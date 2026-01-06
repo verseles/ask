@@ -30,7 +30,8 @@ ask/
 │   ├── executor/
 │   │   ├── mod.rs           # Module exports
 │   │   ├── safety.rs        # Destructive command detection
-│   │   └── runner.rs        # Command execution
+│   │   ├── runner.rs        # Command execution
+│   │   └── injector.rs      # Terminal command injection (uinput/enigo)
 │   └── output/
 │       ├── mod.rs           # Module exports
 │       ├── formatter.rs     # Output formatting (JSON, raw, markdown)

@@ -239,3 +239,31 @@ io::stdout().flush()?;
 - Heap allocation for callbacks
 - Works with trait objects
 - Slightly more verbose call sites
+
+---
+
+## ADR-011: Keystroke Typing Instead of Clipboard Paste
+
+**Status**: Accepted
+
+**Context**: Commands need to be injected into the terminal for user review/edit before execution.
+
+**Decision**: Type commands keystroke-by-keystroke instead of clipboard paste.
+
+**Implementation**:
+- Linux: Use `mouse-keyboard-input` crate via `/dev/uinput` kernel module
+- macOS: Use `enigo` crate with Accessibility API
+- Windows: Use clipboard + Ctrl+V (enigo)
+- Fallback: Interactive dialoguer prompt with editable text
+
+**Rationale**:
+- Does not overwrite user's clipboard content
+- Consistent behavior across platforms (Linux/macOS type, Windows pastes)
+- Works on Wayland without screen recording permission popup
+- Background process spawning prevents "ghost text" during ask output
+
+**Consequences**:
+- Requires uinput permissions on Linux (input group or udev rule)
+- Requires Accessibility permission on macOS
+- Slightly slower than paste for long commands
+- Graceful fallback to interactive prompt if permissions unavailable

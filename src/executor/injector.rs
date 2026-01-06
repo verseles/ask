@@ -148,6 +148,26 @@ fn try_uinput_inject(command: &str) -> Result<()> {
     Ok(())
 }
 
+#[cfg(target_os = "macos")]
+fn try_enigo_type(command: &str) -> Result<()> {
+    use enigo::{Enigo, Keyboard, Settings};
+    use std::thread;
+    use std::time::Duration;
+
+    let mut enigo = Enigo::new(&Settings::default()).map_err(|e| anyhow::anyhow!("{}", e))?;
+
+    thread::sleep(Duration::from_millis(100));
+
+    for ch in command.chars() {
+        enigo
+            .text(&ch.to_string())
+            .map_err(|e| anyhow::anyhow!("{}", e))?;
+        thread::sleep(Duration::from_micros(500));
+    }
+
+    Ok(())
+}
+
 fn interactive_prompt(command: &str) -> Result<Option<String>> {
     use dialoguer::{theme::ColorfulTheme, Input};
 
@@ -172,7 +192,12 @@ pub fn inject_raw_only(command: &str) -> Result<()> {
         return try_uinput_inject(&clean_command);
     }
 
-    #[cfg(any(target_os = "windows", target_os = "macos"))]
+    #[cfg(target_os = "macos")]
+    {
+        return try_enigo_type(&clean_command);
+    }
+
+    #[cfg(target_os = "windows")]
     {
         if let Ok(mut clipboard) = arboard::Clipboard::new() {
             if clipboard.set_text(&clean_command).is_ok() {
@@ -221,15 +246,18 @@ pub fn inject_command(command: &str) -> Result<Option<String>> {
     #[cfg(target_os = "macos")]
     {
         if can_use_accessibility() {
-            if let Ok(mut clipboard) = arboard::Clipboard::new() {
-                if clipboard.set_text(&clean_command).is_ok() {
-                    use enigo::{Direction, Enigo, Key, Keyboard, Settings};
-                    if let Ok(mut enigo) = Enigo::new(&Settings::default()) {
-                        let _ = enigo.key(Key::Meta, Direction::Press);
-                        let _ = enigo.key(Key::Unicode('v'), Direction::Click);
-                        let _ = enigo.key(Key::Meta, Direction::Release);
-                        return Ok(None);
-                    }
+            if let Ok(exe) = std::env::current_exe() {
+                use std::process::{Command, Stdio};
+                let child = Command::new(exe)
+                    .arg("--inject-raw")
+                    .arg(&clean_command)
+                    .stdin(Stdio::null())
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .spawn();
+
+                if child.is_ok() {
+                    return Ok(None);
                 }
             }
         }
