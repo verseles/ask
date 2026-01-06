@@ -1,0 +1,203 @@
+# ask
+
+> Ask anything in plain text, get commands or answers instantly. No quotes needed.
+
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](LICENSE)
+
+A CLI tool that lets you interact with AI models using natural language, without the need for quotes around your questions.
+
+## Features
+
+- **Natural input**: Just type `ask how to list docker containers` - no quotes needed
+- **Smart intent detection**: Automatically detects if you want a command or an answer
+- **Multiple providers**: Supports Gemini (default), OpenAI, and Anthropic Claude
+- **Streaming responses**: Real-time token-by-token output
+- **Context awareness**: Optional conversation memory per directory
+- **Safe command execution**: Detects and warns about destructive commands
+- **Flexible configuration**: TOML config with environment variable overrides
+- **Piping support**: Works with `git diff | ask cm` style workflows
+
+## Installation
+
+### Unix/Linux/macOS
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/verseles/ask/main/install.sh | sh
+```
+
+### Windows
+
+```powershell
+irm https://raw.githubusercontent.com/verseles/ask/main/install.ps1 | iex
+```
+
+### From source
+
+```bash
+cargo install --git https://github.com/verseles/ask
+```
+
+## Quick Start
+
+```bash
+# Initialize configuration (set up API keys)
+ask init
+
+# Ask questions naturally
+ask how to list docker containers
+ask what is the capital of France
+
+# Generate commands
+ask -x delete old log files
+
+# Use context for follow-up questions
+ask -c explain kubernetes
+ask -c what about pods?
+
+# Pipe input
+git diff | ask cm
+cat main.rs | ask explain this code
+```
+
+## Usage
+
+```
+ask [OPTIONS] <your question here>
+
+OPTIONS:
+    -c, --context         Use/create context for current directory
+    -x, --command         Force command mode (bypass auto-detection)
+    -y, --yes             Auto-execute commands without confirmation
+    -m, --model <MODEL>   Override configured model
+    -p, --provider <NAME> Override configured provider
+        --json            Output in JSON format
+        --markdown        Output rendered in Markdown
+        --raw             Output raw text without formatting
+        --no-color        Disable colorized output
+        --no-follow       Disable result echo after execution
+        --update          Check and install updates
+    -V, --version         Show version
+    -h, --help            Show help
+
+SUBCOMMANDS:
+    init                  Initialize configuration interactively
+    --clear               Clear current directory context (use with -c)
+    --history             Show context history (use with -c)
+```
+
+## Configuration
+
+Configuration is loaded from multiple sources (in order of precedence):
+
+1. CLI arguments
+2. Environment variables (`ASK_*`)
+3. `./ask.toml` or `./.ask.toml` (project local)
+4. `~/ask.toml` (home directory)
+5. `~/.config/ask/config.toml` (XDG config)
+6. Default values
+
+### Example config.toml
+
+```toml
+[default]
+provider = "gemini"
+model = "gemini-2.0-flash"
+stream = true
+
+[providers.gemini]
+api_key = "YOUR_API_KEY_HERE"
+
+[providers.openai]
+api_key = "sk-..."
+
+[providers.anthropic]
+api_key = "sk-ant-..."
+
+[behavior]
+auto_execute = false
+confirm_destructive = true
+timeout = 30
+
+[context]
+max_age_minutes = 30
+max_messages = 20
+
+# Custom commands
+[commands.cm]
+system = "Generate concise git commit message based on diff"
+type = "command"
+auto_execute = false
+```
+
+### Environment Variables
+
+```bash
+ASK_PROVIDER=gemini
+ASK_MODEL=gemini-2.0-flash
+ASK_GEMINI_API_KEY=...
+ASK_OPENAI_API_KEY=sk-...
+ASK_ANTHROPIC_API_KEY=sk-ant-...
+ASK_STREAM=true
+NO_COLOR=1  # Disable colors
+```
+
+## Providers
+
+### Gemini (Default)
+
+Google's Gemini models. Get your API key from [Google AI Studio](https://aistudio.google.com/).
+
+### OpenAI
+
+OpenAI's GPT models. Get your API key from [OpenAI Platform](https://platform.openai.com/).
+
+### Anthropic Claude
+
+Anthropic's Claude models. Get your API key from [Anthropic Console](https://console.anthropic.com/).
+
+### OpenAI-Compatible
+
+Any OpenAI-compatible API (e.g., Ollama, LM Studio):
+
+```toml
+[providers.openai_compatible]
+api_key = "..."
+base_url = "http://localhost:11434/v1"
+model = "llama3"
+```
+
+## Safety Features
+
+The CLI includes safety detection for potentially destructive commands:
+
+- Commands like `rm -rf`, `sudo`, `dd`, etc. require explicit confirmation
+- Use `-y` to bypass confirmation (use with caution)
+- Safe commands like `ls`, `git status`, `docker ps` can auto-execute
+
+## Context System
+
+The optional context system (`-c` flag) maintains conversation history per directory:
+
+```bash
+# Start a conversation
+ask -c how do I set up nginx
+
+# Continue the conversation
+ask -c what about SSL?
+
+# Clear context
+ask -c --clear
+
+# View history
+ask -c --history
+```
+
+Context is stored locally and automatically cleaned up after 30 minutes of inactivity.
+
+## License
+
+AGPL-3.0 - see [LICENSE](LICENSE)
+
+## Contributing
+
+Contributions are welcome! Please see the [CODEBASE.md](CODEBASE.md) for project structure and [ADR.md](ADR.md) for architectural decisions.
