@@ -213,7 +213,15 @@ Rules:
         println!();
         executor.execute(command, !args.no_follow).await?;
     } else if crate::executor::can_inject() {
-        crate::executor::inject_command(command)?;
+        match crate::executor::inject_command(command)? {
+            None => {}
+            Some(true) => {
+                executor.execute(command, !args.no_follow).await?;
+            }
+            Some(false) => {
+                println!("{}", "Cancelled.".yellow());
+            }
+        }
     } else {
         println!("{} {}", "Command:".green(), command.bright_white().bold());
         if executor.is_destructive(command) {

@@ -33,6 +33,10 @@ arboard = "3"
 
 [target.'cfg(all(target_os = "linux", target_arch = "x86_64"))'.dependencies]
 enigo = "0.3"
+mouse-keyboard-input = "0.9"
+
+[target.'cfg(all(target_os = "linux", target_arch = "aarch64"))'.dependencies]
+mouse-keyboard-input = "0.9"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 enigo = "0.3"

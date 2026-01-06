@@ -96,6 +96,46 @@ verify_checksum() {
     fi
 }
 
+setup_uinput() {
+    UDEV_RULE='KERNEL=="uinput", SUBSYSTEM=="misc", TAG+="uaccess", OPTIONS+="static_node=uinput"'
+    UDEV_FILE="/etc/udev/rules.d/99-uinput.rules"
+
+    if [ -f "$UDEV_FILE" ]; then
+        return 0
+    fi
+
+    echo ""
+    info "Command injection requires access to /dev/uinput"
+    echo ""
+    echo "This allows 'ask' to type commands directly into your terminal."
+    echo "Without this, you'll need to manually confirm each command."
+    echo ""
+
+    if [ -t 1 ] && [ -e /dev/tty ]; then
+        printf "Setup uinput access now? [Y/n] "
+        read -r answer < /dev/tty
+        case "$answer" in
+            [nN]*)
+                warn "Skipped. Commands will require manual confirmation."
+                return 0
+                ;;
+        esac
+    else
+        warn "Non-interactive mode. Skipping uinput setup."
+        return 0
+    fi
+
+    echo "$UDEV_RULE" | sudo tee "$UDEV_FILE" > /dev/null 2>&1
+    if [ $? -eq 0 ]; then
+        sudo udevadm control --reload-rules 2>/dev/null
+        sudo udevadm trigger 2>/dev/null
+        sudo usermod -a -G input "$(whoami)" 2>/dev/null
+        success "uinput configured. Log out and back in for full effect."
+    else
+        warn "Could not configure uinput. Commands will require manual confirmation."
+    fi
+}
+
 main() {
     info "Installing ${BINARY_NAME}..."
 
@@ -173,6 +213,11 @@ main() {
     echo ""
     success "Installation complete!"
     echo ""
+
+    # Linux-specific: Setup uinput for command injection
+    if [ "$OS" = "linux" ]; then
+        setup_uinput
+    fi
 
     if [ -t 1 ] && [ -e /dev/tty ]; then
         printf "Configure API keys now? [Y/n] "

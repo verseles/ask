@@ -104,7 +104,7 @@ dependencies = [
 
 [[package]]
 name = "ask"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "arboard",
@@ -117,6 +117,7 @@ dependencies = [
  "enigo",
  "futures",
  "indicatif",
+ "mouse-keyboard-input",
  "regex",
  "reqwest",
  "serde",
@@ -221,6 +222,12 @@ name = "cfg-if"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9330f8b2ff13f34540b44e946ef35111825727b38d33286ef986142615121801"
+
+[[package]]
+name = "cfg_aliases"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fd16c4719339c4530435d38e511904438d07cce7950afa3718a84ac36c10e89e"
 
 [[package]]
 name = "cfg_aliases"
@@ -1196,6 +1203,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "ioctl-sys"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8bd11f3a29434026f5ff98c730b668ba74b1033637b8817940b54d040696133c"
+
+[[package]]
 name = "ipnet"
 version = "2.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1364,6 +1377,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "mouse-keyboard-input"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "190a10d6261b87ec8a53efd81d889349793d6fdb2d83969ffadd34839c60c0df"
+dependencies = [
+ "crossbeam-channel",
+ "ioctl-sys",
+ "libc",
+ "nix",
+]
+
+[[package]]
 name = "moxcms"
 version = "0.7.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1371,6 +1396,18 @@ checksum = "ac9557c559cd6fc9867e122e20d2cbefc9ca29d80d027a8e39310920ed2f0a97"
 dependencies = [
  "num-traits",
  "pxfm",
+]
+
+[[package]]
+name = "nix"
+version = "0.28.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ab2156c4fce2f8df6c499cc1c763e4394b7482525bf2a9701c9d79d215f519e4"
+dependencies = [
+ "bitflags",
+ "cfg-if",
+ "cfg_aliases 0.1.1",
+ "libc",
 ]
 
 [[package]]
@@ -1681,7 +1718,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b9e20a958963c291dc322d98411f541009df2ced7b5a4f2bd52337638cfccf20"
 dependencies = [
  "bytes",
- "cfg_aliases",
+ "cfg_aliases 0.2.1",
  "pin-project-lite",
  "quinn-proto",
  "quinn-udp",
@@ -1721,7 +1758,7 @@ version = "0.5.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "addec6a0dcad8a8d96a771f815f0eaf55f9d1805756410b39f5fa81332574cbd"
 dependencies = [
- "cfg_aliases",
+ "cfg_aliases 0.2.1",
  "libc",
  "once_cell",
  "socket2",
