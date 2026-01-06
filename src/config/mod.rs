@@ -248,63 +248,134 @@ impl Config {
     }
 }
 
+fn mask_api_key(key: &str) -> String {
+    if key.len() <= 8 {
+        return "*".repeat(key.len());
+    }
+    let suffix = &key[key.len() - 4..];
+    format!("****{}", suffix)
+}
+
 /// Initialize configuration interactively
 pub async fn init_config() -> Result<()> {
     println!("{}", "Welcome to ask configuration!".cyan().bold());
     println!();
 
-    // Check if config already exists
     let home = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("."));
     let config_path = home.join("ask.toml");
 
-    if config_path.exists() {
-        let overwrite = Confirm::new()
-            .with_prompt("Configuration already exists. Overwrite?")
-            .default(false)
-            .interact()?;
-
-        if !overwrite {
-            println!("{}", "Configuration unchanged.".yellow());
-            return Ok(());
-        }
-
-        // Backup existing config
-        let backup_path = home.join("ask.toml.bak");
-        std::fs::copy(&config_path, &backup_path)?;
+    // Try to parse existing config as raw TOML for reading values
+    let existing: Option<toml::Value> = if config_path.exists() {
         println!(
             "{}",
-            format!("Backed up to {}", backup_path.display()).bright_black()
+            format!("Existing config found: {}", config_path.display()).bright_black()
         );
-    }
+        println!("{}", "Press Enter to keep current values.".bright_black());
+        println!();
+
+        let backup_path = home.join("ask.toml.bak");
+        std::fs::copy(&config_path, &backup_path)?;
+
+        std::fs::read_to_string(&config_path)
+            .ok()
+            .and_then(|s| toml::from_str(&s).ok())
+    } else {
+        None
+    };
+
+    // Helper to get nested TOML values
+    let get_str = |keys: &[&str]| -> Option<String> {
+        let mut val = existing.as_ref()?;
+        for k in keys {
+            val = val.get(*k)?;
+        }
+        val.as_str().map(|s| s.to_string())
+    };
+
+    let get_bool = |keys: &[&str], default: bool| -> bool {
+        let mut val = match existing.as_ref() {
+            Some(v) => v,
+            None => return default,
+        };
+        for k in keys {
+            val = match val.get(*k) {
+                Some(v) => v,
+                None => return default,
+            };
+        }
+        val.as_bool().unwrap_or(default)
+    };
+
+    let get_int = |keys: &[&str]| -> Option<i64> {
+        let mut val = existing.as_ref()?;
+        for k in keys {
+            val = val.get(*k)?;
+        }
+        val.as_integer()
+    };
+
+    let existing_provider = get_str(&["default", "provider"]);
+    let existing_model = get_str(&["default", "model"]);
+    let existing_stream = get_bool(&["default", "stream"], true);
 
     // Select provider
     let providers = vec!["Gemini (recommended)", "OpenAI", "Anthropic Claude"];
+    let default_provider_idx = match existing_provider.as_deref() {
+        Some("gemini") => 0,
+        Some("openai") => 1,
+        Some("anthropic") => 2,
+        _ => 0,
+    };
+
     let provider_idx = Select::new()
         .with_prompt("Select default provider")
         .items(&providers)
-        .default(0)
+        .default(default_provider_idx)
         .interact()?;
 
-    let (provider, default_model) = match provider_idx {
+    let (provider, default_model_for_provider) = match provider_idx {
         0 => ("gemini", "gemini-3-flash-preview"),
         1 => ("openai", "gpt-5-mini"),
         2 => ("anthropic", "claude-haiku-4-5"),
         _ => ("gemini", "gemini-3-flash-preview"),
     };
 
+    // Use existing model if same provider
+    let model_default = if existing_provider.as_deref() == Some(provider) {
+        existing_model.unwrap_or_else(|| default_model_for_provider.to_string())
+    } else {
+        default_model_for_provider.to_string()
+    };
+
     let model: String = Input::new()
         .with_prompt("Model")
-        .default(default_model.to_string())
+        .default(model_default)
         .interact_text()?;
 
-    // Get API key
-    let api_key: String = Input::new()
-        .with_prompt(format!("Enter {} API key", provider))
-        .interact_text()?;
+    // Get existing API key for this provider
+    let existing_api_key = get_str(&["providers", provider, "api_key"]).unwrap_or_default();
+
+    let api_key: String = if !existing_api_key.is_empty() {
+        let masked = mask_api_key(&existing_api_key);
+        let new_key: String = Input::new()
+            .with_prompt(format!("{} API key [{}] (Enter to keep)", provider, masked))
+            .allow_empty(true)
+            .interact_text()?;
+
+        if new_key.is_empty() {
+            existing_api_key
+        } else {
+            new_key
+        }
+    } else {
+        Input::new()
+            .with_prompt(format!("Enter {} API key", provider))
+            .interact_text()?
+    };
 
     let stream = Confirm::new()
         .with_prompt("Enable streaming responses?")
-        .default(true)
+        .default(existing_stream)
         .interact()?;
 
     let (thinking_param, thinking_default) = match provider {
@@ -314,9 +385,20 @@ pub async fn init_config() -> Result<()> {
         _ => ("thinking_level", "low"),
     };
 
+    // Get existing thinking value
+    let existing_thinking = if provider == "anthropic" {
+        get_int(&["providers", provider, thinking_param]).map(|i| i.to_string())
+    } else {
+        get_str(&["providers", provider, thinking_param])
+    };
+
+    let thinking_existing = existing_thinking
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| thinking_default.to_string());
+
     let thinking_value: String = Input::new()
         .with_prompt(format!("Thinking mode ({}, 0 to disable)", thinking_param))
-        .default(thinking_default.to_string())
+        .default(thinking_existing)
         .interact_text()?;
 
     let thinking_config = if thinking_value == "0" {

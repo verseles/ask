@@ -67,6 +67,8 @@ pub struct Args {
     pub context: bool,      // -c, --context
     pub command_mode: bool, // -x, --command
     pub yes: bool,          // -y, --yes
+    pub think: bool,        // -t, --think
+    pub no_think: bool,     // --no-think
     pub model: Option<String>,
     pub provider: Option<String>,
     pub query: Vec<String>, // Free text parts

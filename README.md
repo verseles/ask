@@ -9,9 +9,11 @@ A CLI tool that lets you interact with AI models using natural language, without
 ## Features
 
 - **Natural input**: Just type `ask how to list docker containers` - no quotes needed
+- **Flexible flags**: Put options before or after your question - both work!
 - **Smart intent detection**: Automatically detects if you want a command or an answer
 - **Multiple providers**: Supports Gemini (default), OpenAI, and Anthropic Claude
 - **Streaming responses**: Real-time token-by-token output
+- **Thinking mode**: Enable AI reasoning for complex tasks (`-t` flag or config)
 - **Context awareness**: Optional conversation memory per directory
 - **Safe command execution**: Detects and warns about destructive commands
 - **Flexible configuration**: TOML config with environment variable overrides
@@ -49,11 +51,16 @@ ask init
 ask how to list docker containers
 ask what is the capital of France
 
-# Generate commands
+# Flags can go before OR after your question
 ask -x delete old log files
+ask delete old log files -x
+
+# Enable thinking mode for complex reasoning
+ask -t explain the theory of relativity
+ask solve this math problem step by step --think
 
 # Use context for follow-up questions
-ask -c explain kubernetes
+ask explain kubernetes -c
 ask -c what about pods?
 
 # Pipe input
@@ -63,13 +70,18 @@ cat main.rs | ask explain this code
 
 ## Usage
 
+Flags can be placed **before or after** your question - whatever feels natural.
+
 ```
 ask [OPTIONS] <your question here>
+ask <your question here> [OPTIONS]
 
 OPTIONS:
     -c, --context         Use/create context for current directory
     -x, --command         Force command mode (bypass auto-detection)
     -y, --yes             Auto-execute commands without confirmation
+    -t, --think           Enable thinking mode (override config)
+        --no-think        Disable thinking mode (override config)
     -m, --model <MODEL>   Override configured model
     -p, --provider <NAME> Override configured provider
         --json            Output in JSON format
@@ -173,7 +185,18 @@ model = "llama3"
 
 ## Thinking Mode
 
-Enable AI reasoning/thinking for more complex tasks:
+Enable AI reasoning/thinking for more complex tasks. Use `-t`/`--think` flag or configure in your config file:
+
+```bash
+# Enable thinking for a single query
+ask -t explain quantum entanglement
+ask how does RSA encryption work --think
+
+# Disable thinking (if enabled in config)
+ask --no-think what time is it
+```
+
+### Config Parameters
 
 | Provider | Config Parameter | Values |
 |----------|-----------------|--------|

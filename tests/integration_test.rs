@@ -59,3 +59,23 @@ fn raw_flag_is_recognized() {
 
     assert!(output.status.success());
 }
+
+#[test]
+fn think_flag_is_recognized() {
+    let output = Command::new("cargo")
+        .args(["run", "--", "-t", "--help"])
+        .output()
+        .expect("Failed to execute command");
+
+    assert!(output.status.success());
+}
+
+#[test]
+fn no_think_flag_is_recognized() {
+    let output = Command::new("cargo")
+        .args(["run", "--", "--no-think", "--help"])
+        .output()
+        .expect("Failed to execute command");
+
+    assert!(output.status.success());
+}

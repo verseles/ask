@@ -174,9 +174,9 @@ main() {
     success "Installation complete!"
     echo ""
 
-    if [ -t 0 ] && [ -t 1 ]; then
+    if [ -t 1 ] && [ -e /dev/tty ]; then
         printf "Configure API keys now? [Y/n] "
-        read -r answer
+        read -r answer < /dev/tty
         case "$answer" in
             [nN]*)
                 echo ""
@@ -184,7 +184,7 @@ main() {
                 ;;
             *)
                 echo ""
-                "${INSTALL_DIR}/${BINARY_NAME}" init
+                "${INSTALL_DIR}/${BINARY_NAME}" init < /dev/tty
                 ;;
         esac
     else

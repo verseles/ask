@@ -19,6 +19,12 @@ pub struct Args {
     /// Override configured provider
     pub provider: Option<String>,
 
+    /// Enable thinking mode (override config)
+    pub think: bool,
+
+    /// Disable thinking mode (override config)
+    pub no_think: bool,
+
     /// Output in JSON format
     pub json: bool,
 
@@ -74,6 +80,7 @@ impl Args {
                 "-c" => result.context = true,
                 "-x" => result.command_mode = true,
                 "-y" => result.yes = true,
+                "-t" => result.think = true,
 
                 // Boolean flags (long)
                 "--context" => result.context = true,
@@ -84,6 +91,8 @@ impl Args {
                 "--raw" => result.raw = true,
                 "--no-color" => result.no_color = true,
                 "--no-follow" => result.no_follow = true,
+                "--think" => result.think = true,
+                "--no-think" => result.no_think = true,
                 "--update" => result.update = true,
                 "--version" | "-V" => result.version = true,
                 "--help" | "-h" => {
@@ -117,6 +126,7 @@ impl Args {
                             'c' => result.context = true,
                             'x' => result.command_mode = true,
                             'y' => result.yes = true,
+                            't' => result.think = true,
                             'V' => result.version = true,
                             'h' => {
                                 print_help();
@@ -159,6 +169,8 @@ OPTIONS:
     -c, --context         Use/create context for current directory
     -x, --command         Force command mode (bypass auto-detection)
     -y, --yes             Auto-execute commands without confirmation
+    -t, --think           Enable thinking mode (override config)
+        --no-think        Disable thinking mode (override config)
     -m, --model <MODEL>   Override configured model
     -p, --provider <NAME> Override configured provider
         --json            Output in JSON format
