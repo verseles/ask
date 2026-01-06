@@ -1,5 +1,20 @@
 use anyhow::Result;
-use colored::Colorize;
+
+#[cfg(target_os = "linux")]
+fn can_use_uinput() -> bool {
+    use mouse_keyboard_input::VirtualDevice;
+    VirtualDevice::default().is_ok()
+}
+
+#[cfg(target_os = "macos")]
+fn can_use_accessibility() -> bool {
+    use std::process::Command;
+    Command::new("osascript")
+        .args(["-e", "tell application \"System Events\" to return 1"])
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
 
 #[cfg(target_os = "linux")]
 fn try_uinput_inject(command: &str) -> Result<()> {
@@ -133,20 +148,19 @@ fn try_uinput_inject(command: &str) -> Result<()> {
     Ok(())
 }
 
-fn interactive_prompt(command: &str) -> Result<bool> {
-    use std::io::{self, Write};
+fn interactive_prompt(command: &str) -> Result<Option<String>> {
+    use dialoguer::{theme::ColorfulTheme, Input};
 
-    println!("{} {}", "Command:".green(), command.bright_white().bold());
-    print!(
-        "{}",
-        "Press Enter to execute, Ctrl+C to cancel: ".bright_black()
-    );
-    io::stdout().flush()?;
+    let result: Result<String, _> = Input::with_theme(&ColorfulTheme::default())
+        .with_prompt("Command")
+        .with_initial_text(command)
+        .allow_empty(true)
+        .interact_text();
 
-    let mut input = String::new();
-    match io::stdin().read_line(&mut input) {
-        Ok(_) => Ok(true),
-        Err(_) => Ok(false),
+    match result {
+        Ok(cmd) if cmd.is_empty() => Ok(None),
+        Ok(cmd) => Ok(Some(cmd)),
+        Err(_) => Ok(None),
     }
 }
 
@@ -180,29 +194,49 @@ pub fn inject_raw_only(command: &str) -> Result<()> {
     }
 }
 
-pub fn inject_command(command: &str) -> Result<Option<bool>> {
+pub fn inject_command(command: &str) -> Result<Option<String>> {
     let clean_command = command.replace('\n', " && ").replace('\r', "");
 
     #[cfg(target_os = "linux")]
     {
-        if let Ok(exe) = std::env::current_exe() {
-            use std::process::{Command, Stdio};
-            let child = Command::new(exe)
-                .arg("--inject-raw")
-                .arg(&clean_command)
-                .stdin(Stdio::null())
-                .stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .spawn();
+        if can_use_uinput() {
+            if let Ok(exe) = std::env::current_exe() {
+                use std::process::{Command, Stdio};
+                let child = Command::new(exe)
+                    .arg("--inject-raw")
+                    .arg(&clean_command)
+                    .stdin(Stdio::null())
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .spawn();
 
-            if child.is_ok() {
-                return Ok(None);
+                if child.is_ok() {
+                    return Ok(None);
+                }
             }
         }
-        return interactive_prompt(&clean_command).map(Some);
+        return interactive_prompt(&clean_command);
     }
 
-    #[cfg(any(target_os = "windows", target_os = "macos"))]
+    #[cfg(target_os = "macos")]
+    {
+        if can_use_accessibility() {
+            if let Ok(mut clipboard) = arboard::Clipboard::new() {
+                if clipboard.set_text(&clean_command).is_ok() {
+                    use enigo::{Direction, Enigo, Key, Keyboard, Settings};
+                    if let Ok(mut enigo) = Enigo::new(&Settings::default()) {
+                        let _ = enigo.key(Key::Meta, Direction::Press);
+                        let _ = enigo.key(Key::Unicode('v'), Direction::Click);
+                        let _ = enigo.key(Key::Meta, Direction::Release);
+                        return Ok(None);
+                    }
+                }
+            }
+        }
+        return interactive_prompt(&clean_command);
+    }
+
+    #[cfg(target_os = "windows")]
     {
         if let Ok(mut clipboard) = arboard::Clipboard::new() {
             if clipboard.set_text(&clean_command).is_ok() {
@@ -215,11 +249,11 @@ pub fn inject_command(command: &str) -> Result<Option<bool>> {
                 }
             }
         }
-        return interactive_prompt(&clean_command).map(Some);
+        return interactive_prompt(&clean_command);
     }
 
     #[cfg(not(any(target_os = "linux", target_os = "windows", target_os = "macos")))]
-    interactive_prompt(&clean_command).map(Some)
+    interactive_prompt(&clean_command)
 }
 
 pub fn can_inject() -> bool {

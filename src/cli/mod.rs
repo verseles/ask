@@ -221,11 +221,14 @@ Rules:
     } else if crate::executor::can_inject() {
         match crate::executor::inject_command(command)? {
             None => {}
-            Some(true) => {
-                executor.execute(command, !args.no_follow).await?;
-            }
-            Some(false) => {
-                println!("{}", "Cancelled.".yellow());
+            Some(edited_cmd) => {
+                println!(
+                    "{} {}",
+                    "Running:".green(),
+                    edited_cmd.bright_white().bold()
+                );
+                println!();
+                executor.execute(&edited_cmd, !args.no_follow).await?;
             }
         }
     } else {
