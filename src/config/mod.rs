@@ -302,11 +302,34 @@ pub async fn init_config() -> Result<()> {
         .with_prompt(format!("Enter {} API key", provider))
         .interact_text()?;
 
-    // Enable streaming?
     let stream = Confirm::new()
         .with_prompt("Enable streaming responses?")
         .default(true)
         .interact()?;
+
+    let (thinking_param, thinking_default) = match provider {
+        "gemini" => ("thinking_level", "low"),
+        "openai" => ("reasoning_effort", "low"),
+        "anthropic" => ("thinking_budget", "5000"),
+        _ => ("thinking_level", "low"),
+    };
+
+    let thinking_value: String = Input::new()
+        .with_prompt(format!(
+            "Thinking mode ({}, empty to disable)",
+            thinking_param
+        ))
+        .default(thinking_default.to_string())
+        .allow_empty(true)
+        .interact_text()?;
+
+    let thinking_config = if thinking_value.is_empty() {
+        String::new()
+    } else if provider == "anthropic" {
+        format!("\nthinking_budget = {}", thinking_value)
+    } else {
+        format!("\n{} = \"{}\"", thinking_param, thinking_value)
+    };
 
     // Build config
     let config_content = format!(
@@ -319,7 +342,7 @@ model = "{model}"
 stream = {stream}
 
 [providers.{provider}]
-api_key = "{api_key}"
+api_key = "{api_key}"{thinking_config}
 
 [behavior]
 auto_execute = false

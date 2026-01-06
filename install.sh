@@ -173,9 +173,25 @@ main() {
     echo ""
     success "Installation complete!"
     echo ""
-    echo "Get started:"
-    echo "  ${BINARY_NAME} init    # Configure API keys"
-    echo "  ${BINARY_NAME} --help  # Show help"
+
+    if [ -t 0 ] && [ -t 1 ]; then
+        printf "Configure API keys now? [Y/n] "
+        read -r answer
+        case "$answer" in
+            [nN]*)
+                echo ""
+                echo "Run '${BINARY_NAME} init' when ready to configure."
+                ;;
+            *)
+                echo ""
+                "${INSTALL_DIR}/${BINARY_NAME}" init
+                ;;
+        esac
+    else
+        echo "Get started:"
+        echo "  ${BINARY_NAME} init    # Configure API keys"
+        echo "  ${BINARY_NAME} --help  # Show help"
+    fi
     echo ""
 }
 
