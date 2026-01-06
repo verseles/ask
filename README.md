@@ -22,18 +22,16 @@ A CLI tool that lets you interact with AI models using natural language, without
 
 ## Installation
 
-### Unix/Linux/macOS
+### Linux & macOS
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/verseles/ask/main/install.sh | sh
+curl -fsSL install.cat/verseles/ask | sh
 ```
 
-The installer will prompt you to configure your API keys automatically.
-
-### Windows
+### Windows (PowerShell)
 
 ```powershell
-irm https://raw.githubusercontent.com/verseles/ask/main/install.ps1 | iex
+irm install.cat/verseles/ask | iex
 ```
 
 ### From source
@@ -41,6 +39,8 @@ irm https://raw.githubusercontent.com/verseles/ask/main/install.ps1 | iex
 ```bash
 cargo install --git https://github.com/verseles/ask
 ```
+
+The installer will prompt you to configure your API keys automatically.
 
 ## Quick Start
 
