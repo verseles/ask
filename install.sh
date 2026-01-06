@@ -136,6 +136,19 @@ setup_uinput() {
     fi
 }
 
+setup_macos_accessibility() {
+    echo ""
+    info "Command injection requires Accessibility permission"
+    echo ""
+    echo "To enable automatic command pasting:"
+    echo "  1. Open System Settings → Privacy & Security → Accessibility"
+    echo "  2. Click '+' and add your terminal app (Terminal, iTerm2, etc.)"
+    echo "  3. Enable the toggle next to it"
+    echo ""
+    echo "Without this, commands will require manual confirmation."
+    echo ""
+}
+
 main() {
     info "Installing ${BINARY_NAME}..."
 
@@ -217,6 +230,11 @@ main() {
     # Linux-specific: Setup uinput for command injection
     if [ "$OS" = "linux" ]; then
         setup_uinput
+    fi
+
+    # macOS-specific: Inform about Accessibility permission
+    if [ "$OS" = "darwin" ]; then
+        setup_macos_accessibility
     fi
 
     if [ -t 1 ] && [ -e /dev/tty ]; then

@@ -55,6 +55,9 @@ pub struct Args {
     /// Show context history
     pub show_history: bool,
 
+    /// INTERNAL: Inject command via uinput (hidden)
+    pub inject_raw: Option<String>,
+
     /// The actual query text (all non-flag arguments concatenated)
     pub query: Vec<String>,
 }
@@ -116,6 +119,14 @@ impl Args {
                     i += 1;
                     if i < args.len() {
                         result.provider = Some(args[i].clone());
+                    }
+                }
+
+                // Hidden internal flag for background injection
+                "--inject-raw" => {
+                    i += 1;
+                    if i < args.len() {
+                        result.inject_raw = Some(args[i].clone());
                     }
                 }
 

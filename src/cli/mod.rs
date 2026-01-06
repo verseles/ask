@@ -17,6 +17,12 @@ use crate::providers::{create_provider, IntentClassifier, IntentType};
 pub async fn run() -> Result<()> {
     let args = Args::parse_flexible();
 
+    // Handle internal --inject-raw command first (used by background injection)
+    if let Some(ref cmd) = args.inject_raw {
+        std::thread::sleep(std::time::Duration::from_millis(150));
+        return crate::executor::inject_raw_only(cmd);
+    }
+
     // Handle special commands first
     if args.version {
         println!("ask {}", env!("CARGO_PKG_VERSION"));

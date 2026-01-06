@@ -6,8 +6,12 @@ fn try_uinput_inject(command: &str) -> Result<()> {
     use mouse_keyboard_input::key_codes::*;
     use mouse_keyboard_input::VirtualDevice;
     use std::collections::HashMap;
+    use std::thread;
+    use std::time::Duration;
 
     let mut device = VirtualDevice::default().map_err(|e| anyhow::anyhow!("{}", e))?;
+
+    thread::sleep(Duration::from_millis(100));
 
     let key_map: HashMap<char, (u16, bool)> = [
         ('a', (KEY_A, false)),
@@ -122,6 +126,7 @@ fn try_uinput_inject(command: &str) -> Result<()> {
                     .release(KEY_LEFTSHIFT)
                     .map_err(|e| anyhow::anyhow!("{}", e))?;
             }
+            thread::sleep(Duration::from_micros(500));
         }
     }
 
@@ -145,14 +150,56 @@ fn interactive_prompt(command: &str) -> Result<bool> {
     }
 }
 
+pub fn inject_raw_only(command: &str) -> Result<()> {
+    let clean_command = command.replace('\n', " && ").replace('\r', "");
+
+    #[cfg(target_os = "linux")]
+    {
+        return try_uinput_inject(&clean_command);
+    }
+
+    #[cfg(any(target_os = "windows", target_os = "macos"))]
+    {
+        if let Ok(mut clipboard) = arboard::Clipboard::new() {
+            if clipboard.set_text(&clean_command).is_ok() {
+                use enigo::{Direction, Enigo, Key, Keyboard, Settings};
+                if let Ok(mut enigo) = Enigo::new(&Settings::default()) {
+                    let _ = enigo.key(Key::Control, Direction::Press);
+                    let _ = enigo.key(Key::Unicode('v'), Direction::Click);
+                    let _ = enigo.key(Key::Control, Direction::Release);
+                    return Ok(());
+                }
+            }
+        }
+        anyhow::bail!("Failed to inject via clipboard")
+    }
+
+    #[cfg(not(any(target_os = "linux", target_os = "windows", target_os = "macos")))]
+    {
+        anyhow::bail!("Unsupported platform for raw injection")
+    }
+}
+
 pub fn inject_command(command: &str) -> Result<Option<bool>> {
     let clean_command = command.replace('\n', " && ").replace('\r', "");
 
     #[cfg(target_os = "linux")]
     {
-        if try_uinput_inject(&clean_command).is_ok() {
-            return Ok(None);
+        if let Ok(exe) = std::env::current_exe() {
+            use std::process::{Command, Stdio};
+            let child = Command::new(exe)
+                .arg("--inject-raw")
+                .arg(&clean_command)
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .spawn();
+
+            if child.is_ok() {
+                return Ok(None);
+            }
         }
+        return interactive_prompt(&clean_command).map(Some);
     }
 
     #[cfg(any(target_os = "windows", target_os = "macos"))]
@@ -168,8 +215,10 @@ pub fn inject_command(command: &str) -> Result<Option<bool>> {
                 }
             }
         }
+        return interactive_prompt(&clean_command).map(Some);
     }
 
+    #[cfg(not(any(target_os = "linux", target_os = "windows", target_os = "macos")))]
     interactive_prompt(&clean_command).map(Some)
 }
 
