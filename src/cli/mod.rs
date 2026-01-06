@@ -247,7 +247,6 @@ async fn handle_question_intent(
     let locale = std::env::var("LANG").unwrap_or_else(|_| "en_US.UTF-8".to_string());
     let now = chrono::Local::now().format("%Y-%m-%d %H:%M").to_string();
 
-    let os = std::env::consts::OS;
     let system_prompt = if args.markdown {
         format!(
             "Be brief and direct. Use markdown for formatting. Locale: {}, Now: {}",
@@ -255,8 +254,8 @@ async fn handle_question_intent(
         )
     } else {
         format!(
-            "Be brief and direct. 1-3 sentences (prefer 1 if possible). Use terminal color codes and bold appropriate for {}. Locale: {}, Now: {}",
-            os, locale, now
+            "Be brief and direct. 1-3 sentences max. Plain text only, no formatting codes. Locale: {}, Now: {}",
+            locale, now
         )
     };
 
