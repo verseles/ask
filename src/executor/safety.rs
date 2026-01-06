@@ -138,7 +138,7 @@ impl SafetyAnalyzer {
         self.safe_patterns.iter().any(|p| p.is_match(cmd))
     }
 
-    /// Get a safety assessment message
+    #[allow(dead_code)]
     pub fn assess(&self, command: &str) -> SafetyAssessment {
         if self.is_destructive(command) {
             SafetyAssessment::Destructive
@@ -150,7 +150,7 @@ impl SafetyAnalyzer {
     }
 }
 
-/// Safety assessment result
+#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SafetyAssessment {
     /// Command is known to be safe

@@ -12,8 +12,7 @@ use dialoguer::{Confirm, Input, Select};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-/// Main configuration structure
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Config {
     #[serde(default)]
     pub default: DefaultConfig,
@@ -152,19 +151,6 @@ fn default_channel() -> String {
     "stable".to_string()
 }
 
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            default: DefaultConfig::default(),
-            providers: HashMap::new(),
-            behavior: BehaviorConfig::default(),
-            context: ContextConfig::default(),
-            update: UpdateConfig::default(),
-            commands: HashMap::new(),
-        }
-    }
-}
-
 impl Default for DefaultConfig {
     fn default() -> Self {
         Self {
@@ -238,9 +224,7 @@ impl Config {
         }
 
         // Then check config
-        self.providers
-            .get(provider)
-            .and_then(|p| p.api_key.clone())
+        self.providers.get(provider).and_then(|p| p.api_key.clone())
     }
 
     /// Get base URL for the active provider
@@ -287,7 +271,10 @@ pub async fn init_config() -> Result<()> {
         // Backup existing config
         let backup_path = home.join("ask.toml.bak");
         std::fs::copy(&config_path, &backup_path)?;
-        println!("{}", format!("Backed up to {}", backup_path.display()).bright_black());
+        println!(
+            "{}",
+            format!("Backed up to {}", backup_path.display()).bright_black()
+        );
     }
 
     // Select provider

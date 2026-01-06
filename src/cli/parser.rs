@@ -2,8 +2,7 @@
 
 use std::env;
 
-/// Command-line arguments
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Args {
     /// Use/create context for current directory
     pub context: bool,
@@ -52,29 +51,6 @@ pub struct Args {
 
     /// The actual query text (all non-flag arguments concatenated)
     pub query: Vec<String>,
-}
-
-impl Default for Args {
-    fn default() -> Self {
-        Self {
-            context: false,
-            command_mode: false,
-            yes: false,
-            model: None,
-            provider: None,
-            json: false,
-            markdown: false,
-            raw: false,
-            no_color: false,
-            no_follow: false,
-            update: false,
-            version: false,
-            init: false,
-            clear_context: false,
-            show_history: false,
-            query: Vec::new(),
-        }
-    }
 }
 
 impl Args {

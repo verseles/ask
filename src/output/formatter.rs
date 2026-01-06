@@ -1,20 +1,18 @@
-//! Output formatter based on CLI arguments
-
-use crate::cli::Args;
 use super::markdown::print_markdown;
+use crate::cli::Args;
+use std::io::IsTerminal;
 
-/// Output formatter
 pub struct OutputFormatter {
     json: bool,
     markdown: bool,
     raw: bool,
+    #[allow(dead_code)]
     no_color: bool,
 }
 
 impl OutputFormatter {
     pub fn new(args: &Args) -> Self {
-        // Detect if output is being piped
-        let is_piped = !atty::is(atty::Stream::Stdout);
+        let is_piped = !std::io::stdout().is_terminal();
 
         Self {
             json: args.json,
@@ -42,7 +40,10 @@ impl OutputFormatter {
             "response": text,
             "success": true
         });
-        println!("{}", serde_json::to_string_pretty(&output).unwrap_or_default());
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&output).unwrap_or_default()
+        );
     }
 
     fn format_markdown(&self, text: &str) {

@@ -13,6 +13,7 @@ pub struct ContextManager {
     storage: ContextStorage,
     context_id: String,
     max_messages: usize,
+    #[allow(dead_code)]
     max_age_minutes: u64,
 }
 
@@ -22,9 +23,7 @@ impl ContextManager {
         let storage = ContextStorage::new(storage_path)?;
 
         // Create context ID from current directory
-        let pwd = std::env::current_dir()?
-            .to_string_lossy()
-            .to_string();
+        let pwd = std::env::current_dir()?.to_string_lossy().to_string();
         let context_id = Self::hash_pwd(&pwd);
 
         // Run cleanup
@@ -65,9 +64,7 @@ impl ContextManager {
 
     /// Add a message to the current context
     pub fn add_message(&self, role: &str, content: &str) -> Result<()> {
-        let pwd = std::env::current_dir()?
-            .to_string_lossy()
-            .to_string();
+        let pwd = std::env::current_dir()?.to_string_lossy().to_string();
 
         let mut entry = self
             .storage
@@ -108,11 +105,7 @@ impl ContextManager {
 
         match entry {
             Some(ctx) => {
-                println!(
-                    "{} {}",
-                    "Context for:".cyan(),
-                    ctx.pwd.bright_white()
-                );
+                println!("{} {}", "Context for:".cyan(), ctx.pwd.bright_white());
                 println!(
                     "{} {}",
                     "Created:".cyan(),
@@ -123,11 +116,7 @@ impl ContextManager {
                     "Last used:".cyan(),
                     ctx.last_used.format("%Y-%m-%d %H:%M:%S")
                 );
-                println!(
-                    "{} {}",
-                    "Messages:".cyan(),
-                    ctx.messages.len()
-                );
+                println!("{} {}", "Messages:".cyan(), ctx.messages.len());
                 println!();
 
                 for msg in &ctx.messages {
@@ -137,11 +126,7 @@ impl ContextManager {
                         _ => msg.role.normal(),
                     };
 
-                    println!(
-                        "[{}] {}",
-                        role_color,
-                        msg.timestamp.format("%H:%M:%S")
-                    );
+                    println!("[{}] {}", role_color, msg.timestamp.format("%H:%M:%S"));
 
                     // Truncate long messages
                     let content = if msg.content.len() > 200 {

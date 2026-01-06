@@ -18,9 +18,12 @@ pub fn create_provider(config: &Config) -> Result<Box<dyn Provider>> {
     let provider_name = config.active_provider();
     let model = config.active_model().to_string();
 
-    let api_key = config
-        .api_key()
-        .ok_or_else(|| anyhow!("No API key found for provider '{}'. Run 'ask init' to configure.", provider_name))?;
+    let api_key = config.api_key().ok_or_else(|| {
+        anyhow!(
+            "No API key found for provider '{}'. Run 'ask init' to configure.",
+            provider_name
+        )
+    })?;
 
     match provider_name {
         "gemini" => {

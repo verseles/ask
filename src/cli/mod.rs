@@ -94,7 +94,10 @@ pub async fn run() -> Result<()> {
     } else {
         // Use classifier to determine intent
         let classifier = IntentClassifier::new(provider.as_ref());
-        classifier.classify(&full_query).await.unwrap_or(IntentType::Question)
+        classifier
+            .classify(&full_query)
+            .await
+            .unwrap_or(IntentType::Question)
     };
 
     // Create output formatter
@@ -115,11 +118,10 @@ pub async fn run() -> Result<()> {
     Ok(())
 }
 
-/// Read from stdin if data is available (piping)
 fn read_stdin_if_available() -> Option<String> {
-    use std::io::{self, Read};
+    use std::io::{self, IsTerminal, Read};
 
-    if atty::isnt(atty::Stream::Stdin) {
+    if !io::stdin().is_terminal() {
         let mut buffer = String::new();
         io::stdin().read_to_string(&mut buffer).ok()?;
         if !buffer.is_empty() {
@@ -219,10 +221,7 @@ Example outputs:
             "This command may be destructive. Use -y to execute.".yellow()
         );
     } else {
-        println!(
-            "{}",
-            "Run with -y to execute automatically.".bright_black()
-        );
+        println!("{}", "Run with -y to execute automatically.".bright_black());
     }
 
     Ok(())

@@ -14,19 +14,13 @@ pub struct Message {
 /// Callback type for streaming responses
 pub type StreamCallback = Box<dyn FnMut(&str) + Send>;
 
-/// Provider trait for AI completions
 #[async_trait]
 pub trait Provider: Send + Sync {
-    /// Get a completion for the given messages
     async fn complete(&self, messages: &[Message]) -> Result<String>;
-
-    /// Stream a completion, calling the callback for each chunk
     async fn stream(&self, messages: &[Message], callback: StreamCallback) -> Result<()>;
-
-    /// Get the provider name
+    #[allow(dead_code)]
     fn name(&self) -> &str;
-
-    /// Get the model being used
+    #[allow(dead_code)]
     fn model(&self) -> &str;
 }
 

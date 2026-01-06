@@ -11,6 +11,7 @@ use tokio::process::Command;
 /// Command executor with safety checks
 pub struct CommandExecutor {
     analyzer: SafetyAnalyzer,
+    #[allow(dead_code)]
     confirm_destructive: bool,
 }
 
@@ -97,8 +98,13 @@ impl CommandExecutor {
         Ok(exit_code)
     }
 
-    /// Execute with confirmation if needed
-    pub async fn execute_with_confirm(&self, command: &str, auto_yes: bool, follow: bool) -> Result<i32> {
+    #[allow(dead_code)]
+    pub async fn execute_with_confirm(
+        &self,
+        command: &str,
+        auto_yes: bool,
+        follow: bool,
+    ) -> Result<i32> {
         if !auto_yes && self.is_destructive(command) && self.confirm_destructive {
             println!(
                 "{} {}",

@@ -1,8 +1,7 @@
-//! Color scheme and styling utilities
+#![allow(dead_code)]
 
 use colored::{ColoredString, Colorize};
 
-/// Color scheme for output
 pub struct ColorScheme;
 
 impl ColorScheme {

@@ -1,8 +1,7 @@
-//! Markdown rendering for terminal output
+#![allow(dead_code)]
 
 use termimad::MadSkin;
 
-/// Render markdown to terminal
 pub fn render_markdown(text: &str) -> String {
     let skin = MadSkin::default();
     skin.term_text(text).to_string()
