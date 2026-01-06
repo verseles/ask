@@ -3,8 +3,7 @@ name: CI
 on:
   push:
     branches: [main, develop]
-    tags:
-      - 'v*'
+    tags: ["v*"]
   pull_request:
     branches: [main]
 
@@ -15,142 +14,136 @@ jobs:
   lint:
     name: Lint
     runs-on: ubuntu-latest
-    if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+    if: "!startsWith(github.ref, 'refs/tags/v')"
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
-
-      - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
-
+      - uses: Swatinem/rust-cache@v2
       - name: Check formatting
-        run: cargo fmt -- --check
-
-      - name: Run clippy
-        run: cargo clippy -- -D warnings
+        run: cargo fmt --check
+      - name: Clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
 
   test:
     name: Test (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+    if: "!startsWith(github.ref, 'refs/tags/v')"
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest]
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
-
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
       - name: Run tests
-        run: cargo test --all-features
-
-      - name: Build release
-        run: cargo build --release
+        run: cargo test --all-features --verbose
+      - name: Run tests (release)
+        run: cargo test --release --all-features
 
   security:
     name: Security Audit
     runs-on: ubuntu-latest
-    if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+    if: "!startsWith(github.ref, 'refs/tags/v')"
     steps:
       - uses: actions/checkout@v4
-
+      - uses: dtolnay/rust-toolchain@stable
       - name: Install cargo-audit
         run: cargo install cargo-audit
-
-      - name: Run audit
+      - name: Security audit
         run: cargo audit
 
   validate-tag:
     name: Validate Tag
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/')
+    if: startsWith(github.ref, 'refs/tags/v')
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      - name: Verify tag is on main
+      - name: Check tag is on main
         run: |
-          if ! git branch -r --contains ${{ github.sha }} | grep -q 'origin/main'; then
-            echo "Error: Tags must be created from the main branch"
+          TAG_COMMIT=$(git rev-list -n 1 ${{ github.ref }})
+          echo "Tag commit: $TAG_COMMIT"
+          if git branch -r --contains "$TAG_COMMIT" | grep -q 'origin/main'; then
+            echo "✓ Tag commit is on main branch"
+          else
+            echo "❌ Tag commit is NOT on main branch"
+            echo "Tags must only be created from commits that are on main."
             exit 1
           fi
 
   build:
     name: Build (${{ matrix.target }})
     runs-on: ${{ matrix.os }}
+    if: startsWith(github.ref, 'refs/tags/v')
     needs: [validate-tag]
-    if: startsWith(github.ref, 'refs/tags/')
     strategy:
       matrix:
         include:
-          - target: x86_64-unknown-linux-gnu
-            os: ubuntu-latest
-          - target: aarch64-unknown-linux-gnu
-            os: ubuntu-latest
-            use_cross: true
-          - target: x86_64-apple-darwin
-            os: macos-latest
-          - target: aarch64-apple-darwin
-            os: macos-latest
-          - target: x86_64-pc-windows-msvc
-            os: windows-latest
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact: ask-linux-x86_64
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            artifact: ask-linux-aarch64
+            cross: true
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            artifact: ask-macos-x86_64
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            artifact: ask-macos-aarch64
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact: ask-windows-x86_64.exe
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
 
       - name: Install cross
-        if: matrix.use_cross
+        if: matrix.cross
         run: cargo install cross
 
-      - name: Build (cross)
-        if: matrix.use_cross
-        run: cross build --release --target ${{ matrix.target }}
-
       - name: Build (native)
-        if: ${{ !matrix.use_cross }}
+        if: "!matrix.cross"
         run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Build (cross)
+        if: matrix.cross
+        run: cross build --release --target ${{ matrix.target }}
 
       - name: Prepare artifact (Unix)
         if: runner.os != 'Windows'
         run: |
-          mkdir -p dist
-          cp target/${{ matrix.target }}/release/ask dist/ask-${{ matrix.target }}
-          chmod +x dist/ask-${{ matrix.target }}
-          cd dist && sha256sum ask-${{ matrix.target }} > ask-${{ matrix.target }}.sha256
+          cp target/${{ matrix.target }}/release/ask ${{ matrix.artifact }}
+          chmod +x ${{ matrix.artifact }}
+          sha256sum ${{ matrix.artifact }} > ${{ matrix.artifact }}.sha256
 
       - name: Prepare artifact (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force -Path dist
-          Copy-Item target/${{ matrix.target }}/release/ask.exe dist/ask-${{ matrix.target }}.exe
-          cd dist
-          (Get-FileHash ask-${{ matrix.target }}.exe -Algorithm SHA256).Hash.ToLower() + "  ask-${{ matrix.target }}.exe" | Out-File -Encoding ASCII ask-${{ matrix.target }}.exe.sha256
+          Copy-Item "target/${{ matrix.target }}/release/ask.exe" "${{ matrix.artifact }}"
+          (Get-FileHash "${{ matrix.artifact }}" -Algorithm SHA256).Hash.ToLower() + "  ${{ matrix.artifact }}" | Out-File -Encoding ASCII "${{ matrix.artifact }}.sha256"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ask-${{ matrix.target }}
-          path: dist/
+          name: ${{ matrix.artifact }}
+          path: |
+            ${{ matrix.artifact }}
+            ${{ matrix.artifact }}.sha256
 
   release:
     name: Release
     runs-on: ubuntu-latest
-    needs: [build]
-    if: startsWith(github.ref, 'refs/tags/')
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
     permissions:
       contents: write
     steps:
@@ -159,13 +152,19 @@ jobs:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
-          path: dist
-          merge-multiple: true
+          path: artifacts
 
-      - name: Create Release
-        uses: softprops/action-gh-release@v1
+      - name: Prepare release files
+        run: |
+          mkdir -p release
+          for dir in artifacts/*/; do
+            cp "$dir"* release/
+          done
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
         with:
-          files: dist/*
+          files: release/*
           generate_release_notes: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          draft: false
+          prerelease: ${{ contains(github.ref, '-') }}
