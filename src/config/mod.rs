@@ -315,15 +315,11 @@ pub async fn init_config() -> Result<()> {
     };
 
     let thinking_value: String = Input::new()
-        .with_prompt(format!(
-            "Thinking mode ({}, empty to disable)",
-            thinking_param
-        ))
+        .with_prompt(format!("Thinking mode ({}, 0 to disable)", thinking_param))
         .default(thinking_default.to_string())
-        .allow_empty(true)
         .interact_text()?;
 
-    let thinking_config = if thinking_value.is_empty() {
+    let thinking_config = if thinking_value == "0" {
         String::new()
     } else if provider == "anthropic" {
         format!("\nthinking_budget = {}", thinking_value)
