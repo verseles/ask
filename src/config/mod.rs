@@ -124,7 +124,7 @@ fn default_provider() -> String {
 }
 
 fn default_model() -> String {
-    "gemini-2.0-flash".to_string()
+    "gemini-3-flash-preview".to_string()
 }
 
 fn default_true() -> bool {
@@ -286,11 +286,16 @@ pub async fn init_config() -> Result<()> {
         .interact()?;
 
     let (provider, default_model) = match provider_idx {
-        0 => ("gemini", "gemini-2.0-flash"),
-        1 => ("openai", "gpt-4o-mini"),
-        2 => ("anthropic", "claude-3-5-sonnet-20241022"),
-        _ => ("gemini", "gemini-2.0-flash"),
+        0 => ("gemini", "gemini-3-flash-preview"),
+        1 => ("openai", "gpt-5-mini"),
+        2 => ("anthropic", "claude-haiku-4-5"),
+        _ => ("gemini", "gemini-3-flash-preview"),
     };
+
+    let model: String = Input::new()
+        .with_prompt("Model")
+        .default(default_model.to_string())
+        .interact_text()?;
 
     // Get API key
     let api_key: String = Input::new()
@@ -310,7 +315,7 @@ pub async fn init_config() -> Result<()> {
 
 [default]
 provider = "{provider}"
-model = "{default_model}"
+model = "{model}"
 stream = {stream}
 
 [providers.{provider}]
