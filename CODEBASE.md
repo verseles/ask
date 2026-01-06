@@ -36,16 +36,22 @@ ask/
 │       ├── formatter.rs     # Output formatting (JSON, raw, markdown)
 │       ├── markdown.rs      # Terminal markdown rendering
 │       └── colorize.rs      # Color scheme utilities
+├── tests/
+│   ├── integration_test.rs  # CLI integration tests
+│   └── fixtures/            # Test fixtures
 ├── .github/
 │   └── workflows/
-│       ├── ci.yml           # CI pipeline
-│       ├── release.yml      # Release builds
+│       ├── ci.yml           # CI/CD pipeline (lint, test, build, release)
 │       └── test.yml         # Tests
+├── Makefile                 # Development commands (precommit, fmt, clippy, test, audit)
+├── CLAUDE.md                # Claude AI assistant instructions
+├── GEMINI.md                # Gemini AI assistant instructions
 ├── install.sh               # Unix installation script
 ├── install.ps1              # Windows installation script
 ├── Cargo.toml               # Rust dependencies
 ├── LICENSE                  # AGPL-3.0
 ├── README.md                # User documentation
+├── ROADMAP.md               # Development roadmap
 ├── ADR.md                   # Architecture decisions
 └── CODEBASE.md              # This file
 ```
@@ -170,6 +176,9 @@ Automatically detects piping and disables colors/formatting.
 ## Testing
 
 ```bash
+# Run all checks before committing
+make precommit
+
 # Run all tests
 cargo test
 
@@ -190,8 +199,21 @@ cargo build
 cargo build --release
 
 # Cross-compile (requires cross)
-cross build --release --target x86_64-unknown-linux-gnu
+cross build --release --target aarch64-unknown-linux-gnu
 ```
+
+## Development Commands
+
+The `Makefile` provides convenient development commands:
+
+- `make precommit` - Run all checks (fmt, clippy, test, audit)
+- `make fmt` - Check code formatting
+- `make clippy` - Run linter
+- `make test` - Run tests
+- `make audit` - Security audit
+- `make build` - Debug build
+- `make release` - Release build
+- `make clean` - Clean artifacts
 
 ## Key Design Decisions
 

@@ -80,9 +80,9 @@ Description: Documentation, install scripts, GitHub Actions
 
 Description: Additional tests, cleanup, optimization
 
-- [ ] 8.01 Integration tests for CLI
+- [x] 8.01 Integration tests for CLI (basic)
 - [ ] 8.02 Integration tests for providers (mock server)
-- [ ] 8.03 Remove dead code warnings
+- [x] 8.03 Remove dead code warnings
 - [ ] 8.04 Add more unit tests for config loading
 - [ ] 8.05 Benchmark binary size optimization
 - [ ] 8.06 Shell completions generation
@@ -107,12 +107,19 @@ Description: Additional tests, cleanup, optimization
 7. **CI/CD** - GitHub Actions for testing, linting, and releases
 8. **Install scripts** - Cross-platform installation
 
+### Completed in v0.2.0
+
+1. **Makefile** - Added precommit workflow (fmt, clippy, test, audit)
+2. **AI assistant docs** - Added CLAUDE.md and GEMINI.md
+3. **Integration tests** - Basic CLI tests (help, version, flags)
+4. **Code quality** - Removed dead code warnings, replaced deprecated atty crate
+5. **Cross-compilation** - Switched to rustls-tls for OpenSSL-free builds
+
 ### Known Limitations
 
 1. **No auto-update** - Self-update feature not implemented
 2. **No custom commands** - Config-defined commands not parsed
-3. **Dead code warnings** - Some utility functions not yet used
-4. **Limited tests** - Only basic unit tests implemented
+3. **Limited tests** - Only basic unit tests implemented
 
 ### Future Considerations
 
