@@ -104,12 +104,12 @@ main() {
 
     info "Detected: ${OS}-${ARCH}"
 
-    # Map to target triple
+    # Map to artifact name
     case "${OS}-${ARCH}" in
-        linux-x86_64)   TARGET="x86_64-unknown-linux-gnu" ;;
-        linux-aarch64)  TARGET="aarch64-unknown-linux-gnu" ;;
-        darwin-x86_64)  TARGET="x86_64-apple-darwin" ;;
-        darwin-aarch64) TARGET="aarch64-apple-darwin" ;;
+        linux-x86_64)   ARTIFACT="ask-linux-x86_64" ;;
+        linux-aarch64)  ARTIFACT="ask-linux-aarch64" ;;
+        darwin-x86_64)  ARTIFACT="ask-macos-x86_64" ;;
+        darwin-aarch64) ARTIFACT="ask-macos-aarch64" ;;
         *)              error "Unsupported platform: ${OS}-${ARCH}" ;;
     esac
 
@@ -124,7 +124,7 @@ main() {
     TMP_DIR=$(mktemp -d)
     trap "rm -rf '$TMP_DIR'" EXIT
 
-    BINARY_URL="https://github.com/${REPO}/releases/download/${VERSION}/${BINARY_NAME}-${TARGET}"
+    BINARY_URL="https://github.com/${REPO}/releases/download/${VERSION}/${ARTIFACT}"
     CHECKSUM_URL="${BINARY_URL}.sha256"
 
     info "Downloading ${BINARY_NAME}..."
