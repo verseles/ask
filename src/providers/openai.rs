@@ -23,6 +23,8 @@ struct OpenAIRequest {
     temperature: Option<f32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     max_tokens: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    max_completion_tokens: Option<u32>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -72,6 +74,15 @@ impl OpenAIProvider {
             })
             .collect()
     }
+
+    /// Check if model is a reasoning model (o1, o3, o4, gpt-5) that requires max_completion_tokens
+    fn is_reasoning_model(&self) -> bool {
+        let model = self.model.to_lowercase();
+        model.starts_with("o1")
+            || model.starts_with("o3")
+            || model.starts_with("o4")
+            || model.starts_with("gpt-5")
+    }
 }
 
 #[async_trait]
@@ -79,12 +90,14 @@ impl Provider for OpenAIProvider {
     async fn complete(&self, messages: &[Message]) -> Result<String> {
         let url = format!("{}/chat/completions", self.base_url);
 
+        let is_reasoning = self.is_reasoning_model();
         let request = OpenAIRequest {
             model: self.model.clone(),
             messages: self.convert_messages(messages),
             stream: false,
-            temperature: Some(0.7),
-            max_tokens: Some(4096),
+            temperature: if is_reasoning { None } else { Some(0.7) },
+            max_tokens: if is_reasoning { None } else { Some(4096) },
+            max_completion_tokens: if is_reasoning { Some(4096) } else { None },
         };
 
         let response = self
@@ -122,12 +135,14 @@ impl Provider for OpenAIProvider {
     async fn stream(&self, messages: &[Message], mut callback: StreamCallback) -> Result<()> {
         let url = format!("{}/chat/completions", self.base_url);
 
+        let is_reasoning = self.is_reasoning_model();
         let request = OpenAIRequest {
             model: self.model.clone(),
             messages: self.convert_messages(messages),
             stream: true,
-            temperature: Some(0.7),
-            max_tokens: Some(4096),
+            temperature: if is_reasoning { None } else { Some(0.7) },
+            max_tokens: if is_reasoning { None } else { Some(4096) },
+            max_completion_tokens: if is_reasoning { Some(4096) } else { None },
         };
 
         let response = self
