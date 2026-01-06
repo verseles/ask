@@ -63,10 +63,10 @@ function Main {
     $arch = Get-Architecture
     Write-Info "Detected architecture: $arch"
 
-    # Map to target
+    # Map to artifact name
     $target = switch ($arch) {
-        "x86_64"  { "x86_64-pc-windows-msvc" }
-        "aarch64" { "aarch64-pc-windows-msvc" }
+        "x86_64"  { "windows-x86_64" }
+        "aarch64" { "windows-aarch64" }
         default   { Write-Error "Unsupported architecture: $arch" }
     }
 
@@ -129,6 +129,13 @@ function Main {
         Write-Host "  $BINARY_NAME init    # Configure API keys"
         Write-Host "  $BINARY_NAME --help  # Show help"
         Write-Host ""
+
+        # Prompt to run init
+        $runInit = Read-Host "Would you like to run '$BINARY_NAME init' now to configure your API keys? (Y/n)"
+        if ($runInit -ne "n" -and $runInit -ne "N") {
+            Write-Host ""
+            & $installPath init
+        }
 
     } finally {
         # Cleanup

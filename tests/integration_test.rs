@@ -23,7 +23,7 @@ fn version_flag_shows_version() {
 
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("0.1.0") || stdout.contains("ask"));
+    assert!(stdout.contains("ask"));
 }
 
 #[test]

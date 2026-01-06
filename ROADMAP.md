@@ -114,6 +114,10 @@ Description: Additional tests, cleanup, optimization
 3. **Integration tests** - Basic CLI tests (help, version, flags)
 4. **Code quality** - Removed dead code warnings, replaced deprecated atty crate
 5. **Cross-compilation** - Switched to rustls-tls for OpenSSL-free builds
+6. **Updated models** - Gemini 3 Flash Preview, GPT-5 Mini, Claude Haiku 4.5
+7. **Thinking mode** - Added thinking/reasoning support for all providers
+8. **Interactive init** - Model selection and thinking mode during `ask init`
+9. **Improved installers** - Updated artifact names, prompt to run init after install
 
 ### Known Limitations
 

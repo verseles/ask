@@ -25,6 +25,8 @@ A CLI tool that lets you interact with AI models using natural language, without
 curl -fsSL https://raw.githubusercontent.com/verseles/ask/main/install.sh | sh
 ```
 
+The installer will prompt you to configure your API keys automatically.
+
 ### Windows
 
 ```powershell
@@ -101,17 +103,20 @@ Configuration is loaded from multiple sources (in order of precedence):
 ```toml
 [default]
 provider = "gemini"
-model = "gemini-2.0-flash"
+model = "gemini-3-flash-preview"
 stream = true
 
 [providers.gemini]
 api_key = "YOUR_API_KEY_HERE"
+thinking_level = "low"  # optional: none, low, medium, high
 
 [providers.openai]
 api_key = "sk-..."
+reasoning_effort = "low"  # optional: none, minimal, low, medium, high
 
 [providers.anthropic]
 api_key = "sk-ant-..."
+thinking_budget = 5000  # optional: token budget for reasoning
 
 [behavior]
 auto_execute = false
@@ -133,7 +138,7 @@ auto_execute = false
 
 ```bash
 ASK_PROVIDER=gemini
-ASK_MODEL=gemini-2.0-flash
+ASK_MODEL=gemini-3-flash-preview
 ASK_GEMINI_API_KEY=...
 ASK_OPENAI_API_KEY=sk-...
 ASK_ANTHROPIC_API_KEY=sk-ant-...
@@ -165,6 +170,18 @@ api_key = "..."
 base_url = "http://localhost:11434/v1"
 model = "llama3"
 ```
+
+## Thinking Mode
+
+Enable AI reasoning/thinking for more complex tasks:
+
+| Provider | Config Parameter | Values |
+|----------|-----------------|--------|
+| Gemini | `thinking_level` | `none`, `low`, `medium`, `high` |
+| OpenAI | `reasoning_effort` | `none`, `minimal`, `low`, `medium`, `high` |
+| Anthropic | `thinking_budget` | Token count (e.g., `5000`) |
+
+Configure during `ask init` or manually in your config file.
 
 ## Safety Features
 
