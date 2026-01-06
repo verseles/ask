@@ -160,27 +160,31 @@ async fn handle_command_intent(
         messages.extend(manager.get_messages()?);
     }
 
-    // System prompt for command generation
-    let system_prompt = r#"You are a command-line assistant. Generate shell commands for the user's request.
+    let os = std::env::consts::OS;
+    let cwd = std::env::current_dir()
+        .map(|p| p.display().to_string())
+        .unwrap_or_else(|_| ".".to_string());
+    let shell = std::env::var("SHELL").unwrap_or_else(|_| "sh".to_string());
+    let locale = std::env::var("LANG").unwrap_or_else(|_| "en_US.UTF-8".to_string());
+    let now = chrono::Local::now().format("%Y-%m-%d %H:%M").to_string();
+
+    let system_prompt = format!(
+        r#"Generate shell commands. Output ONLY the command, no explanations.
+
+Context: OS={}, shell={}, cwd={}, locale={}, now={}
 
 Rules:
-1. Output ONLY the command, no explanations
-2. Use standard Unix/Linux commands when possible
-3. For complex tasks, chain commands with && or pipes
-4. If multiple steps are needed, output them on separate lines
-5. Never include markdown formatting or code blocks
-
-Example outputs:
-- "docker ps -a"
-- "find . -name '*.log' -mtime +7 -delete"
-- "git add . && git commit -m 'update'"
-"#;
+- NEVER use newlines - use && for multiple commands or \ for line continuation
+- No markdown, no code blocks, no backticks
+- Use commands appropriate for the OS"#,
+        os, shell, cwd, locale, now
+    );
 
     messages.insert(
         0,
         crate::providers::Message {
             role: "system".to_string(),
-            content: system_prompt.to_string(),
+            content: system_prompt,
         },
     );
 
@@ -202,26 +206,24 @@ Example outputs:
         manager.add_message("assistant", command)?;
     }
 
-    // Display the command
-    println!(
-        "{} {}",
-        "Generated command:".green(),
-        command.bright_white().bold()
-    );
-
-    // Execute if auto-execute is enabled or -y flag
     let executor = CommandExecutor::new(config);
 
     if args.yes || (config.behavior.auto_execute && executor.is_safe(command)) {
+        println!("{} {}", "Running:".green(), command.bright_white().bold());
         println!();
         executor.execute(command, !args.no_follow).await?;
-    } else if executor.is_destructive(command) {
-        println!(
-            "{}",
-            "This command may be destructive. Use -y to execute.".yellow()
-        );
+    } else if crate::executor::can_inject() {
+        crate::executor::inject_command(command)?;
     } else {
-        println!("{}", "Run with -y to execute automatically.".bright_black());
+        println!("{} {}", "Command:".green(), command.bright_white().bold());
+        if executor.is_destructive(command) {
+            println!(
+                "{}",
+                "This command may be destructive. Use -y to execute.".yellow()
+            );
+        } else {
+            println!("{}", "Run with -y to execute automatically.".bright_black());
+        }
     }
 
     Ok(())
@@ -235,30 +237,34 @@ async fn handle_question_intent(
     query: &str,
     formatter: &OutputFormatter,
 ) -> Result<()> {
-    // Build context messages
     let mut messages = Vec::new();
 
-    // Add context if enabled
     if args.context {
         let manager = ContextManager::new(config)?;
         messages.extend(manager.get_messages()?);
     }
 
-    // System prompt for questions
-    let system_prompt = r#"You are a helpful AI assistant. Provide clear, concise answers.
+    let locale = std::env::var("LANG").unwrap_or_else(|_| "en_US.UTF-8".to_string());
+    let now = chrono::Local::now().format("%Y-%m-%d %H:%M").to_string();
 
-Guidelines:
-1. Be direct and informative
-2. Use markdown formatting for better readability
-3. Include code examples when relevant
-4. Keep responses focused on the question
-"#;
+    let os = std::env::consts::OS;
+    let system_prompt = if args.markdown {
+        format!(
+            "Be brief and direct. Use markdown for formatting. Locale: {}, Now: {}",
+            locale, now
+        )
+    } else {
+        format!(
+            "Be brief and direct. 1-3 sentences (prefer 1 if possible). Use terminal color codes and bold appropriate for {}. Locale: {}, Now: {}",
+            os, locale, now
+        )
+    };
 
     messages.insert(
         0,
         crate::providers::Message {
             role: "system".to_string(),
-            content: system_prompt.to_string(),
+            content: system_prompt,
         },
     );
 

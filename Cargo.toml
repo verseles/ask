@@ -1,6 +1,6 @@
 [package]
 name = "ask"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 license = "AGPL-3.0"
 description = "Ask anything in plain text, get commands or answers instantly. No quotes needed."
@@ -29,6 +29,8 @@ termimad = "0.30"
 async-trait = "0.1"
 shellexpand = "3"
 regex = "1"
+arboard = "3"
+enigo = "0.3"
 
 [profile.release]
 opt-level = "z"

@@ -119,6 +119,13 @@ Description: Additional tests, cleanup, optimization
 8. **Interactive init** - Model selection and thinking mode during `ask init`
 9. **Improved installers** - Updated artifact names, prompt to run init after install
 
+### Completed in v0.3.0
+
+1. **Command injection** - Commands are pasted directly to terminal via clipboard + Ctrl+Shift+V
+2. **Context-aware prompts** - System prompts include OS, shell, cwd, locale, datetime
+3. **Improved UX** - `ask init` reads existing config and shows current values as defaults
+4. **Brief responses** - Questions get concise 1-3 sentence answers with terminal colors
+
 ### Known Limitations
 
 1. **No auto-update** - Self-update feature not implemented

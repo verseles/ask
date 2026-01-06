@@ -10,6 +10,7 @@ A CLI tool that lets you interact with AI models using natural language, without
 
 - **Natural input**: Just type `ask how to list docker containers` - no quotes needed
 - **Flexible flags**: Put options before or after your question - both work!
+- **Smart command injection**: Commands are pasted directly to your terminal for editing
 - **Smart intent detection**: Automatically detects if you want a command or an answer
 - **Multiple providers**: Supports Gemini (default), OpenAI, and Anthropic Claude
 - **Streaming responses**: Real-time token-by-token output
@@ -51,13 +52,16 @@ ask init
 ask how to list docker containers
 ask what is the capital of France
 
+# Commands are auto-detected and pasted to your terminal
+ask delete old log files      # Command appears ready to edit/run
+ask -y delete old log files   # Execute immediately
+
 # Flags can go before OR after your question
 ask -x delete old log files
 ask delete old log files -x
 
 # Enable thinking mode for complex reasoning
 ask -t explain the theory of relativity
-ask solve this math problem step by step --think
 
 # Use context for follow-up questions
 ask explain kubernetes -c
