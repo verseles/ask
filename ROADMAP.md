@@ -138,3 +138,5 @@ Description: Additional tests, cleanup, optimization
 2. Add OpenAI-compatible endpoint support (Ollama, LM Studio)
 3. Consider adding TUI mode for interactive sessions
 4. Add shell completion scripts (bash, zsh, fish, PowerShell)
+5. **Model rotation** - Auto-fallback to alternate models on 429/quota errors
+6. **Provider rotation** - Auto-fallback to alternate providers when primary fails
