@@ -58,6 +58,9 @@ pub struct Args {
     /// INTERNAL: Inject command via uinput (hidden)
     pub inject_raw: Option<String>,
 
+    /// Generate shell completions
+    pub completions: Option<String>,
+
     /// The actual query text (all non-flag arguments concatenated)
     pub query: Vec<String>,
 }
@@ -130,6 +133,14 @@ impl Args {
                     }
                 }
 
+                // Generate shell completions
+                "--completions" => {
+                    i += 1;
+                    if i < args.len() {
+                        result.completions = Some(args[i].clone());
+                    }
+                }
+
                 // Handle combined short flags like -cy
                 arg if arg.starts_with('-') && !arg.starts_with("--") && arg.len() > 2 => {
                     for c in arg.chars().skip(1) {
@@ -190,6 +201,7 @@ OPTIONS:
         --no-color        Disable colorized output
         --no-follow       Disable result echo after execution
         --update          Check and install updates
+        --completions <SHELL>  Generate shell completions (bash, zsh, fish, powershell, elvish)
     -V, --version         Show version
     -h, --help            Show this help
 

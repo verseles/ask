@@ -30,11 +30,12 @@ pub async fn run() -> Result<()> {
     }
 
     if args.update {
-        println!("{}", "Checking for updates...".cyan());
-        println!(
-            "{}",
-            "Auto-update not yet implemented. Please check GitHub releases.".yellow()
-        );
+        return crate::update::check_and_update().await;
+    }
+
+    // Handle completions generation
+    if let Some(ref shell) = args.completions {
+        crate::completions::generate_completions(shell);
         return Ok(());
     }
 
@@ -80,18 +81,62 @@ pub async fn run() -> Result<()> {
     // Get piped input if available
     let stdin_content = read_stdin_if_available();
 
+    // Check for custom command (first word of query)
+    let first_word = args.query.first().map(|s| s.as_str()).unwrap_or("");
+    let custom_cmd = config.commands.get(first_word).cloned();
+
     // Build the full query
-    let full_query = if let Some(ref stdin) = stdin_content {
-        format!(
-            "Input:\n```\n{}\n```\n\nQuestion: {}",
-            stdin,
-            args.query.join(" ")
-        )
+    let (full_query, effective_args) = if let Some(ref cmd) = custom_cmd {
+        // Custom command: use remaining query as input
+        let remaining: Vec<String> = args.query.iter().skip(1).cloned().collect();
+        let query_text = if let Some(ref stdin) = stdin_content {
+            format!("Input:\n```\n{}\n```\n\n{}", stdin, remaining.join(" "))
+        } else {
+            remaining.join(" ")
+        };
+
+        // Apply custom command overrides
+        let mut modified_args = args.clone();
+        if cmd.inherit_flags {
+            // Keep existing flags
+        }
+        if let Some(auto_exec) = cmd.auto_execute {
+            modified_args.yes = auto_exec;
+        }
+        if cmd.r#type.as_deref() == Some("command") {
+            modified_args.command_mode = true;
+        }
+
+        (query_text, modified_args)
     } else {
-        args.query.join(" ")
+        // Regular query
+        let query_text = if let Some(ref stdin) = stdin_content {
+            format!(
+                "Input:\n```\n{}\n```\n\nQuestion: {}",
+                stdin,
+                args.query.join(" ")
+            )
+        } else {
+            args.query.join(" ")
+        };
+        (query_text, args.clone())
+    };
+    let args = effective_args;
+
+    // Create provider (with custom command overrides if applicable)
+    let config = if let Some(ref cmd) = custom_cmd {
+        let mut cfg = config;
+        if let Some(ref provider) = cmd.provider {
+            cfg.default.provider = provider.clone();
+        }
+        if let Some(ref model) = cmd.model {
+            cfg.default.model = model.clone();
+        }
+        cfg
+    } else {
+        config
     };
 
-    // Create provider
     let provider = create_provider(&config)?;
 
     // Determine intent
@@ -112,12 +157,26 @@ pub async fn run() -> Result<()> {
     // Handle based on intent
     match intent {
         IntentType::Command => {
-            handle_command_intent(&config, &args, provider.as_ref(), &full_query, &formatter)
-                .await?;
+            handle_command_intent(
+                &config,
+                &args,
+                provider.as_ref(),
+                &full_query,
+                &formatter,
+                custom_cmd.as_ref(),
+            )
+            .await?;
         }
         IntentType::Question | IntentType::Code => {
-            handle_question_intent(&config, &args, provider.as_ref(), &full_query, &formatter)
-                .await?;
+            handle_question_intent(
+                &config,
+                &args,
+                provider.as_ref(),
+                &full_query,
+                &formatter,
+                custom_cmd.as_ref(),
+            )
+            .await?;
         }
     }
 
@@ -144,6 +203,7 @@ async fn handle_command_intent(
     provider: &dyn crate::providers::Provider,
     query: &str,
     _formatter: &OutputFormatter,
+    custom_cmd: Option<&crate::config::CustomCommand>,
 ) -> Result<()> {
     use indicatif::{ProgressBar, ProgressStyle};
 
@@ -174,8 +234,15 @@ async fn handle_command_intent(
     let locale = std::env::var("LANG").unwrap_or_else(|_| "en_US.UTF-8".to_string());
     let now = chrono::Local::now().format("%Y-%m-%d %H:%M").to_string();
 
-    let system_prompt = format!(
-        r#"Generate shell commands. Output ONLY the command, no explanations.
+    // Use custom command system prompt if available, otherwise default
+    let system_prompt = if let Some(cmd) = custom_cmd {
+        format!(
+            "{}\n\nContext: OS={}, shell={}, cwd={}, locale={}, now={}\n\nRules:\n- NEVER use newlines - use && for multiple commands or \\ for line continuation\n- No markdown, no code blocks, no backticks\n- Use commands appropriate for the OS",
+            cmd.system, os, shell, cwd, locale, now
+        )
+    } else {
+        format!(
+            r#"Generate shell commands. Output ONLY the command, no explanations.
 
 Context: OS={}, shell={}, cwd={}, locale={}, now={}
 
@@ -183,8 +250,9 @@ Rules:
 - NEVER use newlines - use && for multiple commands or \ for line continuation
 - No markdown, no code blocks, no backticks
 - Use commands appropriate for the OS"#,
-        os, shell, cwd, locale, now
-    );
+            os, shell, cwd, locale, now
+        )
+    };
 
     messages.insert(
         0,
@@ -217,7 +285,9 @@ Rules:
     if args.yes || (config.behavior.auto_execute && executor.is_safe(command)) {
         println!("{} {}", "Running:".green(), command.bright_white().bold());
         println!();
-        executor.execute(command, !args.no_follow).await?;
+        executor
+            .execute_with_sudo_retry(command, !args.no_follow)
+            .await?;
     } else if crate::executor::can_inject() {
         match crate::executor::inject_command(command)? {
             None => {}
@@ -228,7 +298,9 @@ Rules:
                     edited_cmd.bright_white().bold()
                 );
                 println!();
-                executor.execute(&edited_cmd, !args.no_follow).await?;
+                executor
+                    .execute_with_sudo_retry(&edited_cmd, !args.no_follow)
+                    .await?;
             }
         }
     } else {
@@ -253,6 +325,7 @@ async fn handle_question_intent(
     provider: &dyn crate::providers::Provider,
     query: &str,
     formatter: &OutputFormatter,
+    custom_cmd: Option<&crate::config::CustomCommand>,
 ) -> Result<()> {
     let mut messages = Vec::new();
 
@@ -264,7 +337,10 @@ async fn handle_question_intent(
     let locale = std::env::var("LANG").unwrap_or_else(|_| "en_US.UTF-8".to_string());
     let now = chrono::Local::now().format("%Y-%m-%d %H:%M").to_string();
 
-    let system_prompt = if args.markdown {
+    // Use custom command system prompt if available
+    let system_prompt = if let Some(cmd) = custom_cmd {
+        format!("{}\n\nLocale: {}, Now: {}", cmd.system, locale, now)
+    } else if args.markdown {
         format!(
             "Be brief and direct. Use markdown for formatting. Locale: {}, Now: {}",
             locale, now

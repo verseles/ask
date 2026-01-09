@@ -32,11 +32,14 @@ ask/
 │   │   ├── safety.rs        # Destructive command detection
 │   │   ├── runner.rs        # Command execution
 │   │   └── injector.rs      # Terminal command injection (uinput/enigo)
-│   └── output/
-│       ├── mod.rs           # Module exports
-│       ├── formatter.rs     # Output formatting (JSON, raw, markdown)
-│       ├── markdown.rs      # Terminal markdown rendering
-│       └── colorize.rs      # Color scheme utilities
+│   ├── output/
+│   │   ├── mod.rs           # Module exports
+│   │   ├── formatter.rs     # Output formatting (JSON, raw, markdown)
+│   │   ├── markdown.rs      # Terminal markdown rendering
+│   │   └── colorize.rs      # Color scheme utilities
+│   ├── update/
+│   │   └── mod.rs           # Auto-update from GitHub releases
+│   └── completions.rs       # Shell completions generation
 ├── tests/
 │   ├── integration_test.rs  # CLI integration tests
 │   └── fixtures/            # Test fixtures
@@ -165,6 +168,42 @@ Handles output based on flags:
 
 Automatically detects piping and disables colors/formatting.
 
+### Auto-Update (`src/update/`)
+
+Implements automatic update checking and installation:
+
+- **Background check**: Spawns detached process to check GitHub releases
+- **Notification**: Saves update info for next run notification
+- **Download**: Fetches platform-specific binary from release assets
+- **Atomic replace**: Safe binary replacement with backup
+
+Disable with `ASK_NO_UPDATE=1` environment variable.
+
+### Shell Completions (`src/completions.rs`)
+
+Generates shell completions using clap_complete:
+
+```bash
+ask --completions bash    # Bash completions
+ask --completions zsh     # Zsh completions
+ask --completions fish    # Fish completions
+ask --completions powershell  # PowerShell completions
+ask --completions elvish  # Elvish completions
+```
+
+### Custom Commands (`src/config/`)
+
+Supports user-defined commands in config:
+
+```toml
+[commands.cm]
+system = "Generate commit message"
+type = "command"
+auto_execute = false
+provider = "anthropic"  # Optional override
+model = "claude-3-opus" # Optional override
+```
+
 ## Data Flow
 
 1. **Input**: User runs `ask how to list docker containers`
@@ -231,6 +270,7 @@ See [ADR.md](ADR.md) for architectural decisions including:
 
 Key crates:
 - `clap`: CLI parsing (derive macros)
+- `clap_complete`: Shell completions generation
 - `tokio`: Async runtime
 - `reqwest`: HTTP client with streaming
 - `serde` + `toml`: Configuration parsing
@@ -238,3 +278,4 @@ Key crates:
 - `indicatif`: Progress spinners
 - `termimad`: Markdown rendering
 - `dialoguer`: Interactive prompts
+- `arboard`: Clipboard support for command injection

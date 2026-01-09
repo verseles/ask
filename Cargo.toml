@@ -1,6 +1,6 @@
 [package]
 name = "ask"
-version = "0.5.0"
+version = "0.6.0"
 edition = "2021"
 license = "AGPL-3.0"
 description = "Ask anything in plain text, get commands or answers instantly. No quotes needed."
@@ -30,6 +30,7 @@ async-trait = "0.1"
 shellexpand = "3"
 regex = "1"
 arboard = "3"
+clap_complete = "4"
 
 [target.'cfg(all(target_os = "linux", target_arch = "x86_64"))'.dependencies]
 enigo = "0.3"

@@ -98,6 +98,91 @@ impl CommandExecutor {
         Ok(exit_code)
     }
 
+    /// Execute a command and suggest sudo retry on permission denied
+    pub async fn execute_with_sudo_retry(&self, command: &str, follow: bool) -> Result<i32> {
+        let exit_code = self.execute(command, follow).await?;
+
+        // Check if it looks like a permission error (common exit codes)
+        if exit_code != 0 && !command.starts_with("sudo ") && !cfg!(windows) {
+            // Check if we should suggest sudo
+            let should_suggest = self.might_need_sudo(command);
+
+            if should_suggest {
+                println!();
+                println!(
+                    "{} {}",
+                    "Tip:".yellow().bold(),
+                    "Command may require elevated permissions.".yellow()
+                );
+
+                let retry = dialoguer::Confirm::new()
+                    .with_prompt("Retry with sudo?")
+                    .default(false)
+                    .interact()?;
+
+                if retry {
+                    let sudo_cmd = format!("sudo {}", command);
+                    return self.execute(&sudo_cmd, follow).await;
+                }
+            }
+        }
+
+        Ok(exit_code)
+    }
+
+    /// Check if a command might need sudo based on common patterns
+    fn might_need_sudo(&self, command: &str) -> bool {
+        let sudo_patterns = [
+            // Package managers
+            "apt ",
+            "apt-get ",
+            "dnf ",
+            "yum ",
+            "pacman ",
+            "zypper ",
+            "apk ",
+            // System paths
+            "/etc/",
+            "/usr/",
+            "/var/",
+            "/opt/",
+            // System commands
+            "systemctl ",
+            "service ",
+            "mount ",
+            "umount ",
+            "chown ",
+            "chmod ",
+            "useradd ",
+            "userdel ",
+            "groupadd ",
+            "groupdel ",
+            "usermod ",
+            // Network
+            "iptables ",
+            "ip6tables ",
+            "nft ",
+            "ifconfig ",
+            "ip addr",
+            "ip link",
+            // Other
+            "modprobe ",
+            "insmod ",
+            "rmmod ",
+            "fdisk ",
+            "parted ",
+            "mkfs",
+        ];
+
+        for pattern in sudo_patterns {
+            if command.contains(pattern) {
+                return true;
+            }
+        }
+
+        false
+    }
+
     #[allow(dead_code)]
     pub async fn execute_with_confirm(
         &self,

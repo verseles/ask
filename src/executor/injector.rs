@@ -189,7 +189,7 @@ pub fn inject_raw_only(command: &str) -> Result<()> {
 
     #[cfg(target_os = "linux")]
     {
-        return try_uinput_inject(&clean_command);
+        try_uinput_inject(&clean_command)
     }
 
     #[cfg(target_os = "macos")]
@@ -240,7 +240,7 @@ pub fn inject_command(command: &str) -> Result<Option<String>> {
                 }
             }
         }
-        return interactive_prompt(&clean_command);
+        interactive_prompt(&clean_command)
     }
 
     #[cfg(target_os = "macos")]

@@ -17,8 +17,12 @@ A CLI tool that lets you interact with AI models using natural language, without
 - **Thinking mode**: Enable AI reasoning for complex tasks (`-t` flag or config)
 - **Context awareness**: Optional conversation memory per directory
 - **Safe command execution**: Detects and warns about destructive commands
+- **Sudo retry**: Suggests retry with sudo on permission denied errors
 - **Flexible configuration**: TOML config with environment variable overrides
+- **Custom commands**: Define your own commands with custom system prompts
 - **Piping support**: Works with `git diff | ask cm` style workflows
+- **Auto-update**: Background update checks with notifications
+- **Shell completions**: Bash, Zsh, Fish, PowerShell, Elvish support
 
 ## Installation
 
@@ -237,6 +241,64 @@ ask -c --history
 ```
 
 Context is stored locally and automatically cleaned up after 30 minutes of inactivity.
+
+## Custom Commands
+
+Define reusable commands in your config file with custom system prompts:
+
+```toml
+[commands.cm]
+system = "Generate a concise git commit message based on the diff provided"
+type = "command"
+auto_execute = false
+
+[commands.explain]
+system = "Explain this code in detail, including what it does and how it works"
+inherit_flags = true
+
+[commands.review]
+system = "Review this code for bugs, security issues, and improvements"
+provider = "anthropic"
+model = "claude-3-opus"
+```
+
+Usage:
+```bash
+git diff | ask cm            # Generate commit message
+cat main.rs | ask explain    # Explain code
+cat api.py | ask review      # Code review
+```
+
+## Shell Completions
+
+Generate shell completions for your preferred shell:
+
+```bash
+# Bash
+ask --completions bash >> ~/.bashrc
+
+# Zsh
+ask --completions zsh >> ~/.zshrc
+
+# Fish
+ask --completions fish > ~/.config/fish/completions/ask.fish
+
+# PowerShell
+ask --completions powershell >> $PROFILE
+
+# Elvish
+ask --completions elvish >> ~/.elvish/rc.elv
+```
+
+## Auto-Update
+
+The CLI automatically checks for updates in the background and notifies you on the next run when an update is available. To manually check and install updates:
+
+```bash
+ask --update
+```
+
+Set `ASK_NO_UPDATE=1` to disable automatic update checks.
 
 ## License
 

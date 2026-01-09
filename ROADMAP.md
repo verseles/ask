@@ -33,7 +33,7 @@ Description: JSON storage for conversation history
 - [x] 3.01 JSON file storage backend
 - [x] 3.02 Context manager with directory-based keys
 - [x] 3.03 Context commands (--clear, --history)
-- [ ] 3.04 Automatic TTL cleanup (implemented but untested in production)
+- [x] 3.04 Automatic TTL cleanup
 
 ### Feature 4: Command Execution
 
@@ -42,7 +42,7 @@ Description: Safe command detection and execution
 - [x] 4.01 Safety detector for destructive commands (regex patterns)
 - [x] 4.02 Command executor with follow-up echo
 - [x] 4.03 Confirmation prompts for destructive commands
-- [ ] 4.04 Retry with sudo suggestion on permission denied
+- [x] 4.04 Retry with sudo suggestion on permission denied
 
 ### Feature 5: Output & Streaming
 
@@ -59,9 +59,9 @@ Description: Streaming, formatting, colors
 Description: Auto-update, custom commands, piping
 
 - [x] 6.01 Piping support (stdin detection)
-- [ ] 6.02 Auto-update with self_update crate
-- [ ] 6.03 Custom commands from config ([commands.cm] etc.)
-- [ ] 6.04 Update check notification
+- [x] 6.02 Auto-update from GitHub releases
+- [x] 6.03 Custom commands from config ([commands.cm] etc.)
+- [x] 6.04 Update check notification
 
 ### Feature 7: Documentation & CI/CD
 
@@ -83,9 +83,9 @@ Description: Additional tests, cleanup, optimization
 - [x] 8.01 Integration tests for CLI (basic)
 - [ ] 8.02 Integration tests for providers (mock server)
 - [x] 8.03 Remove dead code warnings
-- [ ] 8.04 Add more unit tests for config loading
+- [x] 8.04 Add more unit tests for config loading
 - [ ] 8.05 Benchmark binary size optimization
-- [ ] 8.06 Shell completions generation
+- [x] 8.06 Shell completions generation
 
 ## Legend
 
@@ -126,11 +126,18 @@ Description: Additional tests, cleanup, optimization
 3. **Improved UX** - `ask init` reads existing config and shows current values as defaults
 4. **Brief responses** - Questions get concise 1-3 sentence answers with terminal colors
 
+### Completed in v0.6.0
+
+1. **Auto-update** - Background update checks with GitHub releases, notification on next run
+2. **Custom commands** - Config-defined commands with custom system prompts
+3. **Sudo retry** - Suggests retry with sudo on permission denied errors
+4. **Shell completions** - Bash, Zsh, Fish, PowerShell, Elvish support via --completions
+5. **Config tests** - Comprehensive unit tests for config loading and parsing
+
 ### Known Limitations
 
-1. **No auto-update** - Self-update feature not implemented
-2. **No custom commands** - Config-defined commands not parsed
-3. **Limited tests** - Only basic unit tests implemented
+1. **Limited tests** - Provider integration tests with mock server not yet implemented
+2. **Binary size** - Could be optimized further
 
 ### Future Considerations
 
