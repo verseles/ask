@@ -43,6 +43,11 @@ detect_os() {
     esac
 }
 
+# Check if running in Termux
+is_termux() {
+    [ -n "${TERMUX_VERSION:-}" ] || [ -d "/data/data/com.termux" ]
+}
+
 # Detect architecture
 detect_arch() {
     case "$(uname -m)" in
@@ -205,20 +210,27 @@ main() {
             echo ""
             echo "Add it to your shell configuration:"
             echo ""
-            case "$SHELL" in
-                */bash)
-                    echo "  echo 'export PATH=\"\$HOME/.local/bin:\$PATH\"' >> ~/.bashrc"
-                    ;;
-                */zsh)
-                    echo "  echo 'export PATH=\"\$HOME/.local/bin:\$PATH\"' >> ~/.zshrc"
-                    ;;
-                */fish)
-                    echo "  fish_add_path ~/.local/bin"
-                    ;;
-                *)
-                    echo "  export PATH=\"\$HOME/.local/bin:\$PATH\""
-                    ;;
-            esac
+            if is_termux; then
+                echo "  echo 'export PATH=\"\$HOME/.local/bin:\$PATH\"' >> ~/.bashrc"
+                echo ""
+                echo "Then reload your shell:"
+                echo "  source ~/.bashrc"
+            else
+                case "$SHELL" in
+                    */bash)
+                        echo "  echo 'export PATH=\"\$HOME/.local/bin:\$PATH\"' >> ~/.bashrc"
+                        ;;
+                    */zsh)
+                        echo "  echo 'export PATH=\"\$HOME/.local/bin:\$PATH\"' >> ~/.zshrc"
+                        ;;
+                    */fish)
+                        echo "  fish_add_path ~/.local/bin"
+                        ;;
+                    *)
+                        echo "  export PATH=\"\$HOME/.local/bin:\$PATH\""
+                        ;;
+                esac
+            fi
             echo ""
             ;;
     esac
@@ -227,9 +239,19 @@ main() {
     success "Installation complete!"
     echo ""
 
-    # Linux-specific: Setup uinput for command injection
-    if [ "$OS" = "linux" ]; then
+    # Linux-specific: Setup uinput for command injection (skip on Termux)
+    if [ "$OS" = "linux" ] && ! is_termux; then
         setup_uinput
+    fi
+
+    # Termux-specific message
+    if is_termux; then
+        echo ""
+        info "Termux detected"
+        echo ""
+        echo "Note: Command injection is not available on Termux/Android."
+        echo "Commands will be displayed for you to copy manually."
+        echo ""
     fi
 
     # macOS-specific: Inform about Accessibility permission
