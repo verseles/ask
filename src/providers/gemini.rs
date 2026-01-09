@@ -4,6 +4,7 @@ use super::{Message, Provider, StreamCallback};
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use futures::StreamExt;
+use crate::http::create_client;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
@@ -77,7 +78,7 @@ impl GeminiProvider {
             api_key,
             base_url,
             model,
-            client: Client::new(),
+            client: create_client(),
         }
     }
 

@@ -104,7 +104,7 @@ dependencies = [
 
 [[package]]
 name = "ask"
-version = "0.7.1"
+version = "0.7.2"
 dependencies = [
  "anyhow",
  "arboard",
@@ -117,6 +117,7 @@ dependencies = [
  "dirs 5.0.1",
  "enigo",
  "futures",
+ "hickory-resolver",
  "indicatif",
  "mouse-keyboard-input",
  "regex",
@@ -1994,7 +1995,6 @@ dependencies = [
  "bytes",
  "futures-core",
  "futures-util",
- "hickory-resolver",
  "http",
  "http-body",
  "http-body-util",
@@ -2003,7 +2003,6 @@ dependencies = [
  "hyper-util",
  "js-sys",
  "log",
- "once_cell",
  "percent-encoding",
  "pin-project-lite",
  "quinn",

@@ -1,5 +1,6 @@
 //! Auto-update module - checks GitHub releases and updates the binary
 
+use crate::http::create_client_builder;
 use anyhow::{anyhow, Result};
 use colored::Colorize;
 use serde::Deserialize;
@@ -232,7 +233,7 @@ pub async fn background_update_check() -> Result<()> {
     fs::write(&last_check_file, chrono::Utc::now().timestamp().to_string())?;
 
     // Fetch latest release
-    let client = reqwest::Client::builder()
+    let client = create_client_builder()
         .timeout(std::time::Duration::from_secs(10))
         .user_agent(format!("ask/{}", current_version))
         .build()?;
@@ -308,7 +309,7 @@ pub async fn check_and_update() -> Result<()> {
 
     println!("{}", "Checking for updates...".cyan());
 
-    let client = reqwest::Client::builder()
+    let client = create_client_builder()
         .timeout(std::time::Duration::from_secs(30))
         .user_agent(format!("ask/{}", current_version))
         .build()?;

@@ -1,6 +1,6 @@
 [package]
 name = "ask"
-version = "0.7.2"
+version = "0.7.3"
 edition = "2021"
 license = "AGPL-3.0"
 description = "Ask anything in plain text, get commands or answers instantly. No quotes needed."
@@ -14,7 +14,8 @@ clap = { version = "4", features = ["derive", "env"] }
 serde = { version = "1", features = ["derive"] }
 toml = "0.8"
 tokio = { version = "1", features = ["full"] }
-reqwest = { version = "0.12", default-features = false, features = ["stream", "json", "rustls-tls", "hickory-dns"] }
+reqwest = { version = "0.12", default-features = false, features = ["stream", "json", "rustls-tls"] }
+hickory-resolver = "0.25"
 futures = "0.3"
 colored = "2"
 indicatif = "0.17"

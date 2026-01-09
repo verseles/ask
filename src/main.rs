@@ -7,6 +7,7 @@ mod completions;
 mod config;
 mod context;
 mod executor;
+pub mod http;
 mod output;
 mod providers;
 mod update;
