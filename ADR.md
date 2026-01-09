@@ -197,7 +197,7 @@ io::stdout().flush()?;
 
 ## ADR-009: Multi-layer Configuration Precedence
 
-**Status**: Accepted
+**Status**: Accepted (Updated v0.6.0)
 
 **Context**: Different contexts need different configurations.
 
@@ -209,16 +209,28 @@ io::stdout().flush()?;
 5. XDG config (`~/.config/ask/config.toml`)
 6. Defaults (lowest)
 
+**Environment Variables** (added v0.6.0):
+All TOML options have corresponding environment variables:
+- `ASK_PROVIDER`, `ASK_MODEL`, `ASK_STREAM` - Default settings
+- `ASK_{PROVIDER}_API_KEY` - API keys (GEMINI, OPENAI, ANTHROPIC)
+- `ASK_{PROVIDER}_BASE_URL` - Custom endpoints
+- `ASK_AUTO_EXECUTE`, `ASK_CONFIRM_DESTRUCTIVE`, `ASK_TIMEOUT` - Behavior
+- `ASK_CONTEXT_MAX_AGE`, `ASK_CONTEXT_MAX_MESSAGES`, `ASK_CONTEXT_PATH` - Context
+- `ASK_UPDATE_AUTO_CHECK`, `ASK_UPDATE_INTERVAL`, `ASK_UPDATE_CHANNEL` - Updates
+- `ASK_NO_UPDATE` - Disable update checks entirely
+
 **Rationale**:
 - Project-specific settings possible
-- Environment variables for CI/CD
+- Environment variables for CI/CD and containers
 - User defaults at home level
 - Follows Unix conventions
+- Full env var coverage enables 12-factor app deployment
 
 **Consequences**:
 - Flexible configuration
 - May be confusing which config is active
 - Config merging logic to maintain
+- Easy to use in Docker/CI environments
 
 ---
 
@@ -267,3 +279,97 @@ io::stdout().flush()?;
 - Requires Accessibility permission on macOS
 - Slightly slower than paste for long commands
 - Graceful fallback to interactive prompt if permissions unavailable
+
+---
+
+## ADR-012: Auto-Update via GitHub Releases
+
+**Status**: Accepted
+
+**Context**: Users need an easy way to keep the CLI updated without manual downloads.
+
+**Decision**: Implement automatic update checking via GitHub Releases API with background process.
+
+**Implementation**:
+- Background check: Spawn detached process to check GitHub releases every 24h
+- Notification: Save update info to file, display on next run
+- Manual update: `ask --update` for interactive update with progress bar
+- Download: Fetch platform-specific binary from release assets
+- Replace: Atomic binary replacement (rename on Unix, backup-replace on Windows)
+
+**Platform Assets**:
+```
+ask-linux-x86_64
+ask-linux-aarch64
+ask-darwin-x86_64
+ask-darwin-aarch64
+ask-windows-x86_64.exe
+```
+
+**Rationale**:
+- No external update tools required (self-contained)
+- Background check doesn't block CLI usage
+- GitHub Releases is reliable and free
+- Atomic replacement prevents corruption
+- User notification respects their workflow
+
+**Disable Options**:
+- `ASK_NO_UPDATE=1` - Disable all update checks
+- `ASK_UPDATE_AUTO_CHECK=false` - Disable background checks only
+- Config: `[update] auto_check = false`
+
+**Consequences**:
+- Binary must be writable (may fail in system directories)
+- Requires network access for updates
+- ~10KB overhead for update notification file
+- Windows may need admin for some install locations
+
+---
+
+## ADR-013: Custom Commands System
+
+**Status**: Accepted
+
+**Context**: Users want reusable shortcuts for common workflows (e.g., `git diff | ask cm` for commit messages).
+
+**Decision**: Implement config-defined custom commands with full override capabilities.
+
+**Configuration**:
+```toml
+[commands.cm]
+system = "Generate concise git commit message based on diff"
+type = "command"           # Forces command mode
+auto_execute = false       # Don't auto-run
+inherit_flags = true       # Respect -c, -t, etc.
+provider = "anthropic"     # Optional: override provider
+model = "claude-3-opus"    # Optional: override model
+```
+
+**Execution Flow**:
+1. First word of query checked against `config.commands`
+2. If match found:
+   - Remaining words become the query
+   - System prompt replaced with custom `system`
+   - Provider/model overridden if specified
+   - `type = "command"` forces command mode
+   - `auto_execute` controls `-y` behavior
+3. Piped input combined with query as usual
+
+**Example Usage**:
+```bash
+git diff | ask cm              # Uses [commands.cm] config
+cat code.rs | ask explain      # Uses [commands.explain] config
+ask review src/main.rs         # Uses [commands.review] config
+```
+
+**Rationale**:
+- Reduces repetitive prompts
+- Enables team-shared workflows via project config
+- Full flexibility with provider/model per command
+- Integrates naturally with piping
+
+**Consequences**:
+- Command names can shadow regular queries (use unique names)
+- Config complexity increases
+- No command-line definition (config only)
+- Custom commands not visible in `--help`

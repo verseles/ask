@@ -138,24 +138,92 @@ impl Config {
 
     /// Apply environment variable overrides
     fn apply_env_overrides(mut config: Config) -> Config {
-        // Provider override
+        // === Default settings ===
         if let Ok(provider) = std::env::var("ASK_PROVIDER") {
             config.default.provider = provider;
         }
-
-        // Model override
         if let Ok(model) = std::env::var("ASK_MODEL") {
             config.default.model = model;
         }
-
-        // Stream override
         if let Ok(stream) = std::env::var("ASK_STREAM") {
-            config.default.stream = stream.to_lowercase() == "true" || stream == "1";
+            config.default.stream = parse_bool(&stream);
+        }
+
+        // === Provider settings ===
+        // Base URLs
+        if let Ok(url) = std::env::var("ASK_GEMINI_BASE_URL") {
+            config
+                .providers
+                .entry("gemini".to_string())
+                .or_default()
+                .base_url = Some(url);
+        }
+        if let Ok(url) = std::env::var("ASK_OPENAI_BASE_URL") {
+            config
+                .providers
+                .entry("openai".to_string())
+                .or_default()
+                .base_url = Some(url);
+        }
+        if let Ok(url) = std::env::var("ASK_ANTHROPIC_BASE_URL") {
+            config
+                .providers
+                .entry("anthropic".to_string())
+                .or_default()
+                .base_url = Some(url);
+        }
+
+        // === Behavior settings ===
+        if let Ok(val) = std::env::var("ASK_AUTO_EXECUTE") {
+            config.behavior.auto_execute = parse_bool(&val);
+        }
+        if let Ok(val) = std::env::var("ASK_CONFIRM_DESTRUCTIVE") {
+            config.behavior.confirm_destructive = parse_bool(&val);
+        }
+        if let Ok(val) = std::env::var("ASK_TIMEOUT") {
+            if let Ok(timeout) = val.parse() {
+                config.behavior.timeout = timeout;
+            }
+        }
+
+        // === Context settings ===
+        if let Ok(val) = std::env::var("ASK_CONTEXT_MAX_AGE") {
+            if let Ok(age) = val.parse() {
+                config.context.max_age_minutes = age;
+            }
+        }
+        if let Ok(val) = std::env::var("ASK_CONTEXT_MAX_MESSAGES") {
+            if let Ok(max) = val.parse() {
+                config.context.max_messages = max;
+            }
+        }
+        if let Ok(path) = std::env::var("ASK_CONTEXT_PATH") {
+            config.context.storage_path = Some(path);
+        }
+
+        // === Update settings ===
+        if let Ok(val) = std::env::var("ASK_UPDATE_AUTO_CHECK") {
+            config.update.auto_check = parse_bool(&val);
+        }
+        if let Ok(val) = std::env::var("ASK_UPDATE_INTERVAL") {
+            if let Ok(hours) = val.parse() {
+                config.update.check_interval_hours = hours;
+            }
+        }
+        if let Ok(channel) = std::env::var("ASK_UPDATE_CHANNEL") {
+            config.update.channel = channel;
         }
 
         config
     }
+}
 
+/// Parse boolean from string (true/false/1/0/yes/no)
+fn parse_bool(s: &str) -> bool {
+    matches!(s.to_lowercase().as_str(), "true" | "1" | "yes" | "on")
+}
+
+impl Config {
     /// Load config from a TOML string (for testing)
     #[cfg(test)]
     pub fn from_toml(content: &str) -> Result<Config> {

@@ -47,7 +47,7 @@ pub struct DefaultConfig {
 }
 
 /// Provider-specific configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ProviderConfig {
     pub api_key: Option<String>,
 

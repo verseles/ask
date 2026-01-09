@@ -156,14 +156,42 @@ auto_execute = false
 
 ### Environment Variables
 
+All configuration options can be set via environment variables:
+
 ```bash
-ASK_PROVIDER=gemini
-ASK_MODEL=gemini-3-flash-preview
-ASK_GEMINI_API_KEY=...
-ASK_OPENAI_API_KEY=sk-...
-ASK_ANTHROPIC_API_KEY=sk-ant-...
-ASK_STREAM=true
-NO_COLOR=1  # Disable colors
+# Default settings
+ASK_PROVIDER=gemini              # Default provider
+ASK_MODEL=gemini-3-flash-preview # Default model
+ASK_STREAM=true                  # Enable streaming (true/false/1/0)
+
+# API Keys
+ASK_GEMINI_API_KEY=...           # Gemini API key
+ASK_OPENAI_API_KEY=sk-...        # OpenAI API key
+ASK_ANTHROPIC_API_KEY=sk-ant-... # Anthropic API key
+
+# Custom base URLs (for proxies or compatible APIs)
+ASK_GEMINI_BASE_URL=https://...
+ASK_OPENAI_BASE_URL=https://...   # e.g., for Ollama: http://localhost:11434/v1
+ASK_ANTHROPIC_BASE_URL=https://...
+
+# Behavior settings
+ASK_AUTO_EXECUTE=false           # Auto-execute safe commands
+ASK_CONFIRM_DESTRUCTIVE=true     # Confirm destructive commands
+ASK_TIMEOUT=30                   # Request timeout in seconds
+
+# Context settings
+ASK_CONTEXT_MAX_AGE=30           # Context TTL in minutes
+ASK_CONTEXT_MAX_MESSAGES=20      # Max messages in context
+ASK_CONTEXT_PATH=~/.local/share/ask/contexts  # Custom storage path
+
+# Update settings
+ASK_UPDATE_AUTO_CHECK=true       # Enable background update checks
+ASK_UPDATE_INTERVAL=24           # Hours between update checks
+ASK_UPDATE_CHANNEL=stable        # Update channel
+ASK_NO_UPDATE=1                  # Disable all update checks
+
+# Other
+NO_COLOR=1                       # Disable colors
 ```
 
 ## Providers
