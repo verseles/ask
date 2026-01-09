@@ -334,10 +334,10 @@ pub async fn init_config() -> Result<()> {
         .interact()?;
 
     let (provider, default_model_for_provider) = match provider_idx {
-        0 => ("gemini", "gemini-3-flash-preview"),
-        1 => ("openai", "gpt-5-mini"),
-        2 => ("anthropic", "claude-haiku-4-5"),
-        _ => ("gemini", "gemini-3-flash-preview"),
+        0 => ("gemini", defaults::DEFAULT_MODEL),
+        1 => ("openai", defaults::DEFAULT_OPENAI_MODEL),
+        2 => ("anthropic", defaults::DEFAULT_ANTHROPIC_MODEL),
+        _ => ("gemini", defaults::DEFAULT_MODEL),
     };
 
     // Use existing model if same provider
