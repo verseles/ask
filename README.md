@@ -93,6 +93,8 @@ OPTIONS:
         --no-think        Disable thinking mode (override config)
     -m, --model <MODEL>   Override configured model
     -p, --provider <NAME> Override configured provider
+    -P, --profile <NAME>  Use named profile (e.g., -P work, --profile=local)
+        --no-fallback     Disable profile fallback for this query
         --json            Output in JSON format
         --markdown        Output rendered in Markdown
         --raw             Output raw text without formatting
@@ -198,6 +200,58 @@ ASK_NO_UPDATE=1                  # Disable all update checks
 # Other
 NO_COLOR=1                       # Disable colors
 ```
+
+</details>
+
+## Profiles
+
+Named profiles let you switch between different configurations quickly, like rclone:
+
+```bash
+# Use work profile
+ask -P work how to deploy to kubernetes
+
+# Use local profile (Ollama)
+ask --profile=local explain this error
+
+# Disable fallback for a single query
+ask --no-fallback -P work critical query
+```
+
+<details>
+<summary>Profile Configuration Examples</summary>
+
+```toml
+# Set default profile
+default_profile = "work"
+
+# Work profile with cloud provider
+[profiles.work]
+provider = "openai"
+model = "gpt-5"
+api_key = "sk-..."
+fallback = "personal"  # retry with personal on errors
+
+# Personal profile with different provider
+[profiles.personal]
+provider = "anthropic"
+model = "claude-haiku-4-5"
+fallback = "none"  # don't retry with another profile
+
+# Local profile for Ollama/LM Studio
+[profiles.local]
+provider = "openai"
+base_url = "http://localhost:11434/v1"
+model = "llama3"
+api_key = "ollama"  # dummy key for local servers
+```
+
+**Inheritance**: Profiles inherit from `[default]` and `[providers.*]` sections - only specify what you want to override.
+
+**Fallback Options**:
+- `fallback = "profile-name"` - Use specific profile on provider errors
+- `fallback = "any"` - Try any available profile
+- `fallback = "none"` - Disable fallback (fail immediately)
 
 </details>
 

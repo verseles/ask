@@ -148,9 +148,9 @@ Description: Named profiles (like rclone) with fallback support for resilient AI
     model = "llama3"
     api_key = "ollama"  # some local servers require dummy key
     ```
-- [ ] 9.10 Review and update tests for Feature 9
-- [ ] 9.11 Review and update ADR.md if needed for Feature 9
-- [ ] 9.12 Review and update README.md if needed for Feature 9
+- [x] 9.10 Review and update tests for Feature 9
+- [x] 9.11 Review and update ADR.md if needed for Feature 9
+- [x] 9.12 Review and update README.md if needed for Feature 9
   - Use `<details>` sections for profile examples and fallback configuration
 
 ### Feature 10: Web Search Integration

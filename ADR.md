@@ -373,3 +373,62 @@ ask review src/main.rs         # Uses [commands.review] config
 - Config complexity increases
 - No command-line definition (config only)
 - Custom commands not visible in `--help`
+
+---
+
+## ADR-014: Multi-Profile System with Fallback
+
+**Status**: Accepted
+
+**Context**: Users need different configurations for different scenarios (work/personal, local/cloud, cost/quality tradeoffs) and resilience when a provider fails.
+
+**Decision**: Implement named profiles (inspired by rclone) with inheritance and fallback support.
+
+**Configuration**:
+```toml
+default_profile = "work"
+
+[profiles.work]
+provider = "openai"
+model = "gpt-5"
+api_key = "sk-..."
+fallback = "personal"  # retry with this profile on error
+
+[profiles.personal]
+provider = "anthropic"
+model = "claude-haiku-4-5"
+fallback = "none"  # disable fallback for this profile
+
+[profiles.local]
+provider = "openai"
+base_url = "http://localhost:11434/v1"  # Ollama, LM Studio
+model = "llama3"
+api_key = "ollama"  # dummy key for local servers
+```
+
+**CLI Flags**:
+- `-P work` or `--profile=work` - Select active profile
+- `--no-fallback` - Disable fallback for single query
+
+**Inheritance Order**:
+1. CLI arguments (highest priority)
+2. Profile settings (`[profiles.name]`)
+3. Default config (`[default]`, `[providers.*]`)
+4. Built-in defaults (lowest priority)
+
+**Fallback Options**:
+- `fallback = "other-profile"` - Use specific profile on error
+- `fallback = "any"` - Try any available profile (order: first in config)
+- `fallback = "none"` - Disable fallback entirely
+
+**Rationale**:
+- Familiar pattern from rclone users
+- Profiles only override what they specify (partial configs)
+- Fallback provides resilience (429 errors, timeouts)
+- OpenAI-compatible base_url enables local models
+
+**Consequences**:
+- Profile names must be unique
+- Circular fallback chains are possible (user responsibility)
+- `--no-fallback` overrides any profile fallback setting
+- Methods `active_profile()` and `fallback_profile()` prepared for auto-fallback (Feature 9.06)
