@@ -3,11 +3,7 @@
 //! Uses hickory-dns with Cloudflare DNS (1.1.1.1) to avoid relying on
 //! system DNS configuration, which may not exist on some platforms (e.g., Termux/Android).
 
-use hickory_resolver::{
-    config::ResolverConfig,
-    name_server::TokioConnectionProvider,
-    Resolver,
-};
+use hickory_resolver::{config::ResolverConfig, name_server::TokioConnectionProvider, Resolver};
 use reqwest::dns::{Addrs, Name, Resolve, Resolving};
 use std::io;
 use std::net::SocketAddr;
@@ -42,12 +38,9 @@ impl Resolve for HickoryDnsResolver {
             let lookup = resolver
                 .lookup_ip(name.as_str())
                 .await
-                .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+                .map_err(io::Error::other)?;
 
-            let addrs: Vec<SocketAddr> = lookup
-                .iter()
-                .map(|ip| SocketAddr::new(ip, 0))
-                .collect();
+            let addrs: Vec<SocketAddr> = lookup.iter().map(|ip| SocketAddr::new(ip, 0)).collect();
 
             Ok(Box::new(addrs.into_iter()) as Addrs)
         })

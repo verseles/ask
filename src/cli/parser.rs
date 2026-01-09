@@ -4,8 +4,9 @@ use std::env;
 
 #[derive(Debug, Clone, Default)]
 pub struct Args {
-    /// Use/create context for current directory
-    pub context: bool,
+    /// Use/create context for current directory (value = TTL in minutes, 0 = permanent)
+    /// None = no context, Some(minutes) = use context with TTL
+    pub context: Option<u64>,
 
     /// Force command mode (bypass auto-detection)
     pub command_mode: bool,
@@ -66,6 +67,16 @@ pub struct Args {
 }
 
 impl Args {
+    /// Check if context is enabled
+    pub fn has_context(&self) -> bool {
+        self.context.is_some()
+    }
+
+    /// Get context TTL in minutes (default 30)
+    pub fn context_ttl(&self) -> u64 {
+        self.context.unwrap_or(30)
+    }
+
     /// Parse arguments flexibly, allowing flags before or after text
     pub fn parse_flexible() -> Self {
         let args: Vec<String> = env::args().skip(1).collect();
@@ -82,14 +93,16 @@ impl Args {
             let arg = &args[i];
 
             match arg.as_str() {
+                // Context flag with optional value
+                "-c" => result.context = Some(30), // default 30 minutes
+                "--context" => result.context = Some(30),
+
                 // Boolean flags (short)
-                "-c" => result.context = true,
                 "-x" => result.command_mode = true,
                 "-y" => result.yes = true,
                 "-t" => result.think = true,
 
                 // Boolean flags (long)
-                "--context" => result.context = true,
                 "--command" => result.command_mode = true,
                 "--yes" => result.yes = true,
                 "--json" => result.json = true,
@@ -141,20 +154,59 @@ impl Args {
                     }
                 }
 
-                // Handle combined short flags like -cy
+                // Handle --context=N format
+                s if s.starts_with("--context=") => {
+                    let value = s.strip_prefix("--context=").unwrap();
+                    result.context = Some(value.parse().unwrap_or(30));
+                }
+
+                // Handle -c=N format
+                s if s.starts_with("-c=") => {
+                    let value = s.strip_prefix("-c=").unwrap();
+                    result.context = Some(value.parse().unwrap_or(30));
+                }
+
+                // Handle combined short flags like -cy or -c60
                 arg if arg.starts_with('-') && !arg.starts_with("--") && arg.len() > 2 => {
-                    for c in arg.chars().skip(1) {
-                        match c {
-                            'c' => result.context = true,
-                            'x' => result.command_mode = true,
-                            'y' => result.yes = true,
-                            't' => result.think = true,
-                            'V' => result.version = true,
-                            'h' => {
-                                print_help();
-                                std::process::exit(0);
+                    let chars: Vec<char> = arg.chars().skip(1).collect();
+
+                    // Check if it's -c followed by a number (like -c60)
+                    if chars.first() == Some(&'c') {
+                        let rest: String = chars[1..].iter().collect();
+                        if let Ok(minutes) = rest.parse::<u64>() {
+                            result.context = Some(minutes);
+                        } else {
+                            // It's combined flags like -cy
+                            for c in chars {
+                                match c {
+                                    'c' => result.context = Some(30),
+                                    'x' => result.command_mode = true,
+                                    'y' => result.yes = true,
+                                    't' => result.think = true,
+                                    'V' => result.version = true,
+                                    'h' => {
+                                        print_help();
+                                        std::process::exit(0);
+                                    }
+                                    _ => {}
+                                }
                             }
-                            _ => {}
+                        }
+                    } else {
+                        // Regular combined flags like -xy
+                        for c in chars {
+                            match c {
+                                'c' => result.context = Some(30),
+                                'x' => result.command_mode = true,
+                                'y' => result.yes = true,
+                                't' => result.think = true,
+                                'V' => result.version = true,
+                                'h' => {
+                                    print_help();
+                                    std::process::exit(0);
+                                }
+                                _ => {}
+                            }
                         }
                     }
                 }
@@ -188,7 +240,8 @@ USAGE:
     ask [OPTIONS] <your question here>
 
 OPTIONS:
-    -c, --context         Use/create context for current directory
+    -c, --context[=MIN]   Use context for current directory (default: 30 min, 0 = permanent)
+                          Examples: -c (30 min), -c60 (60 min), --context=120 (2 hours)
     -x, --command         Force command mode (bypass auto-detection)
     -y, --yes             Auto-execute commands without confirmation
     -t, --think           Enable thinking mode (override config)
@@ -213,8 +266,10 @@ SUBCOMMANDS:
 EXAMPLES:
     ask how to list docker containers
     ask -x delete old log files
-    ask -c explain kubernetes
-    ask -c what about pods?
+    ask -c explain kubernetes         # 30 min context (default)
+    ask -c60 what about pods?         # 60 min context
+    ask -c0 long conversation         # permanent context
+    ask --context=120 complex topic   # 2 hour context
     git diff | ask cm
     cat main.rs | ask explain
 
@@ -245,8 +300,38 @@ mod tests {
         // This test would need to mock env::args
         // For now, just test the default
         let args = Args::default();
-        assert!(!args.context);
+        assert!(args.context.is_none());
+        assert!(!args.has_context());
         assert!(!args.command_mode);
         assert!(args.query.is_empty());
+    }
+
+    #[test]
+    fn test_context_ttl_default() {
+        let args = Args {
+            context: Some(30),
+            ..Default::default()
+        };
+        assert!(args.has_context());
+        assert_eq!(args.context_ttl(), 30);
+    }
+
+    #[test]
+    fn test_context_ttl_custom() {
+        let args = Args {
+            context: Some(60),
+            ..Default::default()
+        };
+        assert_eq!(args.context_ttl(), 60);
+    }
+
+    #[test]
+    fn test_context_permanent() {
+        let args = Args {
+            context: Some(0),
+            ..Default::default()
+        };
+        assert!(args.has_context());
+        assert_eq!(args.context_ttl(), 0);
     }
 }

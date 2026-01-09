@@ -49,16 +49,16 @@ pub async fn run() -> Result<()> {
     }
 
     // Handle context commands
-    if args.context {
+    if args.has_context() {
+        let manager = ContextManager::with_ttl(&config, args.context_ttl())?;
+
         if args.clear_context {
-            let manager = ContextManager::new(&config)?;
             manager.clear_current()?;
             println!("{}", "Context cleared.".green());
             return Ok(());
         }
 
         if args.show_history {
-            let manager = ContextManager::new(&config)?;
             manager.show_history()?;
             return Ok(());
         }
@@ -72,6 +72,7 @@ pub async fn run() -> Result<()> {
         println!("  ask how to list docker containers");
         println!("  ask -x delete old log files");
         println!("  ask -c explain kubernetes");
+        println!("  ask -c60 follow up question    # 60 min context");
         println!();
         println!("Run 'ask init' to configure your API keys.");
         println!("Run 'ask --help' for more options.");
@@ -221,9 +222,12 @@ async fn handle_command_intent(
     let mut messages = Vec::new();
 
     // Add context if enabled
-    if args.context {
-        let manager = ContextManager::new(config)?;
+    if args.has_context() {
+        let manager = ContextManager::with_ttl(config, args.context_ttl())?;
         messages.extend(manager.get_messages()?);
+
+        // Show context echo if needed
+        manager.print_echo_if_needed()?;
     }
 
     let os = std::env::consts::OS;
@@ -274,8 +278,8 @@ Rules:
     let command = response.trim();
 
     // Save to context if enabled
-    if args.context {
-        let manager = ContextManager::new(config)?;
+    if args.has_context() {
+        let manager = ContextManager::with_ttl(config, args.context_ttl())?;
         manager.add_message("user", query)?;
         manager.add_message("assistant", command)?;
     }
@@ -329,9 +333,12 @@ async fn handle_question_intent(
 ) -> Result<()> {
     let mut messages = Vec::new();
 
-    if args.context {
-        let manager = ContextManager::new(config)?;
+    if args.has_context() {
+        let manager = ContextManager::with_ttl(config, args.context_ttl())?;
         messages.extend(manager.get_messages()?);
+
+        // Show context echo if needed
+        manager.print_echo_if_needed()?;
     }
 
     let locale = std::env::var("LANG").unwrap_or_else(|_| "en_US.UTF-8".to_string());
@@ -382,8 +389,8 @@ async fn handle_question_intent(
         println!();
 
         // Save to context if enabled
-        if args.context {
-            let manager = ContextManager::new(config)?;
+        if args.has_context() {
+            let manager = ContextManager::with_ttl(config, args.context_ttl())?;
             let response_text = full_response.lock().unwrap().clone();
             manager.add_message("user", query)?;
             manager.add_message("assistant", &response_text)?;
@@ -396,8 +403,8 @@ async fn handle_question_intent(
         formatter.format(&response);
 
         // Save to context if enabled
-        if args.context {
-            let manager = ContextManager::new(config)?;
+        if args.has_context() {
+            let manager = ContextManager::with_ttl(config, args.context_ttl())?;
             manager.add_message("user", query)?;
             manager.add_message("assistant", &response)?;
         }

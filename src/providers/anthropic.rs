@@ -1,10 +1,10 @@
 //! Anthropic Claude provider implementation
 
 use super::{Message, Provider, StreamCallback};
+use crate::http::create_client;
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use futures::StreamExt;
-use crate::http::create_client;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 

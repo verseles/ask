@@ -8,17 +8,36 @@ use chrono::Utc;
 use colored::Colorize;
 use sha2::{Digest, Sha256};
 
+/// Context statistics for echo display
+#[derive(Debug, Clone)]
+pub struct ContextStats {
+    pub message_count: usize,
+    pub total_chars: usize,
+}
+
+impl ContextStats {
+    /// Check if context should show echo (> 500 chars OR > 3 messages)
+    pub fn should_show_echo(&self) -> bool {
+        self.total_chars > 500 || self.message_count > 3
+    }
+}
+
 /// Manages conversation context for the current directory
 pub struct ContextManager {
     storage: ContextStorage,
     context_id: String,
     max_messages: usize,
-    #[allow(dead_code)]
     max_age_minutes: u64,
 }
 
+#[allow(dead_code)]
 impl ContextManager {
     pub fn new(config: &Config) -> Result<Self> {
+        Self::with_ttl(config, config.context.max_age_minutes)
+    }
+
+    /// Create with custom TTL (0 = permanent, no cleanup)
+    pub fn with_ttl(config: &Config, ttl_minutes: u64) -> Result<Self> {
         let storage_path = config.context_storage_path();
         let storage = ContextStorage::new(storage_path)?;
 
@@ -26,14 +45,16 @@ impl ContextManager {
         let pwd = std::env::current_dir()?.to_string_lossy().to_string();
         let context_id = Self::hash_pwd(&pwd);
 
-        // Run cleanup
-        let _ = storage.cleanup(config.context.max_age_minutes);
+        // Run cleanup only if TTL > 0 (not permanent)
+        if ttl_minutes > 0 {
+            let _ = storage.cleanup(ttl_minutes);
+        }
 
         Ok(Self {
             storage,
             context_id,
             max_messages: config.context.max_messages,
-            max_age_minutes: config.context.max_age_minutes,
+            max_age_minutes: ttl_minutes,
         })
     }
 
@@ -43,6 +64,25 @@ impl ContextManager {
         hasher.update(pwd.as_bytes());
         let result = hasher.finalize();
         format!("{:x}", result)[..16].to_string()
+    }
+
+    /// Get context statistics (message count and total chars)
+    pub fn get_stats(&self) -> Result<ContextStats> {
+        let entry = self.storage.load(&self.context_id)?;
+
+        Ok(entry
+            .map(|e| {
+                let message_count = e.messages.len();
+                let total_chars: usize = e.messages.iter().map(|m| m.content.len()).sum();
+                ContextStats {
+                    message_count,
+                    total_chars,
+                }
+            })
+            .unwrap_or(ContextStats {
+                message_count: 0,
+                total_chars: 0,
+            }))
     }
 
     /// Get messages from the current context
@@ -99,6 +139,11 @@ impl ContextManager {
         self.storage.delete(&self.context_id)
     }
 
+    /// Get max age in minutes (0 = permanent)
+    pub fn max_age_minutes(&self) -> u64 {
+        self.max_age_minutes
+    }
+
     /// Show context history
     pub fn show_history(&self) -> Result<()> {
         let entry = self.storage.load(&self.context_id)?;
@@ -117,6 +162,13 @@ impl ContextManager {
                     ctx.last_used.format("%Y-%m-%d %H:%M:%S")
                 );
                 println!("{} {}", "Messages:".cyan(), ctx.messages.len());
+
+                // Show TTL info
+                if self.max_age_minutes == 0 {
+                    println!("{} {}", "TTL:".cyan(), "permanent".green());
+                } else {
+                    println!("{} {} minutes", "TTL:".cyan(), self.max_age_minutes);
+                }
                 println!();
 
                 for msg in &ctx.messages {
@@ -148,6 +200,27 @@ impl ContextManager {
             }
         }
 
+        Ok(())
+    }
+
+    /// Print context echo if stats exceed threshold
+    pub fn print_echo_if_needed(&self) -> Result<()> {
+        let stats = self.get_stats()?;
+        if stats.should_show_echo() {
+            let ttl_info = if self.max_age_minutes == 0 {
+                "permanent".to_string()
+            } else {
+                format!("{} min TTL", self.max_age_minutes)
+            };
+            eprintln!(
+                "{}",
+                format!(
+                    "(context: {} msgs, {} chars, {} - use -c --clear to reset)",
+                    stats.message_count, stats.total_chars, ttl_info
+                )
+                .bright_black()
+            );
+        }
         Ok(())
     }
 }
