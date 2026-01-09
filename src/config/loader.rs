@@ -137,6 +137,16 @@ impl Config {
                 }
                 commands
             },
+            // Merge profiles: base + overlay, overlay wins conflicts
+            profiles: {
+                let mut profiles = base.profiles;
+                for (k, v) in overlay.profiles {
+                    profiles.insert(k, v);
+                }
+                profiles
+            },
+            // Overlay wins for default_profile
+            default_profile: overlay.default_profile.or(base.default_profile),
         }
     }
 
@@ -417,5 +427,211 @@ model = "gpt-4-turbo"
         let config = Config::from_toml(toml).unwrap();
         assert_eq!(config.active_provider(), "openai");
         assert_eq!(config.active_model(), "gpt-4-turbo");
+    }
+
+    #[test]
+    fn test_parse_profiles() {
+        let toml = r#"
+default_profile = "work"
+
+[profiles.work]
+provider = "openai"
+model = "gpt-5"
+api_key = "sk-work-key"
+
+[profiles.personal]
+provider = "anthropic"
+model = "claude-haiku-4-5"
+base_url = "https://custom.anthropic.com"
+fallback = "work"
+
+[profiles.local]
+provider = "openai"
+base_url = "http://localhost:11434/v1"
+model = "llama3"
+api_key = "ollama"
+fallback = "none"
+"#;
+        let config = Config::from_toml(toml).unwrap();
+
+        assert_eq!(config.default_profile.as_deref(), Some("work"));
+        assert_eq!(config.profiles.len(), 3);
+
+        let work = config.profiles.get("work").unwrap();
+        assert_eq!(work.provider.as_deref(), Some("openai"));
+        assert_eq!(work.model.as_deref(), Some("gpt-5"));
+        assert_eq!(work.api_key.as_deref(), Some("sk-work-key"));
+
+        let personal = config.profiles.get("personal").unwrap();
+        assert_eq!(personal.provider.as_deref(), Some("anthropic"));
+        assert_eq!(personal.fallback.as_deref(), Some("work"));
+
+        let local = config.profiles.get("local").unwrap();
+        assert_eq!(local.base_url.as_deref(), Some("http://localhost:11434/v1"));
+        assert_eq!(local.fallback.as_deref(), Some("none"));
+    }
+
+    #[test]
+    fn test_merge_profiles() {
+        let base_toml = r#"
+[profiles.work]
+provider = "gemini"
+model = "gemini-flash"
+"#;
+        let overlay_toml = r#"
+[profiles.work]
+model = "gemini-pro"
+
+[profiles.personal]
+provider = "anthropic"
+"#;
+        let base = Config::from_toml(base_toml).unwrap();
+        let overlay = Config::from_toml(overlay_toml).unwrap();
+        let merged = Config::merge(base, overlay);
+
+        assert_eq!(merged.profiles.len(), 2);
+
+        let work = merged.profiles.get("work").unwrap();
+        assert_eq!(work.model.as_deref(), Some("gemini-pro"));
+
+        let personal = merged.profiles.get("personal").unwrap();
+        assert_eq!(personal.provider.as_deref(), Some("anthropic"));
+    }
+
+    #[test]
+    fn test_profile_inheritance() {
+        use crate::cli::Args;
+
+        let toml = r#"
+[default]
+provider = "gemini"
+model = "gemini-flash"
+
+[providers.openai]
+api_key = "base-key"
+
+[profiles.work]
+provider = "openai"
+model = "gpt-5"
+api_key = "profile-key"
+"#;
+        let config = Config::from_toml(toml).unwrap();
+        let args = Args {
+            profile: Some("work".to_string()),
+            ..Default::default()
+        };
+        let applied = config.with_cli_overrides(&args);
+
+        assert_eq!(applied.active_provider(), "openai");
+        assert_eq!(applied.active_model(), "gpt-5");
+        assert_eq!(
+            applied.providers.get("openai").unwrap().api_key.as_deref(),
+            Some("profile-key")
+        );
+    }
+
+    #[test]
+    fn test_default_profile_selection() {
+        use crate::cli::Args;
+
+        let toml = r#"
+default_profile = "work"
+
+[profiles.work]
+provider = "openai"
+model = "gpt-5"
+
+[profiles.personal]
+provider = "anthropic"
+"#;
+        let config = Config::from_toml(toml).unwrap();
+        let args = Args::default();
+        let applied = config.with_cli_overrides(&args);
+
+        assert_eq!(applied.active_provider(), "openai");
+        assert_eq!(applied.active_model(), "gpt-5");
+    }
+
+    #[test]
+    fn test_cli_overrides_profile() {
+        use crate::cli::Args;
+
+        let toml = r#"
+[profiles.work]
+provider = "openai"
+model = "gpt-5"
+"#;
+        let config = Config::from_toml(toml).unwrap();
+        let args = Args {
+            profile: Some("work".to_string()),
+            model: Some("gpt-4".to_string()),
+            ..Default::default()
+        };
+        let applied = config.with_cli_overrides(&args);
+
+        assert_eq!(applied.active_provider(), "openai");
+        assert_eq!(applied.active_model(), "gpt-4");
+    }
+
+    #[test]
+    fn test_fallback_profile_none() {
+        let toml = r#"
+[profiles.work]
+provider = "openai"
+fallback = "none"
+
+[profiles.personal]
+provider = "anthropic"
+"#;
+        let config = Config::from_toml(toml).unwrap();
+        assert!(config.fallback_profile("work").is_none());
+    }
+
+    #[test]
+    fn test_fallback_profile_specific() {
+        let toml = r#"
+[profiles.work]
+provider = "openai"
+fallback = "personal"
+
+[profiles.personal]
+provider = "anthropic"
+"#;
+        let config = Config::from_toml(toml).unwrap();
+        assert_eq!(
+            config.fallback_profile("work"),
+            Some("personal".to_string())
+        );
+    }
+
+    #[test]
+    fn test_fallback_profile_any() {
+        let toml = r#"
+[profiles.work]
+provider = "openai"
+fallback = "any"
+
+[profiles.personal]
+provider = "anthropic"
+"#;
+        let config = Config::from_toml(toml).unwrap();
+        let fallback = config.fallback_profile("work");
+        assert!(fallback.is_some());
+        assert_ne!(fallback.as_deref(), Some("work"));
+    }
+
+    #[test]
+    fn test_fallback_profile_default() {
+        let toml = r#"
+[profiles.work]
+provider = "openai"
+
+[profiles.personal]
+provider = "anthropic"
+"#;
+        let config = Config::from_toml(toml).unwrap();
+        let fallback = config.fallback_profile("work");
+        assert!(fallback.is_some());
+        assert_ne!(fallback.as_deref(), Some("work"));
     }
 }

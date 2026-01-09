@@ -20,6 +20,9 @@ pub struct Args {
     /// Override configured provider
     pub provider: Option<String>,
 
+    /// Select named profile
+    pub profile: Option<String>,
+
     /// Enable thinking mode (override config)
     pub think: bool,
 
@@ -40,6 +43,9 @@ pub struct Args {
 
     /// Disable result echo after execution
     pub no_follow: bool,
+
+    /// Disable fallback to other profiles on error
+    pub no_fallback: bool,
 
     /// Check and install updates
     pub update: bool,
@@ -110,6 +116,7 @@ impl Args {
                 "--raw" => result.raw = true,
                 "--no-color" => result.no_color = true,
                 "--no-follow" => result.no_follow = true,
+                "--no-fallback" => result.no_fallback = true,
                 "--think" => result.think = true,
                 "--no-think" => result.no_think = true,
                 "--update" => result.update = true,
@@ -141,6 +148,12 @@ impl Args {
                         result.provider = Some(args[i].clone());
                     }
                 }
+                "-P" | "--profile" => {
+                    i += 1;
+                    if i < args.len() {
+                        result.profile = Some(args[i].clone());
+                    }
+                }
 
                 // Hidden internal flag for background injection
                 "--inject-raw" => {
@@ -168,6 +181,12 @@ impl Args {
                 s if s.starts_with("-c=") => {
                     let value = s.strip_prefix("-c=").unwrap();
                     result.context = Some(value.parse().unwrap_or(30));
+                }
+
+                // Handle --profile=NAME format
+                s if s.starts_with("--profile=") => {
+                    let value = s.strip_prefix("--profile=").unwrap();
+                    result.profile = Some(value.to_string());
                 }
 
                 // Handle combined short flags like -cy or -c60
@@ -310,11 +329,13 @@ OPTIONS:
         --no-think        Disable thinking mode (override config)
     -m, --model <MODEL>   Override configured model
     -p, --provider <NAME> Override configured provider
+    -P, --profile <NAME>  Use named profile from config
         --json            Output in JSON format
         --markdown        Output rendered in Markdown
         --raw             Output raw text without formatting
         --no-color        Disable colorized output
         --no-follow       Disable result echo after execution
+        --no-fallback     Disable fallback to other profiles on error
         --update          Check and install updates
         --completions <SHELL>  Generate shell completions (bash, zsh, fish, powershell, elvish)
     -V, --version         Show version

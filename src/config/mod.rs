@@ -31,6 +31,14 @@ pub struct Config {
 
     #[serde(default)]
     pub commands: HashMap<String, CustomCommand>,
+
+    /// Named profiles for different configurations
+    #[serde(default)]
+    pub profiles: HashMap<String, ProfileConfig>,
+
+    /// Default profile name (if not set, uses first profile or base config)
+    #[serde(default)]
+    pub default_profile: Option<String>,
 }
 
 /// Default provider and model settings
@@ -118,6 +126,42 @@ pub struct CustomCommand {
     pub model: Option<String>,
 }
 
+/// Named profile configuration - overrides default settings
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ProfileConfig {
+    /// Provider name (gemini, openai, anthropic)
+    #[serde(default)]
+    pub provider: Option<String>,
+
+    /// Model name
+    #[serde(default)]
+    pub model: Option<String>,
+
+    /// API key (overrides provider's api_key)
+    #[serde(default)]
+    pub api_key: Option<String>,
+
+    /// Base URL (for OpenAI-compatible endpoints like Ollama)
+    #[serde(default)]
+    pub base_url: Option<String>,
+
+    /// Fallback profile name ("none" to disable, "any" for first available)
+    #[serde(default)]
+    pub fallback: Option<String>,
+
+    /// Thinking level for Gemini (none, low, medium, high)
+    #[serde(default)]
+    pub thinking_level: Option<String>,
+
+    /// Reasoning effort for OpenAI (none, minimal, low, medium, high)
+    #[serde(default)]
+    pub reasoning_effort: Option<String>,
+
+    /// Thinking budget for Anthropic (token count)
+    #[serde(default)]
+    pub thinking_budget: Option<u64>,
+}
+
 // Default value functions
 fn default_provider() -> String {
     "gemini".to_string()
@@ -192,8 +236,22 @@ impl Default for UpdateConfig {
 }
 
 impl Config {
-    /// Apply CLI argument overrides
+    /// Apply CLI argument overrides and profile selection
     pub fn with_cli_overrides(mut self, args: &Args) -> Self {
+        // First apply profile if specified (CLI > default_profile > first profile)
+        let profile_name = args
+            .profile
+            .clone()
+            .or_else(|| self.default_profile.clone())
+            .or_else(|| self.profiles.keys().next().cloned());
+
+        if let Some(ref name) = profile_name {
+            if let Some(profile) = self.profiles.get(name) {
+                self = self.apply_profile(profile.clone());
+            }
+        }
+
+        // Then apply direct CLI overrides (these take precedence over profile)
         if let Some(ref provider) = args.provider {
             self.default.provider = provider.clone();
         }
@@ -201,6 +259,63 @@ impl Config {
             self.default.model = model.clone();
         }
         self
+    }
+
+    /// Apply profile settings over current config (inheritance)
+    fn apply_profile(&mut self, profile: ProfileConfig) -> Self {
+        if let Some(provider) = profile.provider {
+            self.default.provider = provider;
+        }
+        if let Some(model) = profile.model {
+            self.default.model = model;
+        }
+        if let Some(api_key) = profile.api_key {
+            let provider_name = self.default.provider.clone();
+            self.providers.entry(provider_name).or_default().api_key = Some(api_key);
+        }
+        if let Some(base_url) = profile.base_url {
+            let provider_name = self.default.provider.clone();
+            self.providers.entry(provider_name).or_default().base_url = Some(base_url);
+        }
+        self.clone()
+    }
+
+    /// Get active profile name (if any)
+    #[allow(dead_code)]
+    pub fn active_profile(&self, args: &Args) -> Option<String> {
+        args.profile
+            .clone()
+            .or_else(|| self.default_profile.clone())
+            .or_else(|| self.profiles.keys().next().cloned())
+    }
+
+    /// Get fallback profile for the active profile
+    /// Returns None if fallback = "none", Some(name) for specific profile,
+    /// or first available profile for fallback = "any" or default behavior
+    #[allow(dead_code)]
+    pub fn fallback_profile(&self, active_profile: &str) -> Option<String> {
+        let profile = self.profiles.get(active_profile)?;
+
+        match profile.fallback.as_deref() {
+            Some("none") => None,
+            Some("any") => self
+                .profiles
+                .keys()
+                .find(|k| k.as_str() != active_profile)
+                .cloned(),
+            Some(specific) => {
+                if self.profiles.contains_key(specific) {
+                    Some(specific.to_string())
+                } else {
+                    None
+                }
+            }
+            None => self
+                .profiles
+                .keys()
+                .find(|k| k.as_str() != active_profile)
+                .cloned(),
+        }
     }
 
     /// Get the active provider name

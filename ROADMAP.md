@@ -105,7 +105,7 @@ Description: Additional tests, cleanup, optimization
 
 Description: Named profiles (like rclone) with fallback support for resilient AI queries
 
-- [ ] 9.01 Config structure for named profiles
+- [x] 9.01 Config structure for named profiles
   - **Syntax**: `[profiles.work]`, `[profiles.personal]`, etc.
   - **Inheritance**: Profiles inherit from default config (partial configs allowed)
   - **Example**:
@@ -118,15 +118,15 @@ Description: Named profiles (like rclone) with fallback support for resilient AI
     model = "claude-haiku-4-5"
     api_key = "sk-ant-..."  # can override everything
     ```
-- [ ] 9.02 Profile slug flag (`--profile`, `-P`) to select active profile
+- [x] 9.02 Profile slug flag (`--profile`, `-P`) to select active profile
   - **Syntax**: `-P work`, `--profile=personal`
-- [ ] 9.03 Default profile setting in config
+- [x] 9.03 Default profile setting in config
   - **Config**: `default_profile = "work"` or first profile in file if not specified
   - **Fallback order**: First profile defined in config file is the default fallback
-- [ ] 9.04 Profile inheritance (profiles extend base/default settings)
+- [x] 9.04 Profile inheritance (profiles extend base/default settings)
   - Profiles only need to specify what they override
   - All unspecified values come from `[default]` and `[providers.*]` sections
-- [ ] 9.05 Fallback config option per profile
+- [x] 9.05 Fallback config option per profile
   - **Syntax**: `fallback = "other-profile"` or `fallback = "any"` or `fallback = "none"`
   - **Default behavior**: Use first profile as fallback unless `fallback = "none"`
   - **Profile can prohibit fallback**: `fallback = "none"` disables fallback for that profile
@@ -138,8 +138,8 @@ Description: Named profiles (like rclone) with fallback support for resilient AI
     1. Use any available profile
     2. Use specific profile (shows select)
     3. No fallback
-- [ ] 9.08 CLI flag to disable fallback for single query (`--no-fallback`)
-- [ ] 9.09 OpenAI-compatible endpoint support via profile base_url (Ollama, LM Studio)
+- [x] 9.08 CLI flag to disable fallback for single query (`--no-fallback`)
+- [x] 9.09 OpenAI-compatible endpoint support via profile base_url (Ollama, LM Studio)
   - **Example**:
     ```toml
     [profiles.local]
