@@ -47,6 +47,12 @@ pub struct Args {
     /// Disable fallback to other profiles on error
     pub no_fallback: bool,
 
+    /// Enable web search for this query
+    pub search: bool,
+
+    /// Show citations from web search results
+    pub citations: bool,
+
     /// Check and install updates
     pub update: bool,
 
@@ -107,6 +113,7 @@ impl Args {
                 "-x" => result.command_mode = true,
                 "-y" => result.yes = true,
                 "-t" => result.think = true,
+                "-s" => result.search = true,
 
                 // Boolean flags (long)
                 "--command" => result.command_mode = true,
@@ -117,6 +124,8 @@ impl Args {
                 "--no-color" => result.no_color = true,
                 "--no-follow" => result.no_follow = true,
                 "--no-fallback" => result.no_fallback = true,
+                "--search" => result.search = true,
+                "--citations" => result.citations = true,
                 "--think" => result.think = true,
                 "--no-think" => result.no_think = true,
                 "--update" => result.update = true,
@@ -223,6 +232,7 @@ impl Args {
                                 'x' => result.command_mode = true,
                                 'y' => result.yes = true,
                                 't' => result.think = true,
+                                's' => result.search = true,
                                 'V' => result.version = true,
                                 'h' => {
                                     print_help();
@@ -330,6 +340,8 @@ OPTIONS:
     -m, --model <MODEL>   Override configured model
     -p, --provider <NAME> Override configured provider
     -P, --profile <NAME>  Use named profile from config
+    -s, --search          Enable web search for this query
+        --citations       Show citations from web search results
         --json            Output in JSON format
         --markdown        Output rendered in Markdown
         --raw             Output raw text without formatting

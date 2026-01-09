@@ -95,11 +95,14 @@ OPTIONS:
     -p, --provider <NAME> Override configured provider
     -P, --profile <NAME>  Use named profile (e.g., -P work, --profile=local)
         --no-fallback     Disable profile fallback for this query
+    -s, --search          Enable web search for this query
+        --citations       Show citations from web search results
         --json            Output in JSON format
         --markdown        Output rendered in Markdown
         --raw             Output raw text without formatting
         --no-color        Disable colorized output
         --no-follow       Disable result echo after execution
+        --no-fallback     Disable profile fallback for this query
         --update          Check and install updates
         --help-env        Show all environment variables
     -V, --version         Show version
@@ -200,6 +203,37 @@ ASK_NO_UPDATE=1                  # Disable all update checks
 # Other
 NO_COLOR=1                       # Disable colors
 ```
+
+</details>
+
+## Web Search
+
+Enable real-time web search to get current information beyond the LLM's training data:
+
+```bash
+# Enable web search for a single query
+ask -s what happened in the news today
+
+# Show citations from search results
+ask --search --citations latest rust 1.85 features
+```
+
+<details>
+<summary>Web Search Configuration</summary>
+
+```toml
+[profiles.research]
+web_search = true
+
+# Domain filtering (Anthropic only)
+allowed_domains = ["docs.rs", "stackoverflow.com"]
+blocked_domains = ["pinterest.com"]
+```
+
+**Provider Notes:**
+- **Gemini**: Uses Google Search grounding
+- **OpenAI**: Uses Responses API (only works with official API, not compatible endpoints)
+- **Anthropic**: Uses `web_search_20250305` tool with optional domain filtering
 
 </details>
 

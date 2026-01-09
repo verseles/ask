@@ -432,3 +432,48 @@ api_key = "ollama"  # dummy key for local servers
 - Circular fallback chains are possible (user responsibility)
 - `--no-fallback` overrides any profile fallback setting
 - Methods `active_profile()` and `fallback_profile()` prepared for auto-fallback (Feature 9.06)
+
+---
+
+## ADR-015: Web Search Integration Across Providers
+
+**Status**: Accepted
+
+**Context**: Users need real-time web information beyond the LLM's knowledge cutoff.
+
+**Decision**: Implement web search as an opt-in feature across all three providers using their native APIs.
+
+**Provider Implementations**:
+
+| Provider | Tool | API Format |
+|----------|------|------------|
+| Gemini | `google_search` | `tools: [{ google_search: {} }]` |
+| OpenAI | Responses API | `tools: [{ type: "web_search" }]` |
+| Anthropic | `web_search_20250305` | `tools: [{ type: "web_search_20250305", name: "web_search" }]` |
+
+**CLI Flags**:
+- `-s` or `--search` - Enable web search for single query
+- `--citations` - Show source URLs at end of response
+
+**Config Options**:
+```toml
+[profiles.research]
+web_search = true
+allowed_domains = ["docs.rs", "stackoverflow.com"]  # Anthropic only
+blocked_domains = ["pinterest.com"]                  # Anthropic only
+```
+
+**Citations**:
+- Gemini: Extracted from `groundingMetadata.groundingChunks`
+- OpenAI: Extracted from `output.content.annotations` (Responses API)
+- Anthropic: Extracted from `content.citations`
+
+**Rationale**:
+- Opt-in by default (web search has additional costs and latency)
+- Domain filtering only supported by Anthropic currently
+- OpenAI Responses API used instead of Chat Completions for web search support
+
+**Consequences**:
+- Web search may increase response latency
+- Each provider has different pricing for web search
+- OpenAI web search only works with official API (not OpenAI-compatible endpoints)

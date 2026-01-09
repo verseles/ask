@@ -160,6 +160,22 @@ pub struct ProfileConfig {
     /// Thinking budget for Anthropic (token count)
     #[serde(default)]
     pub thinking_budget: Option<u64>,
+
+    /// Enable web search for this profile
+    #[serde(default)]
+    pub web_search: Option<bool>,
+
+    /// Show citations from web search results
+    #[serde(default)]
+    pub show_citations: Option<bool>,
+
+    /// Allowed domains for web search (Anthropic only)
+    #[serde(default)]
+    pub allowed_domains: Option<Vec<String>>,
+
+    /// Blocked domains for web search (Anthropic only)
+    #[serde(default)]
+    pub blocked_domains: Option<Vec<String>>,
 }
 
 // Default value functions
@@ -360,6 +376,29 @@ impl Config {
                 .join("ask")
                 .join("contexts")
         }
+    }
+
+    /// Get web_search setting from active profile
+    pub fn get_profile_web_search(&self) -> bool {
+        for profile in self.profiles.values() {
+            if let Some(web_search) = profile.web_search {
+                return web_search;
+            }
+        }
+        false
+    }
+
+    /// Get domain filters from active profile (Anthropic)
+    pub fn get_profile_domain_filters(&self) -> (Option<Vec<String>>, Option<Vec<String>>) {
+        for profile in self.profiles.values() {
+            if profile.allowed_domains.is_some() || profile.blocked_domains.is_some() {
+                return (
+                    profile.allowed_domains.clone(),
+                    profile.blocked_domains.clone(),
+                );
+            }
+        }
+        (None, None)
     }
 }
 

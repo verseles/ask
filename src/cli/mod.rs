@@ -11,7 +11,7 @@ use crate::config::Config;
 use crate::context::ContextManager;
 use crate::executor::CommandExecutor;
 use crate::output::OutputFormatter;
-use crate::providers::{create_provider, IntentClassifier, IntentType};
+use crate::providers::{create_provider, IntentClassifier, IntentType, ProviderOptions};
 
 /// Main entry point for the CLI
 pub async fn run() -> Result<()> {
@@ -197,6 +197,17 @@ fn read_stdin_if_available() -> Option<String> {
     None
 }
 
+fn build_provider_options(args: &Args, config: &Config) -> ProviderOptions {
+    let web_search = args.search || config.get_profile_web_search();
+    let (allowed_domains, blocked_domains) = config.get_profile_domain_filters();
+
+    ProviderOptions {
+        web_search,
+        allowed_domains,
+        blocked_domains,
+    }
+}
+
 /// Handle command generation intent
 async fn handle_command_intent(
     config: &Config,
@@ -272,10 +283,11 @@ Rules:
     });
 
     // Generate command
-    let response = provider.complete(&messages).await?;
+    let options = build_provider_options(args, config);
+    let response = provider.complete_with_options(&messages, &options).await?;
     spinner.finish_and_clear();
 
-    let command = response.trim();
+    let command = response.text.trim();
 
     // Save to context if enabled
     if args.has_context() {
@@ -384,7 +396,10 @@ async fn handle_question_intent(
             response_clone.lock().unwrap().push_str(chunk);
         });
 
-        provider.stream(&messages, callback).await?;
+        let options = build_provider_options(args, config);
+        provider
+            .stream_with_options(&messages, callback, &options)
+            .await?;
 
         println!();
 
@@ -397,16 +412,25 @@ async fn handle_question_intent(
         }
     } else {
         // Non-streaming response
-        let response = provider.complete(&messages).await?;
+        let options = build_provider_options(args, config);
+        let response = provider.complete_with_options(&messages, &options).await?;
 
         // Format and display
-        formatter.format(&response);
+        formatter.format(&response.text);
+
+        if args.citations && !response.citations.is_empty() {
+            println!();
+            println!("{}", "Sources:".cyan());
+            for (i, cite) in response.citations.iter().enumerate() {
+                println!("  [{}] {} - {}", i + 1, cite.title, cite.url);
+            }
+        }
 
         // Save to context if enabled
         if args.has_context() {
             let manager = ContextManager::with_ttl(config, args.context_ttl())?;
             manager.add_message("user", query)?;
-            manager.add_message("assistant", &response)?;
+            manager.add_message("assistant", &response.text)?;
         }
     }
 

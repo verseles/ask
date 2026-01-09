@@ -11,13 +11,63 @@ pub struct Message {
     pub content: String,
 }
 
+/// Citation from web search results
+#[derive(Debug, Clone, Default)]
+#[allow(dead_code)]
+pub struct Citation {
+    pub title: String,
+    pub url: String,
+    pub snippet: Option<String>,
+}
+
+/// Response with optional citations
+#[derive(Debug, Clone, Default)]
+#[allow(dead_code)]
+pub struct ProviderResponse {
+    pub text: String,
+    pub citations: Vec<Citation>,
+}
+
+/// Options for provider requests
+#[derive(Debug, Clone, Default)]
+pub struct ProviderOptions {
+    pub web_search: bool,
+    pub allowed_domains: Option<Vec<String>>,
+    pub blocked_domains: Option<Vec<String>>,
+}
+
 /// Callback type for streaming responses
 pub type StreamCallback = Box<dyn FnMut(&str) + Send>;
 
 #[async_trait]
 pub trait Provider: Send + Sync {
-    async fn complete(&self, messages: &[Message]) -> Result<String>;
-    async fn stream(&self, messages: &[Message], callback: StreamCallback) -> Result<()>;
+    #[allow(dead_code)]
+    async fn complete(&self, messages: &[Message]) -> Result<String> {
+        let response = self
+            .complete_with_options(messages, &ProviderOptions::default())
+            .await?;
+        Ok(response.text)
+    }
+
+    async fn complete_with_options(
+        &self,
+        messages: &[Message],
+        options: &ProviderOptions,
+    ) -> Result<ProviderResponse>;
+
+    #[allow(dead_code)]
+    async fn stream(&self, messages: &[Message], callback: StreamCallback) -> Result<()> {
+        self.stream_with_options(messages, callback, &ProviderOptions::default())
+            .await
+    }
+
+    async fn stream_with_options(
+        &self,
+        messages: &[Message],
+        callback: StreamCallback,
+        options: &ProviderOptions,
+    ) -> Result<()>;
+
     #[allow(dead_code)]
     fn name(&self) -> &str;
     #[allow(dead_code)]

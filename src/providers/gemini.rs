@@ -1,12 +1,13 @@
 //! Google Gemini provider implementation
 
-use super::{Message, Provider, StreamCallback};
+use super::{Citation, Message, Provider, ProviderOptions, ProviderResponse, StreamCallback};
 use crate::http::create_client;
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use futures::StreamExt;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 pub struct GeminiProvider {
     api_key: String,
@@ -20,6 +21,8 @@ struct GeminiRequest {
     contents: Vec<GeminiContent>,
     #[serde(rename = "generationConfig", skip_serializing_if = "Option::is_none")]
     generation_config: Option<GenerationConfig>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tools: Option<Vec<Value>>,
 }
 
 #[derive(Serialize)]
@@ -50,6 +53,8 @@ struct GeminiResponse {
 #[derive(Deserialize)]
 struct GeminiCandidate {
     content: GeminiContentResponse,
+    #[serde(rename = "groundingMetadata")]
+    grounding_metadata: Option<GroundingMetadata>,
 }
 
 #[derive(Deserialize)]
@@ -65,6 +70,23 @@ struct GeminiPartResponse {
 #[derive(Deserialize)]
 struct GeminiError {
     message: String,
+}
+
+#[derive(Deserialize)]
+struct GroundingMetadata {
+    #[serde(rename = "groundingChunks")]
+    grounding_chunks: Option<Vec<GroundingChunk>>,
+}
+
+#[derive(Deserialize)]
+struct GroundingChunk {
+    web: Option<WebChunk>,
+}
+
+#[derive(Deserialize)]
+struct WebChunk {
+    uri: Option<String>,
+    title: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -89,7 +111,6 @@ impl GeminiProvider {
         for msg in messages {
             match msg.role.as_str() {
                 "system" => {
-                    // Gemini doesn't have a system role, prepend to first user message
                     system_text = msg.content.clone();
                 }
                 "user" => {
@@ -120,11 +141,41 @@ impl GeminiProvider {
 
         contents
     }
+
+    fn build_tools(&self, options: &ProviderOptions) -> Option<Vec<Value>> {
+        if options.web_search {
+            Some(vec![serde_json::json!({ "google_search": {} })])
+        } else {
+            None
+        }
+    }
+
+    fn extract_citations(&self, candidate: &GeminiCandidate) -> Vec<Citation> {
+        let mut citations = Vec::new();
+        if let Some(ref metadata) = candidate.grounding_metadata {
+            if let Some(ref chunks) = metadata.grounding_chunks {
+                for chunk in chunks {
+                    if let Some(ref web) = chunk.web {
+                        citations.push(Citation {
+                            url: web.uri.clone().unwrap_or_default(),
+                            title: web.title.clone().unwrap_or_default(),
+                            snippet: None,
+                        });
+                    }
+                }
+            }
+        }
+        citations
+    }
 }
 
 #[async_trait]
 impl Provider for GeminiProvider {
-    async fn complete(&self, messages: &[Message]) -> Result<String> {
+    async fn complete_with_options(
+        &self,
+        messages: &[Message],
+        options: &ProviderOptions,
+    ) -> Result<ProviderResponse> {
         let url = format!(
             "{}/v1beta/models/{}:generateContent?key={}",
             self.base_url, self.model, self.api_key
@@ -136,6 +187,7 @@ impl Provider for GeminiProvider {
                 temperature: Some(0.7),
                 max_output_tokens: Some(8192),
             }),
+            tools: self.build_tools(options),
         };
 
         let response = self
@@ -159,17 +211,28 @@ impl Provider for GeminiProvider {
             return Err(anyhow!("Gemini error: {}", error.message));
         }
 
-        let text = response
-            .candidates
-            .and_then(|c| c.into_iter().next())
-            .and_then(|c| c.content.parts.into_iter().next())
-            .and_then(|p| p.text)
+        let candidate = response.candidates.and_then(|c| c.into_iter().next());
+
+        let text = candidate
+            .as_ref()
+            .and_then(|c| c.content.parts.first())
+            .and_then(|p| p.text.clone())
             .unwrap_or_default();
 
-        Ok(text)
+        let citations = candidate
+            .as_ref()
+            .map(|c| self.extract_citations(c))
+            .unwrap_or_default();
+
+        Ok(ProviderResponse { text, citations })
     }
 
-    async fn stream(&self, messages: &[Message], mut callback: StreamCallback) -> Result<()> {
+    async fn stream_with_options(
+        &self,
+        messages: &[Message],
+        mut callback: StreamCallback,
+        options: &ProviderOptions,
+    ) -> Result<()> {
         let url = format!(
             "{}/v1beta/models/{}:streamGenerateContent?key={}&alt=sse",
             self.base_url, self.model, self.api_key
@@ -181,6 +244,7 @@ impl Provider for GeminiProvider {
                 temperature: Some(0.7),
                 max_output_tokens: Some(8192),
             }),
+            tools: self.build_tools(options),
         };
 
         let response = self
@@ -202,7 +266,6 @@ impl Provider for GeminiProvider {
             let chunk = chunk?;
             let text = String::from_utf8_lossy(&chunk);
 
-            // Parse SSE data
             for line in text.lines() {
                 if let Some(data) = line.strip_prefix("data: ") {
                     if let Ok(response) = serde_json::from_str::<GeminiStreamResponse>(data) {

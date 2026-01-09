@@ -1,12 +1,13 @@
 //! Anthropic Claude provider implementation
 
-use super::{Message, Provider, StreamCallback};
+use super::{Citation, Message, Provider, ProviderOptions, ProviderResponse, StreamCallback};
 use crate::http::create_client;
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use futures::StreamExt;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 pub struct AnthropicProvider {
     api_key: String,
@@ -23,6 +24,8 @@ struct AnthropicRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     system: Option<String>,
     stream: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tools: Option<Vec<Value>>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -39,7 +42,17 @@ struct AnthropicResponse {
 
 #[derive(Deserialize)]
 struct AnthropicContent {
+    #[serde(rename = "type")]
+    #[allow(dead_code)]
+    content_type: Option<String>,
     text: Option<String>,
+    citations: Option<Vec<AnthropicCitation>>,
+}
+
+#[derive(Deserialize)]
+struct AnthropicCitation {
+    url: Option<String>,
+    title: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -90,11 +103,56 @@ impl AnthropicProvider {
 
         (system, result)
     }
+
+    fn build_tools(&self, options: &ProviderOptions) -> Option<Vec<Value>> {
+        if !options.web_search {
+            return None;
+        }
+
+        let mut tool = serde_json::json!({
+            "type": "web_search_20250305",
+            "name": "web_search"
+        });
+
+        if let Some(ref domains) = options.allowed_domains {
+            if !domains.is_empty() {
+                tool["allowed_domains"] = serde_json::json!(domains);
+            }
+        }
+
+        if let Some(ref domains) = options.blocked_domains {
+            if !domains.is_empty() {
+                tool["blocked_domains"] = serde_json::json!(domains);
+            }
+        }
+
+        Some(vec![tool])
+    }
+
+    fn extract_citations(&self, content: &[AnthropicContent]) -> Vec<Citation> {
+        let mut citations = Vec::new();
+        for item in content {
+            if let Some(ref cites) = item.citations {
+                for cite in cites {
+                    citations.push(Citation {
+                        url: cite.url.clone().unwrap_or_default(),
+                        title: cite.title.clone().unwrap_or_default(),
+                        snippet: None,
+                    });
+                }
+            }
+        }
+        citations
+    }
 }
 
 #[async_trait]
 impl Provider for AnthropicProvider {
-    async fn complete(&self, messages: &[Message]) -> Result<String> {
+    async fn complete_with_options(
+        &self,
+        messages: &[Message],
+        options: &ProviderOptions,
+    ) -> Result<ProviderResponse> {
         let url = format!("{}/v1/messages", self.base_url);
         let (system, msgs) = self.convert_messages(messages);
 
@@ -104,6 +162,7 @@ impl Provider for AnthropicProvider {
             max_tokens: 4096,
             system,
             stream: false,
+            tools: self.build_tools(options),
         };
 
         let response = self
@@ -129,16 +188,25 @@ impl Provider for AnthropicProvider {
             return Err(anyhow!("Anthropic error: {}", error.message));
         }
 
-        let text = response
-            .content
-            .and_then(|c| c.into_iter().next())
-            .and_then(|c| c.text)
-            .unwrap_or_default();
+        let content = response.content.unwrap_or_default();
 
-        Ok(text)
+        let text = content
+            .iter()
+            .filter_map(|c| c.text.clone())
+            .collect::<Vec<_>>()
+            .join("");
+
+        let citations = self.extract_citations(&content);
+
+        Ok(ProviderResponse { text, citations })
     }
 
-    async fn stream(&self, messages: &[Message], mut callback: StreamCallback) -> Result<()> {
+    async fn stream_with_options(
+        &self,
+        messages: &[Message],
+        mut callback: StreamCallback,
+        options: &ProviderOptions,
+    ) -> Result<()> {
         let url = format!("{}/v1/messages", self.base_url);
         let (system, msgs) = self.convert_messages(messages);
 
@@ -148,6 +216,7 @@ impl Provider for AnthropicProvider {
             max_tokens: 4096,
             system,
             stream: true,
+            tools: self.build_tools(options),
         };
 
         let response = self
@@ -171,7 +240,6 @@ impl Provider for AnthropicProvider {
             let chunk = chunk?;
             let text = String::from_utf8_lossy(&chunk);
 
-            // Parse SSE data
             for line in text.lines() {
                 if let Some(data) = line.strip_prefix("data: ") {
                     if let Ok(event) = serde_json::from_str::<AnthropicStreamEvent>(data) {

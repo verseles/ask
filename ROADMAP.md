@@ -157,27 +157,26 @@ Description: Named profiles (like rclone) with fallback support for resilient AI
 
 Description: Native web search support for all providers (Gemini, OpenAI, Anthropic)
 
-- [ ] 10.01 Gemini: Google Search grounding (`tools: [{ google_search: {} }]`)
-- [ ] 10.02 OpenAI: Web Search tool (`web_search_options: {}` for gpt-5-nano and search models)
-- [ ] 10.03 Anthropic: Web Search tool (`web_search_20250305` for claude-haiku-4-5)
-- [ ] 10.04 Config option to enable web search per profile (`web_search = true`)
+- [x] 10.01 Gemini: Google Search grounding (`tools: [{ google_search: {} }]`)
+- [x] 10.02 OpenAI: Web Search tool (`tools: [{ type: "web_search" }]` via Responses API)
+- [x] 10.03 Anthropic: Web Search tool (`web_search_20250305` for claude models)
+- [x] 10.04 Config option to enable web search per profile (`web_search = true`)
   - Default: `false` (opt-in)
-- [ ] 10.05 CLI flag to enable web search (`--search`, `-s`)
+- [x] 10.05 CLI flag to enable web search (`--search`, `-s`)
   - `-s` or `--search` enables for single query
-- [ ] 10.06 Parse and display citations from search results
+- [x] 10.06 Parse and display citations from search results
   - **Default**: Citations hidden
-  - **Config**: `show_citations = true` in profile to always show
-  - **Flag**: `--citations` to show for single query (overrides config)
-  - **Format**: Numbered inline `[1]` with URL list at end
-- [ ] 10.07 Domain filtering support for Anthropic (allowed_domains/blocked_domains)
+  - **Flag**: `--citations` to show for single query
+  - **Format**: Numbered inline with URL list at end
+- [x] 10.07 Domain filtering support for Anthropic (allowed_domains/blocked_domains)
   - Config: `allowed_domains = ["docs.rs", "stackoverflow.com"]`
   - Config: `blocked_domains = ["pinterest.com"]`
 - [ ] 10.08 Interactive web search setup in `ask init`
   - **Note**: Consider renaming `ask init` to `ask config` (keep `init` as alias for compatibility)
   - Both commands lead to same interactive config CLI
-- [ ] 10.09 Review and update tests for Feature 10
-- [ ] 10.10 Review and update ADR.md if needed for Feature 10
-- [ ] 10.11 Review and update README.md if needed for Feature 10
+- [x] 10.09 Review and update tests for Feature 10
+- [x] 10.10 Review and update ADR.md if needed for Feature 10
+- [x] 10.11 Review and update README.md if needed for Feature 10
   - Document pricing differences per provider
   - Use `<details>` for citation format examples
 
