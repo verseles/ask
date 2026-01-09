@@ -45,14 +45,30 @@ impl Config {
     }
 
     /// Find XDG config file
+    /// On Linux: ~/.config/ask/config.toml
+    /// On macOS: ~/Library/Application Support/ask/config.toml OR ~/.config/ask/config.toml
+    /// On Windows: C:\Users\<user>\AppData\Roaming\ask\config.toml
     fn find_xdg_config() -> Option<PathBuf> {
-        let config_dir = dirs::config_dir()?;
-        let path = config_dir.join("ask").join("config.toml");
-        if path.exists() {
-            Some(path)
-        } else {
-            None
+        // First try the platform-specific config dir
+        if let Some(config_dir) = dirs::config_dir() {
+            let path = config_dir.join("ask").join("config.toml");
+            if path.exists() {
+                return Some(path);
+            }
         }
+
+        // On macOS, also check ~/.config/ for Unix compatibility
+        #[cfg(target_os = "macos")]
+        {
+            if let Some(home) = dirs::home_dir() {
+                let path = home.join(".config").join("ask").join("config.toml");
+                if path.exists() {
+                    return Some(path);
+                }
+            }
+        }
+
+        None
     }
 
     /// Find home directory config
@@ -92,22 +108,14 @@ impl Config {
         Ok(config)
     }
 
-    /// Merge two configs (second takes precedence)
+    /// Merge two configs (overlay takes precedence)
+    /// For scalar values: overlay wins
+    /// For collections (providers, commands): merge with overlay winning conflicts
     fn merge(base: Config, overlay: Config) -> Config {
         Config {
-            default: super::DefaultConfig {
-                provider: if overlay.default.provider != "gemini" {
-                    overlay.default.provider
-                } else {
-                    base.default.provider
-                },
-                model: if overlay.default.model != "gemini-2.0-flash" {
-                    overlay.default.model
-                } else {
-                    base.default.model
-                },
-                stream: overlay.default.stream,
-            },
+            // Overlay always wins for default settings
+            default: overlay.default,
+            // Merge providers: base + overlay, overlay wins conflicts
             providers: {
                 let mut providers = base.providers;
                 for (k, v) in overlay.providers {
@@ -115,17 +123,13 @@ impl Config {
                 }
                 providers
             },
-            behavior: super::BehaviorConfig {
-                auto_execute: overlay.behavior.auto_execute || base.behavior.auto_execute,
-                confirm_destructive: overlay.behavior.confirm_destructive,
-                timeout: if overlay.behavior.timeout != 30 {
-                    overlay.behavior.timeout
-                } else {
-                    base.behavior.timeout
-                },
-            },
+            // Overlay wins for behavior
+            behavior: overlay.behavior,
+            // Overlay wins for context
             context: overlay.context,
+            // Overlay wins for update
             update: overlay.update,
+            // Merge commands: base + overlay, overlay wins conflicts
             commands: {
                 let mut commands = base.commands;
                 for (k, v) in overlay.commands {

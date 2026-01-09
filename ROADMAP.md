@@ -133,6 +133,12 @@ Description: Additional tests, cleanup, optimization
 3. **Sudo retry** - Suggests retry with sudo on permission denied errors
 4. **Shell completions** - Bash, Zsh, Fish, PowerShell, Elvish support via --completions
 5. **Config tests** - Comprehensive unit tests for config loading and parsing
+6. **Full env var support** - All TOML options available as ASK_* environment variables
+
+### Completed in v0.7.0
+
+1. **macOS config fix** - Now checks ~/.config/ask/config.toml on macOS for Unix compatibility
+2. **Config merge fix** - Fixed bug where explicit default values were ignored in overlay configs
 
 ### Known Limitations
 
