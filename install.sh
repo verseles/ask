@@ -154,6 +154,113 @@ setup_macos_accessibility() {
     echo ""
 }
 
+# Setup PATH in shell configuration files
+setup_path() {
+    PATH_EXPORT='export PATH="$HOME/.local/bin:$PATH"'
+    SHELLS_CONFIGURED=""
+
+    # Ask user if they want automatic configuration
+    if [ -t 1 ] && [ -e /dev/tty ]; then
+        printf "Add ~/.local/bin to PATH automatically? [Y/n] "
+        read -r answer < /dev/tty
+        case "$answer" in
+            [nN]*)
+                echo ""
+                echo "Add it manually to your shell configuration:"
+                echo ""
+                echo "  # For bash:"
+                echo "  echo 'export PATH=\"\$HOME/.local/bin:\$PATH\"' >> ~/.bashrc"
+                echo ""
+                echo "  # For zsh:"
+                echo "  echo 'export PATH=\"\$HOME/.local/bin:\$PATH\"' >> ~/.zshrc"
+                echo ""
+                echo "  # For fish:"
+                echo "  fish_add_path ~/.local/bin"
+                echo ""
+                return 1
+                ;;
+        esac
+    else
+        # Non-interactive mode - show manual instructions
+        echo ""
+        echo "Add ~/.local/bin to your PATH:"
+        echo ""
+        echo "  # For bash:"
+        echo "  echo 'export PATH=\"\$HOME/.local/bin:\$PATH\"' >> ~/.bashrc"
+        echo ""
+        echo "  # For zsh:"
+        echo "  echo 'export PATH=\"\$HOME/.local/bin:\$PATH\"' >> ~/.zshrc"
+        echo ""
+        echo "  # For fish:"
+        echo "  fish_add_path ~/.local/bin"
+        echo ""
+        return 1
+    fi
+
+    # Configure bash if .bashrc exists or bash is installed
+    if [ -f "$HOME/.bashrc" ] || command -v bash >/dev/null 2>&1; then
+        BASHRC="$HOME/.bashrc"
+        if [ ! -f "$BASHRC" ]; then
+            touch "$BASHRC"
+        fi
+        if ! grep -q '\.local/bin' "$BASHRC" 2>/dev/null; then
+            echo "" >> "$BASHRC"
+            echo "# Added by ask installer" >> "$BASHRC"
+            echo "$PATH_EXPORT" >> "$BASHRC"
+            SHELLS_CONFIGURED="${SHELLS_CONFIGURED}bash "
+        fi
+    fi
+
+    # Configure zsh if .zshrc exists or zsh is installed
+    if [ -f "$HOME/.zshrc" ] || command -v zsh >/dev/null 2>&1; then
+        ZSHRC="$HOME/.zshrc"
+        if [ ! -f "$ZSHRC" ]; then
+            touch "$ZSHRC"
+        fi
+        if ! grep -q '\.local/bin' "$ZSHRC" 2>/dev/null; then
+            echo "" >> "$ZSHRC"
+            echo "# Added by ask installer" >> "$ZSHRC"
+            echo "$PATH_EXPORT" >> "$ZSHRC"
+            SHELLS_CONFIGURED="${SHELLS_CONFIGURED}zsh "
+        fi
+    fi
+
+    # Configure fish if config exists or fish is installed
+    if [ -f "$HOME/.config/fish/config.fish" ] || command -v fish >/dev/null 2>&1; then
+        FISH_CONFIG="$HOME/.config/fish/config.fish"
+        if [ ! -f "$FISH_CONFIG" ]; then
+            mkdir -p "$HOME/.config/fish"
+            touch "$FISH_CONFIG"
+        fi
+        if ! grep -q '\.local/bin' "$FISH_CONFIG" 2>/dev/null; then
+            echo "" >> "$FISH_CONFIG"
+            echo "# Added by ask installer" >> "$FISH_CONFIG"
+            echo "fish_add_path \$HOME/.local/bin" >> "$FISH_CONFIG"
+            SHELLS_CONFIGURED="${SHELLS_CONFIGURED}fish "
+        fi
+    fi
+
+    if [ -n "$SHELLS_CONFIGURED" ]; then
+        success "PATH configured for: ${SHELLS_CONFIGURED}"
+        echo ""
+        echo "Reload your shell or run:"
+        case "$SHELL" in
+            */bash) echo "  source ~/.bashrc" ;;
+            */zsh)  echo "  source ~/.zshrc" ;;
+            */fish) echo "  source ~/.config/fish/config.fish" ;;
+            *)      echo "  source ~/.bashrc  # or your shell's config file" ;;
+        esac
+        echo ""
+        # Export PATH for current session so ask init works
+        export PATH="$HOME/.local/bin:$PATH"
+        return 0
+    else
+        info "PATH already configured in shell files"
+        export PATH="$HOME/.local/bin:$PATH"
+        return 0
+    fi
+}
+
 main() {
     info "Installing ${BINARY_NAME}..."
 
@@ -201,37 +308,15 @@ main() {
 
     success "Installed ${BINARY_NAME} to ${INSTALL_DIR}/${BINARY_NAME}"
 
-    # Check PATH
+    # Check PATH and configure if needed
     case ":$PATH:" in
         *":${INSTALL_DIR}:"*)
+            # PATH is already configured
             ;;
         *)
             warn "${INSTALL_DIR} is not in your PATH"
             echo ""
-            echo "Add it to your shell configuration:"
-            echo ""
-            if is_termux; then
-                echo "  echo 'export PATH=\"\$HOME/.local/bin:\$PATH\"' >> ~/.bashrc"
-                echo ""
-                echo "Then reload your shell:"
-                echo "  source ~/.bashrc"
-            else
-                case "$SHELL" in
-                    */bash)
-                        echo "  echo 'export PATH=\"\$HOME/.local/bin:\$PATH\"' >> ~/.bashrc"
-                        ;;
-                    */zsh)
-                        echo "  echo 'export PATH=\"\$HOME/.local/bin:\$PATH\"' >> ~/.zshrc"
-                        ;;
-                    */fish)
-                        echo "  fish_add_path ~/.local/bin"
-                        ;;
-                    *)
-                        echo "  export PATH=\"\$HOME/.local/bin:\$PATH\""
-                        ;;
-                esac
-            fi
-            echo ""
+            setup_path
             ;;
     esac
 
