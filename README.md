@@ -85,7 +85,8 @@ ask [OPTIONS] <your question here>
 ask <your question here> [OPTIONS]
 
 OPTIONS:
-    -c, --context         Use/create context for current directory
+    -c, --context[=MIN]   Use context for current directory (default: 30 min, 0 = permanent)
+                          Examples: -c (30 min), -c60 (1 hour), --context=0 (permanent)
     -x, --command         Force command mode (bypass auto-detection)
     -y, --yes             Auto-execute commands without confirmation
     -t, --think           Enable thinking mode (override config)
@@ -98,6 +99,7 @@ OPTIONS:
         --no-color        Disable colorized output
         --no-follow       Disable result echo after execution
         --update          Check and install updates
+        --help-env        Show all environment variables
     -V, --version         Show version
     -h, --help            Show help
 
@@ -156,7 +158,10 @@ auto_execute = false
 
 ### Environment Variables
 
-All configuration options can be set via environment variables:
+All configuration options can be set via environment variables. Run `ask --help-env` for the complete reference.
+
+<details>
+<summary>Click to expand full environment variables list</summary>
 
 ```bash
 # Default settings
@@ -193,6 +198,8 @@ ASK_NO_UPDATE=1                  # Disable all update checks
 # Other
 NO_COLOR=1                       # Disable colors
 ```
+
+</details>
 
 ## Providers
 

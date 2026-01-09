@@ -83,7 +83,7 @@ Description: Documentation, install scripts, GitHub Actions
 - [x] 7.06 GitHub Actions CI pipeline - Commit: dd3ef64
 - [x] 7.07 GitHub Actions release pipeline - Commit: dd3ef64
 - [x] 7.08 GitHub Actions test pipeline - Commit: dd3ef64
-- [ ] 7.09 Complete env vars documentation
+- [x] 7.09 Complete env vars documentation
   - **New flag**: `--help-env` shows all environment variables (separate from --help)
   - **README.md**: Full env var list with `<details>` collapsible sections
   - **Variables to document** (~14 missing from --help):

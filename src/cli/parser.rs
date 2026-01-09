@@ -118,6 +118,10 @@ impl Args {
                     print_help();
                     std::process::exit(0);
                 }
+                "--help-env" => {
+                    print_help_env();
+                    std::process::exit(0);
+                }
 
                 // Subcommands
                 "init" if query_parts.is_empty() => result.init = true,
@@ -230,6 +234,64 @@ impl Args {
         result.query = query_parts;
         result
     }
+}
+
+fn print_help_env() {
+    println!(
+        r#"ask - Environment Variables Reference
+
+All configuration options can be set via environment variables with the ASK_ prefix.
+These override config file values but are overridden by CLI arguments.
+
+PROVIDER & MODEL:
+    ASK_PROVIDER              Default provider (gemini, openai, anthropic)
+    ASK_MODEL                 Default model name
+    ASK_STREAM                Enable streaming (true/false, 1/0)
+
+API KEYS:
+    ASK_GEMINI_API_KEY        Gemini API key
+    ASK_OPENAI_API_KEY        OpenAI API key
+    ASK_ANTHROPIC_API_KEY     Anthropic API key
+
+CUSTOM BASE URLS (for proxies or OpenAI-compatible APIs like Ollama):
+    ASK_GEMINI_BASE_URL       Custom Gemini API endpoint
+    ASK_OPENAI_BASE_URL       Custom OpenAI API endpoint (e.g., http://localhost:11434/v1)
+    ASK_ANTHROPIC_BASE_URL    Custom Anthropic API endpoint
+
+BEHAVIOR:
+    ASK_AUTO_EXECUTE          Auto-execute safe commands without prompting (true/false)
+    ASK_CONFIRM_DESTRUCTIVE   Confirm before running destructive commands (true/false)
+    ASK_TIMEOUT               Request timeout in seconds (default: 30)
+
+CONTEXT SETTINGS:
+    ASK_CONTEXT_MAX_AGE       Context TTL in minutes (default: 30)
+    ASK_CONTEXT_MAX_MESSAGES  Maximum messages to keep in context (default: 20)
+    ASK_CONTEXT_PATH          Custom path for context storage
+
+UPDATE SETTINGS:
+    ASK_UPDATE_AUTO_CHECK     Enable background update checks (true/false)
+    ASK_UPDATE_INTERVAL       Hours between update checks (default: 24)
+    ASK_UPDATE_CHANNEL        Update channel (stable, beta, etc.)
+    ASK_NO_UPDATE             Disable all update functionality (set to 1)
+
+DISPLAY:
+    NO_COLOR                  Disable colored output (standard env var)
+
+EXAMPLES:
+    # Set default provider and model
+    export ASK_PROVIDER=anthropic
+    export ASK_MODEL=claude-3-5-haiku
+
+    # Use Ollama locally via OpenAI-compatible API
+    export ASK_OPENAI_BASE_URL=http://localhost:11434/v1
+    export ASK_OPENAI_API_KEY=ollama
+    export ASK_PROVIDER=openai
+    export ASK_MODEL=llama3
+
+    # Disable update checks
+    export ASK_NO_UPDATE=1
+"#
+    );
 }
 
 fn print_help() {
