@@ -184,7 +184,7 @@ Description: Native web search support for all providers (Gemini, OpenAI, Anthro
 
 Description: Consolidate prompts and remove redundant intent classifier API call
 
-- [ ] 11.01 Create unified prompt template (handles command/question detection in single call)
+- [x] 11.01 Create unified prompt template (handles command/question detection in single call)
   - **Template structure**:
     ```
     Answer in the user's language based on locale ({locale}).
@@ -198,32 +198,32 @@ Description: Consolidate prompts and remove redundant intent classifier API call
     Context: OS={os}, shell={shell}, cwd={cwd}, locale={locale}, now={now}
     ```
   - **Result**: Reduces from 2 API calls to 1 per query
-- [ ] 11.02 Remove IntentClassifier API call (saves 1 API call per request)
+- [x] 11.02 Remove IntentClassifier API call (saves 1 API call per request)
   - Delete `IntentClassifier` struct and related code
   - Update tests accordingly
-- [ ] 11.03 Add `use markdown={true|false}` to prompt based on `--markdown[=bool]` flag
+- [x] 11.03 Add `use markdown={true|false}` to prompt based on `--markdown[=bool]` flag
   - `--markdown` or `--markdown=true` → `use markdown=true`
   - `--markdown=false` or default → `use markdown=false`
-- [ ] 11.04 Add `{do not} use terminal colors and formatting` based on `--no-color`/`--color=bool`
+- [x] 11.04 Add `{do not} use terminal colors and formatting` based on `--no-color`/`--color=bool`
   - Default: `use terminal colors and formatting`
   - `--no-color` or `--color=false` → `do not use terminal colors and formatting`
-- [ ] 11.05 Refactor `-x` to add command-mode emphasis to unified prompt (not separate prompt)
+- [x] 11.05 Refactor `-x` to add command-mode emphasis to unified prompt (not separate prompt)
   - When `-x` flag: prepend `"IMPORTANT: User explicitly requested command mode. Return ONLY the shell command, nothing else."`
-- [ ] 11.06 Load custom prompts from `ask.md` files (same hierarchy as ask.toml)
+- [x] 11.06 Load custom prompts from `ask.md` files (same hierarchy as ask.toml)
   - **Search order**: `./ask.md` → `./.ask.md` → `~/ask.md` → `~/.config/ask/ask.md`
   - **Behavior**: If `ask.md` exists, it REPLACES the default prompt entirely
   - **Variables**: Support `{os}`, `{shell}`, `{cwd}`, `{locale}`, `{now}` replacements in custom prompts
-- [ ] 11.07 Load command-specific prompts from `ask.{command}.md` (e.g., `ask.cm.md`, `ask.explain.md`)
+- [x] 11.07 Load command-specific prompts from `ask.{command}.md` (e.g., `ask.cm.md`, `ask.explain.md`)
   - **Priority**: `ask.cm.md` > `[commands.cm].system` in TOML (user file always wins)
   - **Same variable support** as `ask.md`
-- [ ] 11.08 Add `ask --make-prompt` command to export default prompt template
+- [x] 11.08 Add `ask --make-prompt` command to export default prompt template
   - Outputs the current default unified prompt to stdout
   - User can redirect: `ask --make-prompt > ask.md` to customize
-- [ ] 11.09 Review and update tests for Feature 11
-- [ ] 11.10 Review and update ADR.md if needed for Feature 11
+- [x] 11.09 Review and update tests for Feature 11
+- [x] 11.10 Review and update ADR.md if needed for Feature 11
   - Document the decision to remove IntentClassifier
   - Document prompt priority order
-- [ ] 11.11 Review and update README.md if needed for Feature 11
+- [x] 11.11 Review and update README.md if needed for Feature 11
   - Add section on custom prompts with examples
   - Use `<details>` for prompt template reference
 

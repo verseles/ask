@@ -74,66 +74,138 @@ pub trait Provider: Send + Sync {
     fn model(&self) -> &str;
 }
 
-/// Intent classification types
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum IntentType {
-    /// User wants to execute shell commands
-    Command,
-    /// User has a question/informational request
-    Question,
-    /// User wants to generate code
-    Code,
+#[derive(Debug, Clone, Default)]
+pub struct PromptContext {
+    pub os: String,
+    pub shell: String,
+    pub cwd: String,
+    pub locale: String,
+    pub now: String,
+    pub command_mode: bool,
+    pub use_markdown: bool,
+    pub use_colors: bool,
 }
 
-/// Intent classifier using a lightweight model
-pub struct IntentClassifier<'a> {
-    provider: &'a dyn Provider,
-}
-
-impl<'a> IntentClassifier<'a> {
-    pub fn new(provider: &'a dyn Provider) -> Self {
-        Self { provider }
+impl PromptContext {
+    pub fn from_env(command_mode: bool, use_markdown: bool, use_colors: bool) -> Self {
+        Self {
+            os: std::env::consts::OS.to_string(),
+            shell: std::env::var("SHELL").unwrap_or_else(|_| "sh".to_string()),
+            cwd: std::env::current_dir()
+                .map(|p| p.display().to_string())
+                .unwrap_or_else(|_| ".".to_string()),
+            locale: std::env::var("LANG").unwrap_or_else(|_| "en_US.UTF-8".to_string()),
+            now: chrono::Local::now().format("%Y-%m-%d %H:%M").to_string(),
+            command_mode,
+            use_markdown,
+            use_colors,
+        }
     }
 
-    /// Classify the user's intent
-    pub async fn classify(&self, query: &str) -> Result<IntentType> {
-        let system_prompt = r#"Classify the user's intent into exactly one category:
+    fn format_instructions(&self) -> &'static str {
+        if self.use_markdown {
+            "Use markdown for formatting."
+        } else if self.use_colors {
+            "Use terminal colors and ANSI formatting when helpful."
+        } else {
+            "Plain text only, no formatting codes or markdown."
+        }
+    }
+}
 
-COMMAND - User wants to execute shell/terminal commands
-QUESTION - User has a question or wants information
-CODE - User wants to generate/write code
+pub fn build_unified_prompt(ctx: &PromptContext) -> String {
+    let command_emphasis = if ctx.command_mode {
+        "IMPORTANT: User explicitly requested command mode. Return ONLY the shell command, nothing else.\n\n"
+    } else {
+        ""
+    };
 
-Respond with ONLY the category name, nothing else.
+    let format_instructions = ctx.format_instructions();
 
-Examples:
-"list all docker containers" -> COMMAND
-"how does kubernetes work" -> QUESTION
-"write a python function to sort" -> CODE
-"delete old log files" -> COMMAND
-"what is the capital of France" -> QUESTION
-"create a rust struct for user" -> CODE
-"show disk usage" -> COMMAND
-"explain async/await" -> QUESTION
+    format!(
+        r#"{command_emphasis}You are a helpful CLI assistant. Respond in the user's language based on locale ({locale}).
+
+INTENT DETECTION:
+- If the user asks for a shell command (e.g., "list files", "delete logs", "show disk usage"), return ONLY the command
+  - No explanations, no markdown, no code blocks, no backticks
+  - Use && for multiple commands, \ for line continuation
+  - NEVER use newlines in commands
+- If it's a question or informational request, be brief (1-3 sentences max)
+- If user wants code, provide concise code with minimal explanation
+
+Context: OS={os}, shell={shell}, cwd={cwd}, locale={locale}, now={now}
+{format_instructions}"#,
+        command_emphasis = command_emphasis,
+        locale = ctx.locale,
+        os = ctx.os,
+        shell = ctx.shell,
+        cwd = ctx.cwd,
+        now = ctx.now,
+        format_instructions = format_instructions
+    )
+}
+
+pub const DEFAULT_PROMPT_TEMPLATE: &str = r#"You are a helpful CLI assistant. Respond in the user's language based on locale ({locale}).
+
+INTENT DETECTION:
+- If the user asks for a shell command (e.g., "list files", "delete logs", "show disk usage"), return ONLY the command
+  - No explanations, no markdown, no code blocks, no backticks
+  - Use && for multiple commands, \ for line continuation
+  - NEVER use newlines in commands
+- If it's a question or informational request, be brief (1-3 sentences max)
+- If user wants code, provide concise code with minimal explanation
+
+Context: OS={os}, shell={shell}, cwd={cwd}, locale={locale}, now={now}
+{format}
 "#;
 
-        let messages = vec![
-            Message {
-                role: "system".to_string(),
-                content: system_prompt.to_string(),
-            },
-            Message {
-                role: "user".to_string(),
-                content: query.to_string(),
-            },
-        ];
+pub fn load_custom_prompt(command_name: Option<&str>) -> Option<String> {
+    use std::path::PathBuf;
 
-        let response = self.provider.complete(&messages).await?;
-        let response = response.trim().to_uppercase();
+    let home = dirs::home_dir();
+    let config_dir = dirs::config_dir().map(|p| p.join("ask"));
 
-        Ok(match response.as_str() {
-            "COMMAND" => IntentType::Command,
-            "CODE" => IntentType::Code,
-            _ => IntentType::Question,
-        })
+    let search_paths: Vec<PathBuf> = if let Some(cmd) = command_name {
+        let filename = format!("ask.{}.md", cmd);
+        let dot_filename = format!(".ask.{}.md", cmd);
+        vec![
+            PathBuf::from(&filename),
+            PathBuf::from(&dot_filename),
+            home.clone().map(|h| h.join(&filename)).unwrap_or_default(),
+            config_dir
+                .clone()
+                .map(|c| c.join(&filename))
+                .unwrap_or_default(),
+        ]
+    } else {
+        vec![
+            PathBuf::from("ask.md"),
+            PathBuf::from(".ask.md"),
+            home.clone().map(|h| h.join("ask.md")).unwrap_or_default(),
+            config_dir
+                .clone()
+                .map(|c| c.join("ask.md"))
+                .unwrap_or_default(),
+        ]
+    };
+
+    for path in search_paths {
+        if path.exists() {
+            if let Ok(content) = std::fs::read_to_string(&path) {
+                return Some(content);
+            }
+        }
     }
+
+    None
+}
+
+pub fn expand_prompt_variables(template: &str, ctx: &PromptContext) -> String {
+    template
+        .replace("{os}", &ctx.os)
+        .replace("{shell}", &ctx.shell)
+        .replace("{cwd}", &ctx.cwd)
+        .replace("{locale}", &ctx.locale)
+        .replace("{now}", &ctx.now)
+        .replace("{format}", ctx.format_instructions())
 }

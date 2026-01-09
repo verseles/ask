@@ -11,7 +11,10 @@ use crate::config::Config;
 use crate::context::ContextManager;
 use crate::executor::CommandExecutor;
 use crate::output::OutputFormatter;
-use crate::providers::{create_provider, IntentClassifier, IntentType, ProviderOptions};
+use crate::providers::{
+    build_unified_prompt, create_provider, expand_prompt_variables, load_custom_prompt,
+    PromptContext, ProviderOptions,
+};
 
 /// Main entry point for the CLI
 pub async fn run() -> Result<()> {
@@ -31,6 +34,11 @@ pub async fn run() -> Result<()> {
 
     if args.update {
         return crate::update::check_and_update().await;
+    }
+
+    if args.make_prompt {
+        println!("{}", crate::providers::DEFAULT_PROMPT_TEMPLATE);
+        return Ok(());
     }
 
     // Handle completions generation
@@ -140,46 +148,17 @@ pub async fn run() -> Result<()> {
 
     let provider = create_provider(&config)?;
 
-    // Determine intent
-    let intent = if args.command_mode {
-        IntentType::Command
-    } else {
-        // Use classifier to determine intent
-        let classifier = IntentClassifier::new(provider.as_ref());
-        classifier
-            .classify(&full_query)
-            .await
-            .unwrap_or(IntentType::Question)
-    };
-
-    // Create output formatter
     let formatter = OutputFormatter::new(&args);
 
-    // Handle based on intent
-    match intent {
-        IntentType::Command => {
-            handle_command_intent(
-                &config,
-                &args,
-                provider.as_ref(),
-                &full_query,
-                &formatter,
-                custom_cmd.as_ref(),
-            )
-            .await?;
-        }
-        IntentType::Question | IntentType::Code => {
-            handle_question_intent(
-                &config,
-                &args,
-                provider.as_ref(),
-                &full_query,
-                &formatter,
-                custom_cmd.as_ref(),
-            )
-            .await?;
-        }
-    }
+    handle_query(
+        &config,
+        &args,
+        provider.as_ref(),
+        &full_query,
+        &formatter,
+        custom_cmd.as_ref(),
+    )
+    .await?;
 
     Ok(())
 }
@@ -208,65 +187,41 @@ fn build_provider_options(args: &Args, config: &Config) -> ProviderOptions {
     }
 }
 
-/// Handle command generation intent
-async fn handle_command_intent(
+async fn handle_query(
     config: &Config,
     args: &Args,
     provider: &dyn crate::providers::Provider,
     query: &str,
-    _formatter: &OutputFormatter,
+    formatter: &OutputFormatter,
     custom_cmd: Option<&crate::config::CustomCommand>,
 ) -> Result<()> {
-    use indicatif::{ProgressBar, ProgressStyle};
-
-    // Show spinner while generating
-    let spinner = ProgressBar::new_spinner();
-    spinner.set_style(
-        ProgressStyle::default_spinner()
-            .template("{spinner:.cyan} {msg}")
-            .unwrap(),
-    );
-    spinner.set_message("Generating command...");
-    spinner.enable_steady_tick(std::time::Duration::from_millis(100));
-
-    // Build context messages
     let mut messages = Vec::new();
 
-    // Add context if enabled
     if args.has_context() {
         let manager = ContextManager::with_ttl(config, args.context_ttl())?;
         messages.extend(manager.get_messages()?);
-
-        // Show context echo if needed
         manager.print_echo_if_needed()?;
     }
 
-    let os = std::env::consts::OS;
-    let cwd = std::env::current_dir()
-        .map(|p| p.display().to_string())
-        .unwrap_or_else(|_| ".".to_string());
-    let shell = std::env::var("SHELL").unwrap_or_else(|_| "sh".to_string());
-    let locale = std::env::var("LANG").unwrap_or_else(|_| "en_US.UTF-8".to_string());
-    let now = chrono::Local::now().format("%Y-%m-%d %H:%M").to_string();
+    let ctx = PromptContext::from_env(args.command_mode, args.markdown, !args.no_color);
 
-    // Use custom command system prompt if available, otherwise default
     let system_prompt = if let Some(cmd) = custom_cmd {
-        format!(
-            "{}\n\nContext: OS={}, shell={}, cwd={}, locale={}, now={}\n\nRules:\n- NEVER use newlines - use && for multiple commands or \\ for line continuation\n- No markdown, no code blocks, no backticks\n- Use commands appropriate for the OS",
-            cmd.system, os, shell, cwd, locale, now
-        )
+        if let Some(custom_prompt) = load_custom_prompt(Some(&cmd.system)) {
+            expand_prompt_variables(&custom_prompt, &ctx)
+        } else {
+            format!(
+                "{}\n\nContext: OS={}, shell={}, cwd={}, locale={}, now={}",
+                cmd.system, ctx.os, ctx.shell, ctx.cwd, ctx.locale, ctx.now
+            )
+        }
+    } else if let Some(custom_prompt) = load_custom_prompt(None) {
+        let mut prompt = expand_prompt_variables(&custom_prompt, &ctx);
+        if args.command_mode {
+            prompt = format!("IMPORTANT: User explicitly requested command mode. Return ONLY the shell command, nothing else.\n\n{}", prompt);
+        }
+        prompt
     } else {
-        format!(
-            r#"Generate shell commands. Output ONLY the command, no explanations.
-
-Context: OS={}, shell={}, cwd={}, locale={}, now={}
-
-Rules:
-- NEVER use newlines - use && for multiple commands or \ for line continuation
-- No markdown, no code blocks, no backticks
-- Use commands appropriate for the OS"#,
-            os, shell, cwd, locale, now
-        )
+        build_unified_prompt(&ctx)
     };
 
     messages.insert(
@@ -282,30 +237,79 @@ Rules:
         content: query.to_string(),
     });
 
-    // Generate command
     let options = build_provider_options(args, config);
-    let response = provider.complete_with_options(&messages, &options).await?;
-    spinner.finish_and_clear();
 
-    let command = response.text.trim();
+    if config.default.stream && !args.json && !args.raw {
+        use std::sync::{Arc, Mutex};
+        let full_response = Arc::new(Mutex::new(String::new()));
+        let response_clone = full_response.clone();
 
-    // Save to context if enabled
-    if args.has_context() {
-        let manager = ContextManager::with_ttl(config, args.context_ttl())?;
-        manager.add_message("user", query)?;
-        manager.add_message("assistant", command)?;
+        let callback: crate::providers::StreamCallback = Box::new(move |chunk: &str| {
+            print!("{}", chunk);
+            std::io::Write::flush(&mut std::io::stdout()).ok();
+            response_clone.lock().unwrap().push_str(chunk);
+        });
+
+        provider
+            .stream_with_options(&messages, callback, &options)
+            .await?;
+
+        println!();
+
+        let response_text = full_response.lock().unwrap().clone();
+
+        if args.has_context() {
+            let manager = ContextManager::with_ttl(config, args.context_ttl())?;
+            manager.add_message("user", query)?;
+            manager.add_message("assistant", &response_text)?;
+        }
+
+        maybe_execute_command(config, args, &response_text).await?;
+    } else {
+        let response = provider.complete_with_options(&messages, &options).await?;
+
+        formatter.format(&response.text);
+
+        if args.citations && !response.citations.is_empty() {
+            println!();
+            println!("{}", "Sources:".cyan());
+            for (i, cite) in response.citations.iter().enumerate() {
+                println!("  [{}] {} - {}", i + 1, cite.title, cite.url);
+            }
+        }
+
+        if args.has_context() {
+            let manager = ContextManager::with_ttl(config, args.context_ttl())?;
+            manager.add_message("user", query)?;
+            manager.add_message("assistant", &response.text)?;
+        }
+
+        maybe_execute_command(config, args, &response.text).await?;
+    }
+
+    Ok(())
+}
+
+async fn maybe_execute_command(config: &Config, args: &Args, response: &str) -> Result<()> {
+    let response = response.trim();
+
+    let looks_like_command = is_likely_command(response);
+
+    if !looks_like_command {
+        return Ok(());
     }
 
     let executor = CommandExecutor::new(config);
 
-    if args.yes || (config.behavior.auto_execute && executor.is_safe(command)) {
-        println!("{} {}", "Running:".green(), command.bright_white().bold());
+    if args.yes || (config.behavior.auto_execute && executor.is_safe(response)) {
+        println!();
+        println!("{} {}", "Running:".green(), response.bright_white().bold());
         println!();
         executor
-            .execute_with_sudo_retry(command, !args.no_follow)
+            .execute_with_sudo_retry(response, !args.no_follow)
             .await?;
-    } else if crate::executor::can_inject() {
-        match crate::executor::inject_command(command)? {
+    } else if args.command_mode && crate::executor::can_inject() {
+        match crate::executor::inject_command(response)? {
             None => {}
             Some(edited_cmd) => {
                 println!(
@@ -319,120 +323,89 @@ Rules:
                     .await?;
             }
         }
-    } else {
-        println!("{} {}", "Command:".green(), command.bright_white().bold());
-        if executor.is_destructive(command) {
-            println!(
-                "{}",
-                "This command may be destructive. Use -y to execute.".yellow()
-            );
-        } else {
-            println!("{}", "Run with -y to execute automatically.".bright_black());
-        }
     }
 
     Ok(())
 }
 
-/// Handle question/code intent
-async fn handle_question_intent(
-    config: &Config,
-    args: &Args,
-    provider: &dyn crate::providers::Provider,
-    query: &str,
-    formatter: &OutputFormatter,
-    custom_cmd: Option<&crate::config::CustomCommand>,
-) -> Result<()> {
-    let mut messages = Vec::new();
+fn is_likely_command(text: &str) -> bool {
+    let text = text.trim();
 
-    if args.has_context() {
-        let manager = ContextManager::with_ttl(config, args.context_ttl())?;
-        messages.extend(manager.get_messages()?);
-
-        // Show context echo if needed
-        manager.print_echo_if_needed()?;
+    if text.is_empty() || text.contains('\n') {
+        return false;
     }
 
-    let locale = std::env::var("LANG").unwrap_or_else(|_| "en_US.UTF-8".to_string());
-    let now = chrono::Local::now().format("%Y-%m-%d %H:%M").to_string();
-
-    // Use custom command system prompt if available
-    let system_prompt = if let Some(cmd) = custom_cmd {
-        format!("{}\n\nLocale: {}, Now: {}", cmd.system, locale, now)
-    } else if args.markdown {
-        format!(
-            "Be brief and direct. Use markdown for formatting. Locale: {}, Now: {}",
-            locale, now
-        )
-    } else {
-        format!(
-            "Be brief and direct. 1-3 sentences max. Plain text only, no formatting codes. Locale: {}, Now: {}",
-            locale, now
-        )
-    };
-
-    messages.insert(
-        0,
-        crate::providers::Message {
-            role: "system".to_string(),
-            content: system_prompt,
-        },
-    );
-
-    messages.push(crate::providers::Message {
-        role: "user".to_string(),
-        content: query.to_string(),
-    });
-
-    // Stream response
-    if config.default.stream && !args.json && !args.raw {
-        use std::sync::{Arc, Mutex};
-        let full_response = Arc::new(Mutex::new(String::new()));
-        let response_clone = full_response.clone();
-
-        let callback: crate::providers::StreamCallback = Box::new(move |chunk: &str| {
-            print!("{}", chunk);
-            std::io::Write::flush(&mut std::io::stdout()).ok();
-            response_clone.lock().unwrap().push_str(chunk);
-        });
-
-        let options = build_provider_options(args, config);
-        provider
-            .stream_with_options(&messages, callback, &options)
-            .await?;
-
-        println!();
-
-        // Save to context if enabled
-        if args.has_context() {
-            let manager = ContextManager::with_ttl(config, args.context_ttl())?;
-            let response_text = full_response.lock().unwrap().clone();
-            manager.add_message("user", query)?;
-            manager.add_message("assistant", &response_text)?;
-        }
-    } else {
-        // Non-streaming response
-        let options = build_provider_options(args, config);
-        let response = provider.complete_with_options(&messages, &options).await?;
-
-        // Format and display
-        formatter.format(&response.text);
-
-        if args.citations && !response.citations.is_empty() {
-            println!();
-            println!("{}", "Sources:".cyan());
-            for (i, cite) in response.citations.iter().enumerate() {
-                println!("  [{}] {} - {}", i + 1, cite.title, cite.url);
-            }
-        }
-
-        // Save to context if enabled
-        if args.has_context() {
-            let manager = ContextManager::with_ttl(config, args.context_ttl())?;
-            manager.add_message("user", query)?;
-            manager.add_message("assistant", &response.text)?;
-        }
+    if text.len() > 500 {
+        return false;
     }
 
-    Ok(())
+    let first_word = text.split_whitespace().next().unwrap_or("");
+    let command_starters = [
+        "ls",
+        "cd",
+        "rm",
+        "cp",
+        "mv",
+        "mkdir",
+        "touch",
+        "cat",
+        "echo",
+        "grep",
+        "find",
+        "chmod",
+        "chown",
+        "sudo",
+        "apt",
+        "yum",
+        "brew",
+        "npm",
+        "yarn",
+        "cargo",
+        "git",
+        "docker",
+        "kubectl",
+        "systemctl",
+        "service",
+        "curl",
+        "wget",
+        "tar",
+        "zip",
+        "unzip",
+        "ssh",
+        "scp",
+        "rsync",
+        "ps",
+        "kill",
+        "top",
+        "htop",
+        "df",
+        "du",
+        "free",
+        "ping",
+        "traceroute",
+        "netstat",
+        "ss",
+        "iptables",
+        "ufw",
+        "python",
+        "python3",
+        "node",
+        "ruby",
+        "perl",
+        "php",
+        "java",
+        "go",
+        "rustc",
+        "gcc",
+        "g++",
+        "make",
+        "cmake",
+        "./",
+        "/",
+        "~",
+    ];
+
+    command_starters
+        .iter()
+        .any(|cmd| first_word.starts_with(cmd))
 }

@@ -477,3 +477,47 @@ blocked_domains = ["pinterest.com"]                  # Anthropic only
 - Web search may increase response latency
 - Each provider has different pricing for web search
 - OpenAI web search only works with official API (not OpenAI-compatible endpoints)
+
+---
+
+## ADR-016: Unified Prompt System
+
+**Status**: Accepted
+
+**Context**: The original implementation used a separate `IntentClassifier` that made an additional API call to classify user intent before the main request. This doubled API usage and latency.
+
+**Decision**: Replace the two-call approach with a unified prompt that handles intent detection inline.
+
+**Previous Architecture**:
+1. `IntentClassifier.classify()` → API call to determine COMMAND/QUESTION/CODE
+2. Based on intent, call appropriate handler with specialized prompt
+3. **Total: 2 API calls per user query**
+
+**New Architecture**:
+1. Unified prompt with inline intent detection rules
+2. Single call handles all intents
+3. Response detection identifies commands for execution
+4. **Total: 1 API call per user query**
+
+**Custom Prompts**:
+- `ask.md` files can override the default prompt entirely
+- Search order: `./ask.md` → `./.ask.md` → `~/ask.md` → `~/.config/ask/ask.md`
+- Command-specific prompts: `ask.{command}.md` (e.g., `ask.cm.md`)
+- Variables supported: `{os}`, `{shell}`, `{cwd}`, `{locale}`, `{now}`, `{format}`
+
+**CLI Flags**:
+- `--make-prompt` - Export default prompt template
+- `--markdown[=bool]` - Control markdown formatting in responses
+- `--color=bool` / `--no-color` - Control ANSI color formatting
+
+**Rationale**:
+- 50% reduction in API calls and latency
+- LLMs are capable of inline intent detection
+- Custom prompts allow project-specific behavior
+- Simpler codebase without separate classifier
+
+**Consequences**:
+- Reduced API costs
+- Faster response times
+- Commands detected heuristically from response (may occasionally miss edge cases)
+- Users can fully customize behavior via `ask.md` files

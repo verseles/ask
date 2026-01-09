@@ -98,11 +98,13 @@ OPTIONS:
     -s, --search          Enable web search for this query
         --citations       Show citations from web search results
         --json            Output in JSON format
-        --markdown        Output rendered in Markdown
+        --markdown[=bool] Output rendered in Markdown (--markdown or --markdown=true)
         --raw             Output raw text without formatting
         --no-color        Disable colorized output
+        --color=bool      Enable/disable colorized output
         --no-follow       Disable result echo after execution
         --no-fallback     Disable profile fallback for this query
+        --make-prompt     Export default prompt template
         --update          Check and install updates
         --help-env        Show all environment variables
     -V, --version         Show version
@@ -391,6 +393,54 @@ git diff | ask cm            # Generate commit message
 cat main.rs | ask explain    # Explain code
 cat api.py | ask review      # Code review
 ```
+
+## Custom Prompts
+
+Customize the AI's behavior by creating `ask.md` files. These files completely replace the default system prompt.
+
+```bash
+# Export the default prompt template
+ask --make-prompt > ask.md
+
+# Edit ask.md to customize behavior
+# The file will be used automatically
+```
+
+<details>
+<summary>Custom Prompt Configuration</summary>
+
+**Search Order** (first found wins):
+1. `./ask.md` or `./.ask.md` (project directory)
+2. `~/ask.md` (home directory)
+3. `~/.config/ask/ask.md` (XDG config)
+
+**Command-Specific Prompts**:
+- `ask.cm.md` - Custom prompt for the `cm` command
+- `ask.explain.md` - Custom prompt for the `explain` command
+
+**Available Variables**:
+| Variable | Description |
+|----------|-------------|
+| `{os}` | Operating system (linux, macos, windows) |
+| `{shell}` | User's shell (/bin/bash, /bin/zsh, etc.) |
+| `{cwd}` | Current working directory |
+| `{locale}` | User's locale (en_US.UTF-8, etc.) |
+| `{now}` | Current date and time |
+| `{format}` | Formatting instruction (markdown/colors/plain) |
+
+**Example ask.md**:
+```markdown
+You are a senior developer assistant. Respond in {locale}.
+
+When asked for commands:
+- Use {shell} syntax appropriate for {os}
+- Consider the current directory: {cwd}
+
+Current time: {now}
+{format}
+```
+
+</details>
 
 ## Shell Completions
 

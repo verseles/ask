@@ -74,6 +74,9 @@ pub struct Args {
     /// Generate shell completions
     pub completions: Option<String>,
 
+    /// Export default prompt template
+    pub make_prompt: bool,
+
     /// The actual query text (all non-flag arguments concatenated)
     pub query: Vec<String>,
 }
@@ -121,7 +124,8 @@ impl Args {
                 "--json" => result.json = true,
                 "--markdown" => result.markdown = true,
                 "--raw" => result.raw = true,
-                "--no-color" => result.no_color = true,
+                "--no-color" | "--color=false" => result.no_color = true,
+                "--color" | "--color=true" => result.no_color = false,
                 "--no-follow" => result.no_follow = true,
                 "--no-fallback" => result.no_fallback = true,
                 "--search" => result.search = true,
@@ -129,6 +133,7 @@ impl Args {
                 "--think" => result.think = true,
                 "--no-think" => result.no_think = true,
                 "--update" => result.update = true,
+                "--make-prompt" => result.make_prompt = true,
                 "--version" | "-V" => result.version = true,
                 "--help" | "-h" => {
                     print_help();
@@ -196,6 +201,12 @@ impl Args {
                 s if s.starts_with("--profile=") => {
                     let value = s.strip_prefix("--profile=").unwrap();
                     result.profile = Some(value.to_string());
+                }
+
+                // Handle --markdown=true|false format
+                s if s.starts_with("--markdown=") => {
+                    let value = s.strip_prefix("--markdown=").unwrap();
+                    result.markdown = value == "true" || value == "1";
                 }
 
                 // Handle combined short flags like -cy or -c60
