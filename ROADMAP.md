@@ -130,10 +130,10 @@ Description: Named profiles (like rclone) with fallback support for resilient AI
   - **Syntax**: `fallback = "other-profile"` or `fallback = "any"` or `fallback = "none"`
   - **Default behavior**: Use first profile as fallback unless `fallback = "none"`
   - **Profile can prohibit fallback**: `fallback = "none"` disables fallback for that profile
-- [ ] 9.06 Auto-fallback on provider errors (429, timeout, API errors)
+- [x] 9.06 Auto-fallback on provider errors (429, timeout, API errors)
   - Automatic retry with fallback profile on: 429, 500, 502, 503, 504, timeout, connection errors
   - Show message: `"Provider error, retrying with fallback profile..."`
-- [ ] 9.07 Interactive fallback setup in `ask init`
+- [x] 9.07 Interactive fallback setup in `ask init`
   - Prompt: "Fallback behavior?" with options:
     1. Use any available profile
     2. Use specific profile (shows select)
@@ -171,7 +171,7 @@ Description: Native web search support for all providers (Gemini, OpenAI, Anthro
 - [x] 10.07 Domain filtering support for Anthropic (allowed_domains/blocked_domains)
   - Config: `allowed_domains = ["docs.rs", "stackoverflow.com"]`
   - Config: `blocked_domains = ["pinterest.com"]`
-- [ ] 10.08 Interactive web search setup in `ask init`
+- [x] 10.08 Interactive web search setup in `ask init`
   - **Note**: Consider renaming `ask init` to `ask config` (keep `init` as alias for compatibility)
   - Both commands lead to same interactive config CLI
 - [x] 10.09 Review and update tests for Feature 10

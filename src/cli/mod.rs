@@ -16,6 +16,24 @@ use crate::providers::{
     PromptContext, ProviderOptions,
 };
 
+/// Check if an error is retryable with a fallback profile
+fn is_retryable_error(err: &anyhow::Error) -> bool {
+    let msg = err.to_string().to_lowercase();
+    msg.contains("429")
+        || msg.contains("500")
+        || msg.contains("502")
+        || msg.contains("503")
+        || msg.contains("504")
+        || msg.contains("rate limit")
+        || msg.contains("too many requests")
+        || msg.contains("timeout")
+        || msg.contains("timed out")
+        || msg.contains("connection refused")
+        || msg.contains("connection reset")
+        || msg.contains("network unreachable")
+        || msg.contains("service unavailable")
+}
+
 /// Main entry point for the CLI
 pub async fn run() -> Result<()> {
     let args = Args::parse_flexible();
@@ -87,6 +105,10 @@ pub async fn run() -> Result<()> {
         return Ok(());
     }
 
+    execute_with_fallback(&config, &args).await
+}
+
+async fn execute_with_fallback(config: &Config, args: &Args) -> Result<()> {
     // Get piped input if available
     let stdin_content = read_stdin_if_available();
 
@@ -134,7 +156,7 @@ pub async fn run() -> Result<()> {
 
     // Create provider (with custom command overrides if applicable)
     let config = if let Some(ref cmd) = custom_cmd {
-        let mut cfg = config;
+        let mut cfg = config.clone();
         if let Some(ref provider) = cmd.provider {
             cfg.default.provider = provider.clone();
         }
@@ -143,24 +165,105 @@ pub async fn run() -> Result<()> {
         }
         cfg
     } else {
-        config
+        config.clone()
     };
 
-    let provider = create_provider(&config)?;
+    let active_profile = config.active_profile(&args);
+    let result = try_query(&config, &args, &full_query, custom_cmd.as_ref()).await;
 
-    let formatter = OutputFormatter::new(&args);
+    match result {
+        Ok(()) => Ok(()),
+        Err(err) if !args.no_fallback && is_retryable_error(&err) => {
+            if let Some(ref profile_name) = active_profile {
+                try_with_fallback(
+                    &config,
+                    &args,
+                    &full_query,
+                    custom_cmd.as_ref(),
+                    profile_name,
+                    &err,
+                )
+                .await
+            } else {
+                Err(err)
+            }
+        }
+        Err(err) => Err(err),
+    }
+}
+
+async fn try_with_fallback(
+    _config: &Config,
+    args: &Args,
+    query: &str,
+    custom_cmd: Option<&crate::config::CustomCommand>,
+    current_profile: &str,
+    original_err: &anyhow::Error,
+) -> Result<()> {
+    let mut tried_profiles = vec![current_profile.to_string()];
+    let mut current = current_profile.to_string();
+    let original_config = Config::load()?;
+
+    while let Some(fallback_name) = original_config.fallback_profile(&current) {
+        if tried_profiles.contains(&fallback_name) {
+            break;
+        }
+
+        eprintln!(
+            "{} {}",
+            "Provider error, retrying with fallback profile:".yellow(),
+            fallback_name.bright_white()
+        );
+
+        let mut fallback_args = args.clone();
+        fallback_args.profile = Some(fallback_name.clone());
+        let fallback_config = original_config.clone().with_cli_overrides(&fallback_args);
+
+        let fallback_config = if let Some(cmd) = custom_cmd {
+            let mut cfg = fallback_config;
+            if let Some(ref provider) = cmd.provider {
+                cfg.default.provider = provider.clone();
+            }
+            if let Some(ref model) = cmd.model {
+                cfg.default.model = model.clone();
+            }
+            cfg
+        } else {
+            fallback_config
+        };
+
+        match try_query(&fallback_config, &fallback_args, query, custom_cmd).await {
+            Ok(()) => return Ok(()),
+            Err(err) if is_retryable_error(&err) => {
+                tried_profiles.push(fallback_name.clone());
+                current = fallback_name;
+                continue;
+            }
+            Err(err) => return Err(err),
+        }
+    }
+
+    Err(anyhow::anyhow!("{}", original_err))
+}
+
+async fn try_query(
+    config: &Config,
+    args: &Args,
+    query: &str,
+    custom_cmd: Option<&crate::config::CustomCommand>,
+) -> Result<()> {
+    let provider = create_provider(config)?;
+    let formatter = OutputFormatter::new(args);
 
     handle_query(
-        &config,
-        &args,
+        config,
+        args,
         provider.as_ref(),
-        &full_query,
+        query,
         &formatter,
-        custom_cmd.as_ref(),
+        custom_cmd,
     )
-    .await?;
-
-    Ok(())
+    .await
 }
 
 fn read_stdin_if_available() -> Option<String> {
