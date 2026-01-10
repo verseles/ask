@@ -408,44 +408,41 @@ fn mask_api_key(key: &str) -> String {
     format!("****{}", suffix)
 }
 
-/// Initialize configuration interactively
-pub async fn init_config() -> Result<()> {
-    println!("{}", "Welcome to ask configuration!".cyan().bold());
-    println!();
+/// Helper struct for config management
+struct ConfigManager {
+    config_path: std::path::PathBuf,
+    existing: Option<toml::Value>,
+}
 
-    let home = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("."));
-    let config_path = home.join("ask.toml");
+impl ConfigManager {
+    fn new() -> Result<Self> {
+        let home = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("."));
+        let config_path = home.join("ask.toml");
 
-    // Try to parse existing config as raw TOML for reading values
-    let existing: Option<toml::Value> = if config_path.exists() {
-        println!(
-            "{}",
-            format!("Existing config found: {}", config_path.display()).bright_black()
-        );
-        println!("{}", "Press Enter to keep current values.".bright_black());
-        println!();
+        let existing: Option<toml::Value> = if config_path.exists() {
+            std::fs::read_to_string(&config_path)
+                .ok()
+                .and_then(|s| toml::from_str(&s).ok())
+        } else {
+            None
+        };
 
-        let backup_path = home.join("ask.toml.bak");
-        std::fs::copy(&config_path, &backup_path)?;
+        Ok(Self {
+            config_path,
+            existing,
+        })
+    }
 
-        std::fs::read_to_string(&config_path)
-            .ok()
-            .and_then(|s| toml::from_str(&s).ok())
-    } else {
-        None
-    };
-
-    // Helper to get nested TOML values
-    let get_str = |keys: &[&str]| -> Option<String> {
-        let mut val = existing.as_ref()?;
+    fn get_str(&self, keys: &[&str]) -> Option<String> {
+        let mut val = self.existing.as_ref()?;
         for k in keys {
             val = val.get(*k)?;
         }
         val.as_str().map(|s| s.to_string())
-    };
+    }
 
-    let get_bool = |keys: &[&str], default: bool| -> bool {
-        let mut val = match existing.as_ref() {
+    fn get_bool(&self, keys: &[&str], default: bool) -> bool {
+        let mut val = match self.existing.as_ref() {
             Some(v) => v,
             None => return default,
         };
@@ -456,21 +453,53 @@ pub async fn init_config() -> Result<()> {
             };
         }
         val.as_bool().unwrap_or(default)
-    };
+    }
 
-    let get_int = |keys: &[&str]| -> Option<i64> {
-        let mut val = existing.as_ref()?;
+    fn get_int(&self, keys: &[&str]) -> Option<i64> {
+        let mut val = self.existing.as_ref()?;
         for k in keys {
             val = val.get(*k)?;
         }
         val.as_integer()
-    };
+    }
 
-    let existing_provider = get_str(&["default", "provider"]);
-    let existing_model = get_str(&["default", "model"]);
-    let existing_stream = get_bool(&["default", "stream"], true);
+    fn get_profiles(&self) -> Vec<String> {
+        self.existing
+            .as_ref()
+            .and_then(|e| e.get("profiles"))
+            .and_then(|p| p.as_table())
+            .map(|t| t.keys().cloned().collect())
+            .unwrap_or_default()
+    }
 
-    // Select provider
+    fn backup(&self) -> Result<()> {
+        if self.config_path.exists() {
+            let home = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("."));
+            let backup_path = home.join("ask.toml.bak");
+            std::fs::copy(&self.config_path, &backup_path)?;
+        }
+        Ok(())
+    }
+
+    fn reload(&mut self) -> Result<()> {
+        self.existing = if self.config_path.exists() {
+            std::fs::read_to_string(&self.config_path)
+                .ok()
+                .and_then(|s| toml::from_str(&s).ok())
+        } else {
+            None
+        };
+        Ok(())
+    }
+}
+
+/// Configure default provider and model
+fn configure_defaults(mgr: &ConfigManager) -> Result<(String, String, String, bool, String, bool)> {
+    let existing_provider = mgr.get_str(&["default", "provider"]);
+    let existing_model = mgr.get_str(&["default", "model"]);
+    let existing_stream = mgr.get_bool(&["default", "stream"], true);
+    let existing_web_search = mgr.get_bool(&["default", "web_search"], false);
+
     let providers = vec!["Gemini (recommended)", "OpenAI", "Anthropic Claude"];
     let default_provider_idx = match existing_provider.as_deref() {
         Some("gemini") => 0,
@@ -492,7 +521,6 @@ pub async fn init_config() -> Result<()> {
         _ => ("gemini", defaults::DEFAULT_MODEL),
     };
 
-    // Use existing model if same provider
     let model_default = if existing_provider.as_deref() == Some(provider) {
         existing_model.unwrap_or_else(|| default_model_for_provider.to_string())
     } else {
@@ -504,8 +532,9 @@ pub async fn init_config() -> Result<()> {
         .default(model_default)
         .interact_text()?;
 
-    // Get existing API key for this provider
-    let existing_api_key = get_str(&["providers", provider, "api_key"]).unwrap_or_default();
+    let existing_api_key = mgr
+        .get_str(&["providers", provider, "api_key"])
+        .unwrap_or_default();
 
     let api_key: String = if !existing_api_key.is_empty() {
         let masked = mask_api_key(&existing_api_key);
@@ -537,11 +566,11 @@ pub async fn init_config() -> Result<()> {
         _ => ("thinking_level", "low"),
     };
 
-    // Get existing thinking value
     let existing_thinking = if provider == "anthropic" {
-        get_int(&["providers", provider, thinking_param]).map(|i| i.to_string())
+        mgr.get_int(&["providers", provider, thinking_param])
+            .map(|i| i.to_string())
     } else {
-        get_str(&["providers", provider, thinking_param])
+        mgr.get_str(&["providers", provider, thinking_param])
     };
 
     let thinking_existing = existing_thinking
@@ -561,59 +590,455 @@ pub async fn init_config() -> Result<()> {
         format!("\n{} = \"{}\"", thinking_param, thinking_value)
     };
 
-    let existing_web_search = get_bool(&["default", "web_search"], false);
     let web_search = Confirm::new()
         .with_prompt("Enable web search by default?")
         .default(existing_web_search)
         .interact()?;
 
-    let web_search_config = if web_search {
-        "\nweb_search = true"
+    Ok((
+        provider.to_string(),
+        model,
+        api_key,
+        stream,
+        thinking_config,
+        web_search,
+    ))
+}
+
+/// Configure a single profile
+fn configure_profile(mgr: &ConfigManager, profile_name: Option<&str>) -> Result<Option<String>> {
+    let name: String = if let Some(n) = profile_name {
+        n.to_string()
     } else {
-        ""
+        Input::new()
+            .with_prompt("Profile name (e.g., work, personal, local)")
+            .interact_text()?
     };
 
-    let existing_profiles: Vec<String> = existing
-        .as_ref()
-        .and_then(|e| e.get("profiles"))
-        .and_then(|p| p.as_table())
-        .map(|t| t.keys().cloned().collect())
+    if name.is_empty() {
+        return Ok(None);
+    }
+
+    println!();
+    println!("{}", format!("Configuring profile: {}", name).cyan());
+
+    let providers = vec!["Gemini", "OpenAI", "Anthropic Claude"];
+    let existing_provider = mgr.get_str(&["profiles", &name, "provider"]);
+
+    let default_idx = match existing_provider.as_deref() {
+        Some("gemini") => 0,
+        Some("openai") => 1,
+        Some("anthropic") => 2,
+        _ => 0,
+    };
+
+    let provider_idx = Select::new()
+        .with_prompt("Provider for this profile")
+        .items(&providers)
+        .default(default_idx)
+        .interact()?;
+
+    let (provider, default_model) = match provider_idx {
+        0 => ("gemini", defaults::DEFAULT_MODEL),
+        1 => ("openai", defaults::DEFAULT_OPENAI_MODEL),
+        2 => ("anthropic", defaults::DEFAULT_ANTHROPIC_MODEL),
+        _ => ("gemini", defaults::DEFAULT_MODEL),
+    };
+
+    let existing_model = mgr
+        .get_str(&["profiles", &name, "model"])
+        .unwrap_or_else(|| default_model.to_string());
+
+    let model: String = Input::new()
+        .with_prompt("Model")
+        .default(existing_model)
+        .interact_text()?;
+
+    let existing_api_key = mgr
+        .get_str(&["profiles", &name, "api_key"])
+        .or_else(|| mgr.get_str(&["providers", provider, "api_key"]))
         .unwrap_or_default();
 
-    let fallback_config = if existing_profiles.len() >= 2 {
-        let existing_fallback = get_str(&["default", "default_fallback"]);
-        let fallback_options = vec![
-            "Use any available profile",
-            "No fallback (fail immediately)",
-        ];
+    let api_key: String = if !existing_api_key.is_empty() {
+        let masked = mask_api_key(&existing_api_key);
+        let new_key: String = Input::new()
+            .with_prompt(format!("API key [{}] (Enter to keep/inherit)", masked))
+            .allow_empty(true)
+            .interact_text()?;
 
-        let default_idx = match existing_fallback.as_deref() {
-            Some("none") => 1,
-            _ => 0,
-        };
-
-        let fallback_idx = Select::new()
-            .with_prompt("Fallback behavior when provider fails?")
-            .items(&fallback_options)
-            .default(default_idx)
-            .interact()?;
-
-        match fallback_idx {
-            0 => "\ndefault_fallback = \"any\"",
-            _ => "\ndefault_fallback = \"none\"",
+        if new_key.is_empty() {
+            String::new()
+        } else {
+            new_key
         }
     } else {
-        ""
+        let key: String = Input::new()
+            .with_prompt("API key (Enter to inherit from provider)")
+            .allow_empty(true)
+            .interact_text()?;
+        key
     };
 
-    let config_content = format!(
-        r#"# ask configuration
+    let existing_base_url = mgr.get_str(&["profiles", &name, "base_url"]);
+    let base_url: String = Input::new()
+        .with_prompt("Base URL (Enter for default, or custom like http://localhost:11434/v1)")
+        .default(existing_base_url.unwrap_or_default())
+        .allow_empty(true)
+        .interact_text()?;
+
+    let existing_web_search = mgr.get_bool(&["profiles", &name, "web_search"], false);
+    let web_search = Confirm::new()
+        .with_prompt("Enable web search for this profile?")
+        .default(existing_web_search)
+        .interact()?;
+
+    let fallback_options = vec![
+        "Inherit from default",
+        "Use any available profile",
+        "No fallback (fail immediately)",
+        "Specific profile...",
+    ];
+
+    let existing_fallback = mgr.get_str(&["profiles", &name, "fallback"]);
+    let default_fallback_idx = match existing_fallback.as_deref() {
+        Some("any") => 1,
+        Some("none") => 2,
+        Some(_) => 3,
+        None => 0,
+    };
+
+    let fallback_idx = Select::new()
+        .with_prompt("Fallback behavior")
+        .items(&fallback_options)
+        .default(default_fallback_idx)
+        .interact()?;
+
+    let fallback = match fallback_idx {
+        0 => String::new(),
+        1 => "any".to_string(),
+        2 => "none".to_string(),
+        3 => {
+            let fb: String = Input::new()
+                .with_prompt("Fallback profile name")
+                .default(existing_fallback.unwrap_or_default())
+                .interact_text()?;
+            fb
+        }
+        _ => String::new(),
+    };
+
+    let mut profile_toml = format!(
+        r#"
+[profiles.{}]
+provider = "{}"
+model = "{}""#,
+        name, provider, model
+    );
+
+    if !api_key.is_empty() {
+        profile_toml.push_str(&format!("\napi_key = \"{}\"", api_key));
+    }
+
+    if !base_url.is_empty() {
+        profile_toml.push_str(&format!("\nbase_url = \"{}\"", base_url));
+    }
+
+    if web_search {
+        profile_toml.push_str("\nweb_search = true");
+    }
+
+    if !fallback.is_empty() {
+        profile_toml.push_str(&format!("\nfallback = \"{}\"", fallback));
+    }
+
+    Ok(Some(profile_toml))
+}
+
+/// Show current configuration
+fn show_current_config(mgr: &ConfigManager) {
+    println!();
+    println!("{}", "Current Configuration".cyan().bold());
+    println!("{}", "─".repeat(40).bright_black());
+
+    if mgr.existing.is_none() {
+        println!("{}", "No configuration file found.".yellow());
+        println!("Run {} to create one.", "'ask init'".cyan());
+        return;
+    }
+
+    let provider = mgr
+        .get_str(&["default", "provider"])
+        .unwrap_or_else(|| "gemini".to_string());
+    let model = mgr
+        .get_str(&["default", "model"])
+        .unwrap_or_else(|| "not set".to_string());
+    let stream = mgr.get_bool(&["default", "stream"], true);
+    let web_search = mgr.get_bool(&["default", "web_search"], false);
+    let default_profile = mgr.get_str(&["default", "default_profile"]);
+    let fallback = mgr.get_str(&["default", "default_fallback"]);
+
+    println!();
+    println!("{}", "[default]".green());
+    println!("  provider: {}", provider.bright_white());
+    println!("  model: {}", model.bright_white());
+    println!("  stream: {}", stream.to_string().bright_white());
+    println!("  web_search: {}", web_search.to_string().bright_white());
+    if let Some(dp) = default_profile {
+        println!("  default_profile: {}", dp.bright_white());
+    }
+    if let Some(fb) = fallback {
+        println!("  default_fallback: {}", fb.bright_white());
+    }
+
+    println!();
+    println!("{}", "[providers]".green());
+    for p in &["gemini", "openai", "anthropic"] {
+        if let Some(key) = mgr.get_str(&["providers", p, "api_key"]) {
+            println!("  {}: {}", p, mask_api_key(&key).bright_black());
+        }
+    }
+
+    let profiles = mgr.get_profiles();
+    if !profiles.is_empty() {
+        println!();
+        println!("{}", "[profiles]".green());
+        for name in &profiles {
+            let p_provider = mgr
+                .get_str(&["profiles", name, "provider"])
+                .unwrap_or_else(|| "inherited".to_string());
+            let p_model = mgr
+                .get_str(&["profiles", name, "model"])
+                .unwrap_or_else(|| "inherited".to_string());
+            let p_fallback = mgr
+                .get_str(&["profiles", name, "fallback"])
+                .unwrap_or_else(|| "default".to_string());
+
+            println!(
+                "  {}: {} / {} (fallback: {})",
+                name.cyan(),
+                p_provider.bright_white(),
+                p_model.bright_white(),
+                p_fallback.bright_black()
+            );
+        }
+    }
+
+    println!();
+}
+
+fn manage_profiles(mgr: &mut ConfigManager) -> Result<()> {
+    loop {
+        println!();
+        let profiles = mgr.get_profiles();
+
+        let mut options = vec!["Create new profile".to_string()];
+        if !profiles.is_empty() {
+            options.push("Edit existing profile".to_string());
+            options.push("Delete profile".to_string());
+            options.push("Set default profile".to_string());
+        }
+        options.push("Back to main menu".to_string());
+
+        let choice = Select::new()
+            .with_prompt("Manage Profiles")
+            .items(&options)
+            .default(0)
+            .interact()?;
+
+        let back_idx = options.len() - 1;
+
+        if choice == back_idx {
+            break;
+        }
+
+        match options[choice].as_str() {
+            "Create new profile" => {
+                if let Some(profile_toml) = configure_profile(mgr, None)? {
+                    let content = std::fs::read_to_string(&mgr.config_path).unwrap_or_default();
+                    let new_content = format!("{}\n{}", content, profile_toml);
+                    std::fs::write(&mgr.config_path, new_content)?;
+                    mgr.reload()?;
+                    println!("{}", "Profile created!".green());
+                }
+            }
+            "Edit existing profile" => {
+                let profiles = mgr.get_profiles();
+                if profiles.is_empty() {
+                    println!("{}", "No profiles to edit.".yellow());
+                    continue;
+                }
+
+                let mut items: Vec<String> = profiles.clone();
+                items.push("Cancel".to_string());
+
+                let idx = Select::new()
+                    .with_prompt("Select profile to edit")
+                    .items(&items)
+                    .default(0)
+                    .interact()?;
+
+                if idx < profiles.len() {
+                    let profile_name = &profiles[idx];
+                    if let Some(profile_toml) = configure_profile(mgr, Some(profile_name))? {
+                        let content = std::fs::read_to_string(&mgr.config_path).unwrap_or_default();
+
+                        let mut doc: toml::Value = toml::from_str(&content)?;
+                        if let Some(profiles_table) = doc.get_mut("profiles") {
+                            if let Some(table) = profiles_table.as_table_mut() {
+                                table.remove(profile_name);
+                            }
+                        }
+
+                        let new_content =
+                            format!("{}\n{}", toml::to_string_pretty(&doc)?, profile_toml);
+                        std::fs::write(&mgr.config_path, new_content)?;
+                        mgr.reload()?;
+                        println!("{}", "Profile updated!".green());
+                    }
+                }
+            }
+            "Delete profile" => {
+                let profiles = mgr.get_profiles();
+                if profiles.is_empty() {
+                    println!("{}", "No profiles to delete.".yellow());
+                    continue;
+                }
+
+                let mut items: Vec<String> = profiles.clone();
+                items.push("Cancel".to_string());
+
+                let idx = Select::new()
+                    .with_prompt("Select profile to delete")
+                    .items(&items)
+                    .default(0)
+                    .interact()?;
+
+                if idx < profiles.len() {
+                    let profile_name = &profiles[idx];
+                    let confirm = Confirm::new()
+                        .with_prompt(format!("Delete profile '{}'?", profile_name))
+                        .default(false)
+                        .interact()?;
+
+                    if confirm {
+                        let content = std::fs::read_to_string(&mgr.config_path).unwrap_or_default();
+                        let mut doc: toml::Value = toml::from_str(&content)?;
+                        if let Some(profiles_table) = doc.get_mut("profiles") {
+                            if let Some(table) = profiles_table.as_table_mut() {
+                                table.remove(profile_name);
+                            }
+                        }
+                        std::fs::write(&mgr.config_path, toml::to_string_pretty(&doc)?)?;
+                        mgr.reload()?;
+                        println!("{}", "Profile deleted!".green());
+                    }
+                }
+            }
+            "Set default profile" => {
+                let profiles = mgr.get_profiles();
+                if profiles.is_empty() {
+                    println!("{}", "No profiles available.".yellow());
+                    continue;
+                }
+
+                let current_default = mgr.get_str(&["default", "default_profile"]);
+                let default_idx = current_default
+                    .as_ref()
+                    .and_then(|d| profiles.iter().position(|p| p == d))
+                    .unwrap_or(0);
+
+                let idx = Select::new()
+                    .with_prompt("Select default profile")
+                    .items(&profiles)
+                    .default(default_idx)
+                    .interact()?;
+
+                let profile_name = &profiles[idx];
+
+                let content = std::fs::read_to_string(&mgr.config_path).unwrap_or_default();
+                let mut doc: toml::Value = toml::from_str(&content)?;
+
+                if let Some(default_section) = doc.get_mut("default") {
+                    if let Some(table) = default_section.as_table_mut() {
+                        table.insert(
+                            "default_profile".to_string(),
+                            toml::Value::String(profile_name.clone()),
+                        );
+                    }
+                }
+
+                std::fs::write(&mgr.config_path, toml::to_string_pretty(&doc)?)?;
+                mgr.reload()?;
+                println!(
+                    "{} {}",
+                    "Default profile set to:".green(),
+                    profile_name.cyan()
+                );
+            }
+            _ => {}
+        }
+    }
+
+    Ok(())
+}
+
+/// Initialize configuration interactively
+pub async fn init_config() -> Result<()> {
+    println!("{}", "ask configuration".cyan().bold());
+    println!();
+
+    let mut mgr = ConfigManager::new()?;
+
+    if mgr.existing.is_some() {
+        println!(
+            "{}",
+            format!("Config found: {}", mgr.config_path.display()).bright_black()
+        );
+    }
+
+    loop {
+        println!();
+        let menu_options = if mgr.existing.is_some() {
+            vec![
+                "View current config",
+                "Edit default settings",
+                "Manage API keys",
+                "Manage profiles",
+                "Configure fallback behavior",
+                "Exit",
+            ]
+        } else {
+            vec!["Quick setup (recommended)", "Exit"]
+        };
+
+        let choice = Select::new()
+            .with_prompt("What would you like to do?")
+            .items(&menu_options)
+            .default(0)
+            .interact()?;
+
+        if mgr.existing.is_none() {
+            match choice {
+                0 => {
+                    mgr.backup()?;
+
+                    let (provider, model, api_key, stream, thinking_config, web_search) =
+                        configure_defaults(&mgr)?;
+
+                    let web_search_config = if web_search {
+                        "\nweb_search = true"
+                    } else {
+                        ""
+                    };
+
+                    let config_content = format!(
+                        r#"# ask configuration
 # Generated by 'ask init'
 
 [default]
 provider = "{provider}"
 model = "{model}"
-stream = {stream}{web_search_config}{fallback_config}
+stream = {stream}{web_search_config}
 
 [providers.{provider}]
 api_key = "{api_key}"{thinking_config}
@@ -638,18 +1063,230 @@ channel = "stable"
 # type = "command"
 # auto_execute = false
 "#
-    );
+                    );
 
-    std::fs::write(&config_path, config_content)?;
+                    std::fs::write(&mgr.config_path, config_content)?;
+                    mgr.reload()?;
 
-    println!();
-    println!(
-        "{} {}",
-        "Created".green(),
-        config_path.display().to_string().bright_white()
-    );
-    println!();
-    println!("You're all set! Try: {}", "ask how to list files".cyan());
+                    println!();
+                    println!(
+                        "{} {}",
+                        "Created".green(),
+                        mgr.config_path.display().to_string().bright_white()
+                    );
+                    println!();
+                    println!("You're all set! Try: {}", "ask how to list files".cyan());
+                }
+                1 => {
+                    println!("{}", "Goodbye!".bright_black());
+                    break;
+                }
+                _ => {}
+            }
+        } else {
+            match choice {
+                0 => {
+                    show_current_config(&mgr);
+                }
+                1 => {
+                    mgr.backup()?;
+
+                    let (provider, model, api_key, stream, thinking_config, web_search) =
+                        configure_defaults(&mgr)?;
+
+                    let content = std::fs::read_to_string(&mgr.config_path).unwrap_or_default();
+                    let mut doc: toml::Value = toml::from_str(&content)?;
+
+                    if let Some(default_section) = doc.get_mut("default") {
+                        if let Some(table) = default_section.as_table_mut() {
+                            table.insert(
+                                "provider".to_string(),
+                                toml::Value::String(provider.clone()),
+                            );
+                            table.insert("model".to_string(), toml::Value::String(model.clone()));
+                            table.insert("stream".to_string(), toml::Value::Boolean(stream));
+                            table
+                                .insert("web_search".to_string(), toml::Value::Boolean(web_search));
+                        }
+                    }
+
+                    if let Some(providers_section) = doc.get_mut("providers") {
+                        if let Some(table) = providers_section.as_table_mut() {
+                            let provider_table = table
+                                .entry(provider.clone())
+                                .or_insert(toml::Value::Table(toml::map::Map::new()));
+                            if let Some(pt) = provider_table.as_table_mut() {
+                                pt.insert("api_key".to_string(), toml::Value::String(api_key));
+                                if !thinking_config.is_empty() {
+                                    if thinking_config.contains("thinking_budget") {
+                                        if let Some(val) = thinking_config
+                                            .split('=')
+                                            .nth(1)
+                                            .and_then(|s| s.trim().parse::<i64>().ok())
+                                        {
+                                            pt.insert(
+                                                "thinking_budget".to_string(),
+                                                toml::Value::Integer(val),
+                                            );
+                                        }
+                                    } else if thinking_config.contains("thinking_level") {
+                                        if let Some(val) = thinking_config
+                                            .split('=')
+                                            .nth(1)
+                                            .map(|s| s.trim().trim_matches('"').to_string())
+                                        {
+                                            pt.insert(
+                                                "thinking_level".to_string(),
+                                                toml::Value::String(val),
+                                            );
+                                        }
+                                    } else if thinking_config.contains("reasoning_effort") {
+                                        if let Some(val) = thinking_config
+                                            .split('=')
+                                            .nth(1)
+                                            .map(|s| s.trim().trim_matches('"').to_string())
+                                        {
+                                            pt.insert(
+                                                "reasoning_effort".to_string(),
+                                                toml::Value::String(val),
+                                            );
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    std::fs::write(&mgr.config_path, toml::to_string_pretty(&doc)?)?;
+                    mgr.reload()?;
+                    println!("{}", "Default settings updated!".green());
+                }
+                2 => {
+                    mgr.backup()?;
+
+                    let providers_list = vec!["Gemini", "OpenAI", "Anthropic Claude", "Back"];
+                    let idx = Select::new()
+                        .with_prompt("Which provider API key?")
+                        .items(&providers_list)
+                        .default(0)
+                        .interact()?;
+
+                    if idx < 3 {
+                        let provider = match idx {
+                            0 => "gemini",
+                            1 => "openai",
+                            2 => "anthropic",
+                            _ => continue,
+                        };
+
+                        let existing_key = mgr
+                            .get_str(&["providers", provider, "api_key"])
+                            .unwrap_or_default();
+
+                        let new_key: String = if !existing_key.is_empty() {
+                            let masked = mask_api_key(&existing_key);
+                            Input::new()
+                                .with_prompt(format!("API key [{}] (Enter to keep)", masked))
+                                .allow_empty(true)
+                                .interact_text()?
+                        } else {
+                            Input::new()
+                                .with_prompt(format!("{} API key", provider))
+                                .interact_text()?
+                        };
+
+                        let final_key = if new_key.is_empty() {
+                            existing_key
+                        } else {
+                            new_key
+                        };
+
+                        if !final_key.is_empty() {
+                            let content =
+                                std::fs::read_to_string(&mgr.config_path).unwrap_or_default();
+                            let mut doc: toml::Value = toml::from_str(&content)?;
+
+                            if doc.get("providers").is_none() {
+                                if let Some(table) = doc.as_table_mut() {
+                                    table.insert(
+                                        "providers".to_string(),
+                                        toml::Value::Table(toml::map::Map::new()),
+                                    );
+                                }
+                            }
+
+                            if let Some(providers_section) = doc.get_mut("providers") {
+                                if let Some(table) = providers_section.as_table_mut() {
+                                    let provider_table = table
+                                        .entry(provider.to_string())
+                                        .or_insert(toml::Value::Table(toml::map::Map::new()));
+                                    if let Some(pt) = provider_table.as_table_mut() {
+                                        pt.insert(
+                                            "api_key".to_string(),
+                                            toml::Value::String(final_key),
+                                        );
+                                    }
+                                }
+                            }
+
+                            std::fs::write(&mgr.config_path, toml::to_string_pretty(&doc)?)?;
+                            mgr.reload()?;
+                            println!("{}", "API key updated!".green());
+                        }
+                    }
+                }
+                3 => {
+                    manage_profiles(&mut mgr)?;
+                }
+                4 => {
+                    mgr.backup()?;
+
+                    let fallback_options = vec![
+                        "Use any available profile (recommended)",
+                        "No fallback (fail immediately)",
+                    ];
+
+                    let existing_fallback = mgr.get_str(&["default", "default_fallback"]);
+                    let default_idx = match existing_fallback.as_deref() {
+                        Some("none") => 1,
+                        _ => 0,
+                    };
+
+                    let idx = Select::new()
+                        .with_prompt("Default fallback behavior when provider fails?")
+                        .items(&fallback_options)
+                        .default(default_idx)
+                        .interact()?;
+
+                    let fallback_value = match idx {
+                        0 => "any",
+                        _ => "none",
+                    };
+
+                    let content = std::fs::read_to_string(&mgr.config_path).unwrap_or_default();
+                    let mut doc: toml::Value = toml::from_str(&content)?;
+
+                    if let Some(default_section) = doc.get_mut("default") {
+                        if let Some(table) = default_section.as_table_mut() {
+                            table.insert(
+                                "default_fallback".to_string(),
+                                toml::Value::String(fallback_value.to_string()),
+                            );
+                        }
+                    }
+
+                    std::fs::write(&mgr.config_path, toml::to_string_pretty(&doc)?)?;
+                    mgr.reload()?;
+                    println!("{} {}", "Fallback set to:".green(), fallback_value.cyan());
+                }
+                5 => {
+                    println!("{}", "Goodbye!".bright_black());
+                    break;
+                }
+                _ => {}
+            }
+        }
+    }
 
     Ok(())
 }
