@@ -89,8 +89,7 @@ OPTIONS:
                           Examples: -c (30 min), -c60 (1 hour), --context=0 (permanent)
     -x, --command         Force command mode (bypass auto-detection)
     -y, --yes             Auto-execute commands without confirmation
-    -t, --think           Enable thinking mode (override config)
-        --no-think        Disable thinking mode (override config)
+    -t, --think[=bool]    Enable/disable thinking mode (--think or --think=false)
     -m, --model <MODEL>   Override configured model
     -p, --provider <NAME> Override configured provider
     -P, --profile <NAME>  Use named profile (e.g., -P work, --profile=local)
@@ -111,12 +110,43 @@ OPTIONS:
     -h, --help            Show help
 
 SUBCOMMANDS:
-    init                  Initialize configuration interactively
+    init, config          Initialize/manage configuration interactively
     --clear               Clear current directory context (use with -c)
     --history             Show context history (use with -c)
 ```
 
 ## Configuration
+
+Run `ask init` or `ask config` to configure interactively:
+
+```
+? What would you like to do?
+› View current config
+  Edit default settings
+  Manage API keys
+  Manage profiles
+  Configure fallback behavior
+  Exit
+```
+
+<details>
+<summary>Interactive Menu Features</summary>
+
+**Main Menu:**
+- **View current config** - Display all settings in formatted output
+- **Edit default settings** - Provider, model, API key, streaming, thinking mode, web search
+- **Manage API keys** - Add/update API keys for any provider
+- **Manage profiles** - Create, edit, delete, set default profiles
+- **Configure fallback** - Set default fallback behavior (any/none)
+
+**Profile Management:**
+- Create new profiles with custom provider, model, API key, base URL
+- Edit existing profiles
+- Delete profiles
+- Set default profile
+- Per-profile web search and fallback settings
+
+</details>
 
 Configuration is loaded from multiple sources (in order of precedence):
 

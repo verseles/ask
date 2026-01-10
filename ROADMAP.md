@@ -227,6 +227,32 @@ Description: Consolidate prompts and remove redundant intent classifier API call
   - Add section on custom prompts with examples
   - Use `<details>` for prompt template reference
 
+### Feature 12: Interactive Configuration Menu
+
+Description: Full-featured interactive menu for ask init/config with profile management
+
+- [x] 12.01 Add `config` as alias for `init` command
+  - Both `ask init` and `ask config` lead to same interactive menu
+- [x] 12.02 Implement main menu with options
+  - View current config
+  - Edit default settings
+  - Manage API keys
+  - Manage profiles
+  - Configure fallback behavior
+  - Exit
+- [x] 12.03 Implement profile management submenu
+  - Create new profile
+  - Edit existing profile
+  - Delete profile
+  - Set default profile
+- [x] 12.04 Per-profile configuration
+  - Provider, model, API key, base URL
+  - Web search toggle
+  - Fallback behavior (inherit, any, none, specific)
+- [x] 12.05 View current configuration with formatted display
+- [x] 12.06 ConfigManager struct for cleaner state management
+- [x] 12.07 Proper TOML editing preserving existing settings
+
 ## Legend
 
 - [x] Complete and functional
@@ -280,6 +306,15 @@ Description: Consolidate prompts and remove redundant intent classifier API call
 
 1. **macOS config fix** - Now checks ~/.config/ask/config.toml on macOS for Unix compatibility
 2. **Config merge fix** - Fixed bug where explicit default values were ignored in overlay configs
+
+### Completed in v0.13.0 - Commit: ccc69f0
+
+1. **Interactive config menu** - Full-featured menu for `ask init` / `ask config`
+2. **Profile management** - Create, edit, delete, set default profiles
+3. **View current config** - Formatted display of all settings
+4. **Per-profile settings** - Provider, model, API key, base URL, web search, fallback
+5. **ConfigManager struct** - Cleaner state management for config operations
+6. **Proper TOML editing** - Preserves existing settings instead of overwriting
 
 ### Known Limitations
 

@@ -19,7 +19,7 @@ ask/
 │   │   └── defaults.rs      # Default constants
 │   ├── providers/
 │   │   ├── mod.rs           # Provider factory
-│   │   ├── traits.rs        # Provider trait + IntentClassifier
+│   │   ├── traits.rs        # Provider trait + PromptContext
 │   │   ├── gemini.rs        # Google Gemini integration
 │   │   ├── openai.rs        # OpenAI integration
 │   │   └── anthropic.rs     # Anthropic Claude integration
@@ -71,8 +71,7 @@ pub struct Args {
     pub context: bool,      // -c, --context
     pub command_mode: bool, // -x, --command
     pub yes: bool,          // -y, --yes
-    pub think: bool,        // -t, --think
-    pub no_think: bool,     // --no-think
+    pub think: Option<bool>, // -t, --think[=bool]
     pub model: Option<String>,
     pub provider: Option<String>,
     pub query: Vec<String>, // Free text parts
@@ -100,8 +99,17 @@ Key structures:
 - `Config` - Main config container
 - `DefaultConfig` - Default provider/model settings
 - `ProviderConfig` - Per-provider API keys and URLs
+- `ProfileConfig` - Named profile settings (provider, model, api_key, base_url, fallback)
 - `BehaviorConfig` - Execution behavior settings
 - `ContextConfig` - Context/history settings
+- `ConfigManager` - Helper struct for interactive config management
+
+Key functions:
+- `init_config()` - Interactive configuration menu
+- `configure_defaults()` - Configure default provider/model
+- `configure_profile()` - Configure a single profile
+- `manage_profiles()` - Profile management submenu
+- `show_current_config()` - Display current config formatted
 
 ### Providers (`src/providers/`)
 
@@ -122,10 +130,10 @@ Supported providers:
 - **OpenAIProvider**: OpenAI and compatible APIs
 - **AnthropicProvider**: Anthropic Claude API
 
-The `IntentClassifier` uses the provider to classify user intent:
-- `COMMAND` - User wants shell commands
-- `QUESTION` - User wants information
-- `CODE` - User wants code generation
+The unified prompt system handles intent detection inline (command vs question vs code) without a separate API call. Key functions:
+- `build_unified_prompt()` - Builds the system prompt with context
+- `load_custom_prompt()` - Loads custom prompts from ask.md files
+- `expand_prompt_variables()` - Replaces {os}, {shell}, {cwd}, {locale}, {now} variables
 
 ### Context Manager (`src/context/`)
 

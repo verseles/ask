@@ -23,11 +23,9 @@ pub struct Args {
     /// Select named profile
     pub profile: Option<String>,
 
-    /// Enable thinking mode (override config)
-    pub think: bool,
-
-    /// Disable thinking mode (override config)
-    pub no_think: bool,
+    /// Enable/disable thinking mode (--think or --think=true/false)
+    /// None = use config default, Some(true) = enable, Some(false) = disable
+    pub think: Option<bool>,
 
     /// Output in JSON format
     pub json: bool,
@@ -115,7 +113,7 @@ impl Args {
                 // Boolean flags (short)
                 "-x" => result.command_mode = true,
                 "-y" => result.yes = true,
-                "-t" => result.think = true,
+                "-t" => result.think = Some(true),
                 "-s" => result.search = true,
 
                 // Boolean flags (long)
@@ -130,8 +128,8 @@ impl Args {
                 "--no-fallback" => result.no_fallback = true,
                 "--search" => result.search = true,
                 "--citations" => result.citations = true,
-                "--think" => result.think = true,
-                "--no-think" => result.no_think = true,
+                "--think" | "--think=true" => result.think = Some(true),
+                "--think=false" => result.think = Some(false),
                 "--update" => result.update = true,
                 "--make-prompt" => result.make_prompt = true,
                 "--version" | "-V" => result.version = true,
@@ -225,7 +223,7 @@ impl Args {
                                     'c' => result.context = Some(30),
                                     'x' => result.command_mode = true,
                                     'y' => result.yes = true,
-                                    't' => result.think = true,
+                                    't' => result.think = Some(true),
                                     'V' => result.version = true,
                                     'h' => {
                                         print_help();
@@ -242,7 +240,7 @@ impl Args {
                                 'c' => result.context = Some(30),
                                 'x' => result.command_mode = true,
                                 'y' => result.yes = true,
-                                't' => result.think = true,
+                                't' => result.think = Some(true),
                                 's' => result.search = true,
                                 'V' => result.version = true,
                                 'h' => {
@@ -346,8 +344,7 @@ OPTIONS:
                           Examples: -c (30 min), -c60 (60 min), --context=120 (2 hours)
     -x, --command         Force command mode (bypass auto-detection)
     -y, --yes             Auto-execute commands without confirmation
-    -t, --think           Enable thinking mode (override config)
-        --no-think        Disable thinking mode (override config)
+    -t, --think[=bool]    Enable/disable thinking mode (--think or --think=false)
     -m, --model <MODEL>   Override configured model
     -p, --provider <NAME> Override configured provider
     -P, --profile <NAME>  Use named profile from config

@@ -35,14 +35,10 @@ fn build_cli() -> Command {
             Arg::new("think")
                 .short('t')
                 .long("think")
-                .help("Enable thinking mode (override config)")
-                .action(clap::ArgAction::SetTrue),
-        )
-        .arg(
-            Arg::new("no-think")
-                .long("no-think")
-                .help("Disable thinking mode (override config)")
-                .action(clap::ArgAction::SetTrue),
+                .help("Enable/disable thinking mode (--think or --think=false)")
+                .num_args(0..=1)
+                .default_missing_value("true")
+                .value_name("BOOL"),
         )
         .arg(
             Arg::new("model")

@@ -521,3 +521,49 @@ blocked_domains = ["pinterest.com"]                  # Anthropic only
 - Faster response times
 - Commands detected heuristically from response (may occasionally miss edge cases)
 - Users can fully customize behavior via `ask.md` files
+
+---
+
+## ADR-017: Interactive Configuration Menu
+
+**Status**: Accepted
+
+**Context**: The original `ask init` command was a simple linear wizard that only configured basic settings. Users couldn't easily manage multiple profiles, view current config, or edit specific settings without re-running the entire wizard.
+
+**Decision**: Implement a full-featured interactive menu system for `ask init` / `ask config`.
+
+**Menu Structure**:
+```
+Main Menu (existing config):
+├── View current config
+├── Edit default settings
+├── Manage API keys
+├── Manage profiles
+│   ├── Create new profile
+│   ├── Edit existing profile
+│   ├── Delete profile
+│   └── Set default profile
+├── Configure fallback behavior
+└── Exit
+
+Quick Setup (new config):
+└── Guided wizard for first-time setup
+```
+
+**Key Features**:
+- `ConfigManager` struct for state management
+- Proper TOML editing that preserves existing settings
+- Backup before any changes (`ask.toml.bak`)
+- Per-profile settings: provider, model, API key, base URL, web search, fallback
+- Fallback configuration always available (not just with 2+ profiles)
+
+**Rationale**:
+- Users need to manage multiple profiles for different use cases
+- Editing specific settings shouldn't require full reconfiguration
+- Viewing current config helps with debugging
+- Profile management completes the vision from Feature 9
+
+**Consequences**:
+- More complex code in `src/config/mod.rs` (~700 lines added)
+- Better user experience for configuration management
+- `ask config` now works as alias for `ask init`
