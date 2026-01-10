@@ -57,17 +57,6 @@ detect_arch() {
     esac
 }
 
-# Get latest version from GitHub
-get_latest_version() {
-    if command -v curl >/dev/null 2>&1; then
-        curl -sL "https://api.github.com/repos/${REPO}/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/'
-    elif command -v wget >/dev/null 2>&1; then
-        wget -qO- "https://api.github.com/repos/${REPO}/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/'
-    else
-        error "curl or wget is required"
-    fi
-}
-
 # Download file
 download() {
     url="$1"
@@ -278,35 +267,26 @@ main() {
         *)              error "Unsupported platform: ${OS}-${ARCH}" ;;
     esac
 
-    VERSION=$(get_latest_version)
-    if [ -z "$VERSION" ]; then
-        error "Could not determine latest version"
-    fi
-
-    info "Latest version: ${VERSION}"
-
-    # Create temp directory
     TMP_DIR=$(mktemp -d)
     trap "rm -rf '$TMP_DIR'" EXIT
 
-    BINARY_URL="https://github.com/${REPO}/releases/download/${VERSION}/${ARTIFACT}"
+    BINARY_URL="https://github.com/${REPO}/releases/latest/download/${ARTIFACT}"
     CHECKSUM_URL="${BINARY_URL}.sha256"
 
     info "Downloading ${BINARY_NAME}..."
     download "$BINARY_URL" "${TMP_DIR}/${BINARY_NAME}"
     download "$CHECKSUM_URL" "${TMP_DIR}/${BINARY_NAME}.sha256"
 
-    # Verify checksum
     EXPECTED_CHECKSUM=$(awk '{print $1}' "${TMP_DIR}/${BINARY_NAME}.sha256")
     verify_checksum "${TMP_DIR}/${BINARY_NAME}" "$EXPECTED_CHECKSUM"
     success "Checksum verified"
 
-    # Install binary
     mkdir -p "$INSTALL_DIR"
     mv "${TMP_DIR}/${BINARY_NAME}" "${INSTALL_DIR}/${BINARY_NAME}"
     chmod +x "${INSTALL_DIR}/${BINARY_NAME}"
 
-    success "Installed ${BINARY_NAME} to ${INSTALL_DIR}/${BINARY_NAME}"
+    VERSION=$("${INSTALL_DIR}/${BINARY_NAME}" --version 2>/dev/null | awk '{print $2}' || echo "latest")
+    success "Installed ${BINARY_NAME} ${VERSION} to ${INSTALL_DIR}/${BINARY_NAME}"
 
     # Check PATH and configure if needed
     case ":$PATH:" in
