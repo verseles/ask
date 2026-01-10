@@ -145,7 +145,7 @@ impl Args {
                 }
 
                 // Subcommands
-                "init" if query_parts.is_empty() => result.init = true,
+                "init" | "config" if query_parts.is_empty() => result.init = true,
                 "--clear" => result.clear_context = true,
                 "--history" => result.show_history = true,
 
@@ -351,21 +351,24 @@ OPTIONS:
     -m, --model <MODEL>   Override configured model
     -p, --provider <NAME> Override configured provider
     -P, --profile <NAME>  Use named profile from config
+        --no-fallback     Disable fallback to other profiles on error
     -s, --search          Enable web search for this query
         --citations       Show citations from web search results
         --json            Output in JSON format
-        --markdown        Output rendered in Markdown
+        --markdown[=bool] Output rendered in Markdown (--markdown or --markdown=true)
         --raw             Output raw text without formatting
         --no-color        Disable colorized output
+        --color=bool      Enable/disable colorized output
         --no-follow       Disable result echo after execution
-        --no-fallback     Disable fallback to other profiles on error
+        --make-prompt     Export default prompt template to stdout
+        --help-env        Show all environment variables
         --update          Check and install updates
         --completions <SHELL>  Generate shell completions (bash, zsh, fish, powershell, elvish)
     -V, --version         Show version
     -h, --help            Show this help
 
 SUBCOMMANDS:
-    init                  Initialize configuration interactively
+    init, config          Initialize/manage configuration interactively
     --clear              Clear current directory context (use with -c)
     --history            Show context history (use with -c)
 
@@ -376,23 +379,23 @@ EXAMPLES:
     ask -c60 what about pods?         # 60 min context
     ask -c0 long conversation         # permanent context
     ask --context=120 complex topic   # 2 hour context
+    ask -P work important query       # use work profile
+    ask -s what happened today        # web search
     git diff | ask cm
     cat main.rs | ask explain
 
 CONFIGURATION:
-    Run 'ask init' to set up your API keys and preferences.
+    Run 'ask init' or 'ask config' to set up your API keys and preferences.
     Configuration files are loaded from:
       1. ./ask.toml or ./.ask.toml (project local)
       2. ~/ask.toml (home directory)
       3. ~/.config/ask/config.toml (XDG config)
 
-ENVIRONMENT VARIABLES:
-    ASK_PROVIDER          Override default provider
-    ASK_MODEL             Override default model
-    ASK_GEMINI_API_KEY    Gemini API key
-    ASK_OPENAI_API_KEY    OpenAI API key
-    ASK_ANTHROPIC_API_KEY Anthropic API key
-    NO_COLOR              Disable colored output
+CUSTOM PROMPTS:
+    Create ask.md in the config search path to customize the system prompt.
+    Use 'ask --make-prompt > ask.md' to export the default template.
+
+Run 'ask --help-env' for all environment variables.
 "#
     );
 }
