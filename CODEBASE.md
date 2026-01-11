@@ -68,19 +68,19 @@ Implements flexible argument parsing that allows flags before or after free text
 
 ```rust
 pub struct Args {
-    pub context: bool,      // -c, --context
-    pub command_mode: bool, // -x, --command
-    pub yes: bool,          // -y, --yes
-    pub think: Option<bool>, // -t, --think[=bool]
+    pub context: Option<u64>, // -c, --context[=MIN]
+    pub command_mode: bool,   // -x, --command
+    pub yes: bool,            // -y, --yes
+    pub think: Option<bool>,  // -t, --think[=bool]
     pub model: Option<String>,
-    pub provider: Option<String>,
-    pub profile: Option<String>,  // -P, --profile
+    pub provider: Option<String>, // -P, --provider
+    pub profile: Option<String>,  // -p, --profile
     pub api_key: Option<String>,  // -k, --api-key
     pub non_interactive: bool,    // -n, --non-interactive
     pub verbose: bool,            // -v, --verbose
     pub list_profiles: bool,      // profiles subcommand
     pub make_config: bool,        // --make-config
-    pub query: Vec<String>, // Free text parts
+    pub query: Vec<String>,       // Free text parts
     // ...
 }
 ```
@@ -94,13 +94,14 @@ The parser:
 
 ### Configuration (`src/config/`)
 
-Configuration is loaded with precedence:
-1. CLI arguments
-2. Environment variables (`ASK_*`)
-3. Local config (`./ask.toml`)
-4. Home config (`~/ask.toml`)
-5. XDG config (`~/.config/ask/config.toml`)
-6. Defaults
+Configuration is loaded with precedence (Profile-First):
+1. CLI arguments (highest)
+2. Profile settings (selected via `-p` or `default_profile`)
+3. Environment variables (`ASK_*`)
+4. Local config (`./ask.toml`)
+5. Home config (`~/ask.toml`)
+6. XDG config (`~/.config/ask/config.toml`)
+7. Defaults (lowest)
 
 Key structures:
 - `Config` - Main config container
@@ -298,13 +299,16 @@ See [ADR.md](ADR.md) for architectural decisions including:
 ## Dependencies
 
 Key crates:
-- `clap`: CLI parsing (derive macros)
+- `clap`: CLI utility functions and shell completions
 - `clap_complete`: Shell completions generation
 - `tokio`: Async runtime
-- `reqwest`: HTTP client with streaming
+- `reqwest`: HTTP client with streaming and rustls
+- `hickory-resolver`: Custom DNS resolution for Termux/Android compatibility
 - `serde` + `toml`: Configuration parsing
 - `colored`: Terminal colors
 - `indicatif`: Progress spinners
 - `termimad`: Markdown rendering
 - `dialoguer`: Interactive prompts
-- `arboard`: Clipboard support for command injection
+- `arboard`: Clipboard support for command injection (Windows fallback)
+- `mouse-keyboard-input`: Command injection via `/dev/uinput` (Linux)
+- `enigo`: Command injection via Accessibility/keystrokes (macOS/Windows)

@@ -93,7 +93,7 @@ ask -c -x list all files
 
 ## ADR-005: Automatic Intent Detection
 
-**Status**: Accepted
+**Status**: Deprecated (Superseded by ADR-016)
 
 **Context**: Users may not know if they want a command or an answer.
 
@@ -112,7 +112,7 @@ ask -c -x list all files
 **Consequences**:
 - Extra API call for intent detection
 - Slight latency increase
-- More intelligent default behavior
+- **Note**: This was replaced in v0.12.0 with a unified prompt approach (see ADR-016) to reduce latency and costs.
 
 ---
 
@@ -197,40 +197,29 @@ io::stdout().flush()?;
 
 ## ADR-009: Multi-layer Configuration Precedence
 
-**Status**: Accepted (Updated v0.6.0)
+**Status**: Accepted (Updated v0.16.0)
 
-**Context**: Different contexts need different configurations.
+**Context**: Different contexts need different configurations, with profiles becoming the primary unit of configuration.
 
-**Decision**: Implement configuration hierarchy:
-1. CLI arguments (highest)
-2. Environment variables
-3. Local config (`./ask.toml`)
-4. Home config (`~/ask.toml`)
-5. XDG config (`~/.config/ask/config.toml`)
-6. Defaults (lowest)
-
-**Environment Variables** (added v0.6.0):
-All TOML options have corresponding environment variables:
-- `ASK_PROVIDER`, `ASK_MODEL`, `ASK_STREAM` - Default settings
-- `ASK_{PROVIDER}_API_KEY` - API keys (GEMINI, OPENAI, ANTHROPIC)
-- `ASK_{PROVIDER}_BASE_URL` - Custom endpoints
-- `ASK_AUTO_EXECUTE`, `ASK_CONFIRM_DESTRUCTIVE`, `ASK_TIMEOUT` - Behavior
-- `ASK_CONTEXT_MAX_AGE`, `ASK_CONTEXT_MAX_MESSAGES`, `ASK_CONTEXT_PATH` - Context
-- `ASK_UPDATE_AUTO_CHECK`, `ASK_UPDATE_INTERVAL`, `ASK_UPDATE_CHANNEL` - Updates
-- `ASK_NO_UPDATE` - Disable update checks entirely
+**Decision**: Implement a "profile-first" configuration hierarchy:
+1. CLI arguments (highest) - e.g., `-m`, `-P`, `-t`
+2. Profile settings (selected via `-p`, `default_profile`, or first available)
+3. Environment variables - e.g., `ASK_PROVIDER`, `ASK_GEMINI_API_KEY`
+4. Local config (`./ask.toml`)
+5. Home config (`~/ask.toml`)
+6. XDG config (`~/.config/ask/config.toml`)
+7. Defaults (lowest)
 
 **Rationale**:
-- Project-specific settings possible
-- Environment variables for CI/CD and containers
-- User defaults at home level
-- Follows Unix conventions
-- Full env var coverage enables 12-factor app deployment
+- Profiles allow grouping related settings (provider, model, thinking, search)
+- CLI overrides allow one-off changes to any profile setting
+- Environment variables provide a way to inject secrets and CI settings
+- Follows Unix conventions for configuration discovery
 
 **Consequences**:
-- Flexible configuration
-- May be confusing which config is active
-- Config merging logic to maintain
-- Easy to use in Docker/CI environments
+- Profile selection happens before other settings are resolved
+- Clearer mental model: "I am using the 'work' profile, but overriding the model just for this call"
+- Easy to use in Docker/CI environments with env vars or non-interactive init
 
 ---
 
@@ -376,13 +365,13 @@ ask review src/main.rs         # Uses [commands.review] config
 
 ---
 
-## ADR-014: Multi-Profile System with Fallback
+## ADR-014: Multi-Profile System (Profile-First)
 
-**Status**: Accepted
+**Status**: Accepted (Updated v0.16.0)
 
 **Context**: Users need different configurations for different scenarios (work/personal, local/cloud, cost/quality tradeoffs) and resilience when a provider fails.
 
-**Decision**: Implement named profiles (inspired by rclone) with inheritance and fallback support.
+**Decision**: Implement named profiles as the primary configuration unit. Every run uses a profile.
 
 **Configuration**:
 ```toml
@@ -397,41 +386,37 @@ fallback = "personal"  # retry with this profile on error
 [profiles.personal]
 provider = "anthropic"
 model = "claude-haiku-4-5"
-fallback = "none"  # disable fallback for this profile
+fallback = "none"
 
 [profiles.local]
 provider = "openai"
-base_url = "http://localhost:11434/v1"  # Ollama, LM Studio
+base_url = "http://localhost:11434/v1"
 model = "llama3"
-api_key = "ollama"  # dummy key for local servers
+api_key = "ollama"
 ```
 
 **CLI Flags**:
-- `-P work` or `--profile=work` - Select active profile
+- `-p work` or `--profile=work` - Select active profile
+- `-P gemini` or `--provider=gemini` - Override provider for current call
+- `-m model` or `--model=model` - Override model for current call
 - `--no-fallback` - Disable fallback for single query
 
-**Inheritance Order**:
-1. CLI arguments (highest priority)
-2. Profile settings (`[profiles.name]`)
-3. Default config (`[default]`, `[providers.*]`)
-4. Built-in defaults (lowest priority)
-
-**Fallback Options**:
-- `fallback = "other-profile"` - Use specific profile on error
-- `fallback = "any"` - Try any available profile (order: first in config)
-- `fallback = "none"` - Disable fallback entirely
+**Logic**:
+1. Select profile from CLI `-p`, then `default_profile`, then first available.
+2. Load all settings from selected profile.
+3. Apply CLI overrides (`-P`, `-m`, `-t`).
+4. On provider error, attempt fallback to next profile in chain.
 
 **Rationale**:
 - Familiar pattern from rclone users
-- Profiles only override what they specify (partial configs)
+- Profile-first architecture simplifies configuration merging
 - Fallback provides resilience (429 errors, timeouts)
-- OpenAI-compatible base_url enables local models
+- Consistent flags: lowercase `-p` for the common profile switch, uppercase `-P` for provider override
 
 **Consequences**:
 - Profile names must be unique
-- Circular fallback chains are possible (user responsibility)
-- `--no-fallback` overrides any profile fallback setting
-- Methods `active_profile()` and `fallback_profile()` prepared for auto-fallback (Feature 9.06)
+- Circular fallback chains are prevented by tracking visited profiles
+- `-p` and `-P` swap ensures the most common flag (profile) is easier to type
 
 ---
 
@@ -669,6 +654,38 @@ Profiles
   work openai gpt-4o [search]
 
 Default profile: personal
+
+---
+
+## ADR-021: Unified Thinking Mode
+
+**Status**: Accepted (v0.14.0)
+
+**Context**: Modern LLMs (Gemini 2.0+, Claude 3.7+, OpenAI o1+) support "thinking" or "reasoning" modes with different API parameters.
+
+**Decision**: Implement a unified `--think` flag and profile-level configuration that abstracts provider-specific parameters.
+
+**Implementation**:
+
+| Provider | Config Key | Values | API Implementation |
+|----------|------------|--------|--------------------|
+| **Gemini** | `thinking_level` | `minimal, low, medium, high` | `thinking_config: { include_thoughts: true }` + `max_output_tokens` scaling |
+| **OpenAI** | `reasoning_effort` | `none, minimal, low, medium, high, xhigh` | `reasoning_effort` field |
+| **Anthropic** | `thinking_budget` | `0` or `1024-128000` | `thinking: { type: "enabled", budget_tokens: N }` |
+
+**CLI Flags**:
+- `-t` or `--think` - Enable thinking with profile's default level/budget
+- `--think=false` - Force disable thinking for current query
+
+**Rationale**:
+- Users shouldn't need to remember different parameter names per provider
+- "Thinking" is the common conceptual model for these features
+- Automatic `max_output_tokens` adjustment prevents truncation when thinking is enabled
+
+**Consequences**:
+- Profile configuration is slightly more verbose to accommodate all three types
+- Code handles the mapping from levels (low/medium/high) to specific provider budgets
+- Prevents "budget overflow" errors by validating against model limits
 ```
 
 **Rationale**:
