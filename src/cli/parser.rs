@@ -84,6 +84,12 @@ pub struct Args {
     /// Export example config template
     pub make_config: bool,
 
+    /// Non-interactive mode for init (use with --provider, --model, --api-key)
+    pub non_interactive: bool,
+
+    /// API key for non-interactive init
+    pub api_key: Option<String>,
+
     /// The actual query text (all non-flag arguments concatenated)
     pub query: Vec<String>,
 }
@@ -142,6 +148,7 @@ impl Args {
                 "--update" => result.update = true,
                 "--make-prompt" => result.make_prompt = true,
                 "--make-config" => result.make_config = true,
+                "--non-interactive" | "-n" => result.non_interactive = true,
                 "-v" | "--verbose" => result.verbose = true,
                 "--version" | "-V" => result.version = true,
                 "--help" | "-h" => {
@@ -176,6 +183,12 @@ impl Args {
                     i += 1;
                     if i < args.len() {
                         result.profile = Some(args[i].clone());
+                    }
+                }
+                "-k" | "--api-key" => {
+                    i += 1;
+                    if i < args.len() {
+                        result.api_key = Some(args[i].clone());
                     }
                 }
 
@@ -362,6 +375,8 @@ OPTIONS:
     -m, --model <MODEL>   Override configured model
     -p, --provider <NAME> Override configured provider
     -P, --profile <NAME>  Use named profile from config
+    -k, --api-key <KEY>   API key (for use with init -n)
+    -n, --non-interactive Non-interactive init (use with -p, -m, -k)
         --no-fallback     Disable fallback to other profiles on error
     -s, --search          Enable web search for this query
         --citations       Show citations from web search results

@@ -62,6 +62,20 @@ fn build_cli() -> Command {
                 .value_name("NAME"),
         )
         .arg(
+            Arg::new("api-key")
+                .short('k')
+                .long("api-key")
+                .help("API key (for use with init -n)")
+                .value_name("KEY"),
+        )
+        .arg(
+            Arg::new("non-interactive")
+                .short('n')
+                .long("non-interactive")
+                .help("Non-interactive init (use with -p, -m, -k)")
+                .action(clap::ArgAction::SetTrue),
+        )
+        .arg(
             Arg::new("json")
                 .long("json")
                 .help("Output in JSON format")

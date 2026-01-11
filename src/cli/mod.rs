@@ -76,6 +76,13 @@ pub async fn run() -> Result<()> {
 
     // Handle init command
     if args.init {
+        if args.non_interactive {
+            return crate::config::init_config_non_interactive(
+                args.provider.as_deref(),
+                args.model.as_deref(),
+                args.api_key.as_deref(),
+            );
+        }
         return crate::config::init_config().await;
     }
 
