@@ -39,6 +39,10 @@ pub struct Config {
     /// Default profile name (if not set, uses first profile or base config)
     #[serde(default)]
     pub default_profile: Option<String>,
+
+    /// Command-line aliases (e.g., "q" = "--raw --no-color")
+    #[serde(default)]
+    pub aliases: HashMap<String, String>,
 }
 
 /// Default provider and model settings

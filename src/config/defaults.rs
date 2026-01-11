@@ -91,4 +91,11 @@ inherit_flags = true
 # system = "Review this code for bugs, security issues, and improvements."
 # provider = "anthropic"
 # model = "claude-sonnet-4-20250514"
+
+# Command-line aliases - expand short aliases to full flags
+# Usage: ask q how to list files -> ask --raw --no-color how to list files
+[aliases]
+# q = "--raw --no-color"
+# fast = "-P fast --no-fallback"
+# deep = "-t --search"
 "##;

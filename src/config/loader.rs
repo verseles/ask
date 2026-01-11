@@ -5,6 +5,21 @@ use anyhow::Result;
 use std::path::PathBuf;
 
 impl Config {
+    /// Load only aliases from config (fast, for early argument expansion)
+    pub fn load_aliases_only() -> std::collections::HashMap<String, String> {
+        if let Some(path) = Self::find_local_config()
+            .or_else(Self::find_home_config)
+            .or_else(Self::find_xdg_config)
+        {
+            if let Ok(content) = std::fs::read_to_string(&path) {
+                if let Ok(config) = toml::from_str::<Config>(&content) {
+                    return config.aliases;
+                }
+            }
+        }
+        std::collections::HashMap::new()
+    }
+
     /// Load configuration with precedence:
     /// 1. CLI arguments (handled separately via with_cli_overrides)
     /// 2. Environment variables (handled separately)
@@ -147,6 +162,14 @@ impl Config {
             },
             // Overlay wins for default_profile
             default_profile: overlay.default_profile.or(base.default_profile),
+            // Merge aliases: base + overlay, overlay wins conflicts
+            aliases: {
+                let mut aliases = base.aliases;
+                for (k, v) in overlay.aliases {
+                    aliases.insert(k, v);
+                }
+                aliases
+            },
         }
     }
 

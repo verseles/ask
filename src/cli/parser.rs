@@ -107,7 +107,31 @@ impl Args {
 
     /// Parse arguments flexibly, allowing flags before or after text
     pub fn parse_flexible() -> Self {
-        let args: Vec<String> = env::args().skip(1).collect();
+        let raw_args: Vec<String> = env::args().skip(1).collect();
+        let args = Self::expand_aliases(raw_args);
+        Self::parse_args(args)
+    }
+
+    fn expand_aliases(args: Vec<String>) -> Vec<String> {
+        let aliases = crate::config::Config::load_aliases_only();
+        if aliases.is_empty() {
+            return args;
+        }
+
+        let mut expanded = Vec::new();
+        for arg in args {
+            if let Some(expansion) = aliases.get(&arg) {
+                for part in expansion.split_whitespace() {
+                    expanded.push(part.to_string());
+                }
+            } else {
+                expanded.push(arg);
+            }
+        }
+        expanded
+    }
+
+    fn parse_args(args: Vec<String>) -> Self {
         let mut result = Args::default();
         let mut query_parts: Vec<String> = Vec::new();
         let mut i = 0;
