@@ -567,3 +567,115 @@ Quick Setup (new config):
 - More complex code in `src/config/mod.rs` (~700 lines added)
 - Better user experience for configuration management
 - `ask config` now works as alias for `ask init`
+
+---
+
+## ADR-018: Command-Line Aliases
+
+**Status**: Accepted
+
+**Context**: Users frequently use the same flag combinations and want shortcuts.
+
+**Decision**: Add `[aliases]` section to config for defining flag shortcuts that expand before argument parsing.
+
+**Configuration**:
+```toml
+[aliases]
+q = "--raw --no-color"
+fast = "-P fast --no-fallback"
+deep = "-t --search"
+```
+
+**Implementation**:
+1. `Config::load_aliases_only()` - Fast alias loading (no full config parse)
+2. `Args::expand_aliases()` - Expands aliases before parsing
+3. Aliases are merged from all config sources (local overrides global)
+
+**Usage**:
+```bash
+ask q what is rust           # Expands to: ask --raw --no-color what is rust
+ask deep explain quantum     # Expands to: ask -t --search explain quantum
+```
+
+**Rationale**:
+- Reduces typing for common workflows
+- User-definable (not hardcoded)
+- Transparent expansion (aliases become real flags)
+
+**Consequences**:
+- Alias names cannot conflict with subcommands
+- Expansion happens once (no recursive aliases)
+- Fast path avoids full config load for alias expansion
+
+---
+
+## ADR-019: Non-Interactive Init
+
+**Status**: Accepted
+
+**Context**: Users need to configure `ask` in scripts, CI/CD, and automation without interactive prompts.
+
+**Decision**: Add `-n`/`--non-interactive` flag with `-k`/`--api-key` for scripted configuration.
+
+**Usage**:
+```bash
+# Explicit API key
+ask init -n -p gemini -m gemini-2.5-flash -k YOUR_KEY
+
+# From environment variable
+GEMINI_API_KEY=xxx ask init -n
+
+# Minimal (uses defaults)
+ask init -n -k YOUR_KEY
+```
+
+**API Key Resolution**:
+1. `-k`/`--api-key` flag (highest priority)
+2. `{PROVIDER}_API_KEY` environment variable
+3. `ASK_{PROVIDER}_API_KEY` environment variable
+4. Error if none found
+
+**Rationale**:
+- Enables Docker/CI configuration
+- Complements `--make-config` for template-based setup
+- Follows 12-factor app principles
+
+**Consequences**:
+- Creates minimal config (no custom commands, profiles)
+- Always writes to XDG config path
+- For complex configs, use `--make-config` + manual edit
+
+---
+
+## ADR-020: Verbose Mode and Profiles Subcommand
+
+**Status**: Accepted
+
+**Context**: Users need visibility into which profile/provider is being used and want to list available profiles.
+
+**Decision**: Add `-v`/`--verbose` flag and `ask profiles` subcommand.
+
+**Verbose Output**:
+```
+[verbose] provider=gemini, model=gemini-3-flash, profile=work, thinking=high
+```
+
+**Profiles Subcommand**:
+```
+$ ask profiles
+Profiles
+
+  personal anthropic claude-sonnet-4 [fallback: any] [think:high]
+  work openai gpt-4o [search]
+
+Default profile: personal
+```
+
+**Rationale**:
+- Debugging which config is active
+- Discovery of available profiles
+- Consistent with other CLI tools (`docker ps`, `kubectl get`)
+
+**Consequences**:
+- Verbose output goes to stderr (doesn't pollute stdout)
+- Profiles shows all settings at a glance

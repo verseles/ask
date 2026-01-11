@@ -79,3 +79,89 @@ fn no_think_flag_is_recognized() {
 
     assert!(output.status.success());
 }
+
+#[test]
+fn verbose_flag_is_recognized() {
+    let output = Command::new("cargo")
+        .args(["run", "--", "-v", "--help"])
+        .output()
+        .expect("Failed to execute command");
+
+    assert!(output.status.success());
+}
+
+#[test]
+fn verbose_long_flag_is_recognized() {
+    let output = Command::new("cargo")
+        .args(["run", "--", "--verbose", "--help"])
+        .output()
+        .expect("Failed to execute command");
+
+    assert!(output.status.success());
+}
+
+#[test]
+fn profiles_subcommand_works() {
+    let output = Command::new("cargo")
+        .args(["run", "--", "profiles"])
+        .output()
+        .expect("Failed to execute command");
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Profiles") || stdout.contains("profile"));
+}
+
+#[test]
+fn make_config_flag_outputs_template() {
+    let output = Command::new("cargo")
+        .args(["run", "--", "--make-config"])
+        .output()
+        .expect("Failed to execute command");
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("[default]"));
+    assert!(stdout.contains("[providers"));
+    assert!(stdout.contains("[behavior]"));
+}
+
+#[test]
+fn non_interactive_flag_is_recognized() {
+    let output = Command::new("cargo")
+        .args(["run", "--", "-n", "--help"])
+        .output()
+        .expect("Failed to execute command");
+
+    assert!(output.status.success());
+}
+
+#[test]
+fn api_key_flag_is_recognized() {
+    let output = Command::new("cargo")
+        .args(["run", "--", "-k", "test-key", "--help"])
+        .output()
+        .expect("Failed to execute command");
+
+    assert!(output.status.success());
+}
+
+#[test]
+fn profile_flag_is_recognized() {
+    let output = Command::new("cargo")
+        .args(["run", "--", "-P", "test", "--help"])
+        .output()
+        .expect("Failed to execute command");
+
+    assert!(output.status.success());
+}
+
+#[test]
+fn search_flag_is_recognized() {
+    let output = Command::new("cargo")
+        .args(["run", "--", "-s", "--help"])
+        .output()
+        .expect("Failed to execute command");
+
+    assert!(output.status.success());
+}

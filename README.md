@@ -52,6 +52,9 @@ The installer will prompt you to configure your API keys automatically.
 # Initialize configuration (set up API keys)
 ask init
 
+# Non-interactive init (for scripts/automation)
+ask init -n -p gemini -k YOUR_API_KEY
+
 # Ask questions naturally
 ask how to list docker containers
 ask what is the capital of France
@@ -93,6 +96,8 @@ OPTIONS:
     -m, --model <MODEL>   Override configured model
     -p, --provider <NAME> Override configured provider
     -P, --profile <NAME>  Use named profile (e.g., -P work, --profile=local)
+    -k, --api-key <KEY>   API key (for use with init -n)
+    -n, --non-interactive Non-interactive init (use with -p, -m, -k)
         --no-fallback     Disable profile fallback for this query
     -s, --search          Enable web search for this query
         --citations       Show citations from web search results
@@ -102,15 +107,17 @@ OPTIONS:
         --no-color        Disable colorized output
         --color=bool      Enable/disable colorized output
         --no-follow       Disable result echo after execution
-        --no-fallback     Disable profile fallback for this query
         --make-prompt     Export default prompt template
+        --make-config     Export example config.toml template
         --update          Check and install updates
         --help-env        Show all environment variables
+    -v, --verbose         Show verbose output (profile, provider, model info)
     -V, --version         Show version
     -h, --help            Show help
 
 SUBCOMMANDS:
     init, config          Initialize/manage configuration interactively
+    profiles              List all available profiles
     --clear               Clear current directory context (use with -c)
     --history             Show context history (use with -c)
 ```
@@ -185,6 +192,12 @@ timeout = 30
 [context]
 max_age_minutes = 30
 max_messages = 20
+
+# Command-line aliases
+[aliases]
+# q = "--raw --no-color"
+# fast = "-P fast --no-fallback"
+# deep = "-t --search"
 
 # Custom commands
 [commands.cm]
@@ -274,6 +287,9 @@ blocked_domains = ["pinterest.com"]
 Named profiles let you switch between different configurations quickly, like rclone:
 
 ```bash
+# List all profiles
+ask profiles
+
 # Use work profile
 ask -P work how to deploy to kubernetes
 
@@ -282,6 +298,9 @@ ask --profile=local explain this error
 
 # Disable fallback for a single query
 ask --no-fallback -P work critical query
+
+# Verbose mode shows which profile is active
+ask -v -P work what is kubernetes
 ```
 
 <details>
@@ -422,6 +441,23 @@ Usage:
 git diff | ask cm            # Generate commit message
 cat main.rs | ask explain    # Explain code
 cat api.py | ask review      # Code review
+```
+
+## Command-Line Aliases
+
+Define short aliases for common flag combinations:
+
+```toml
+[aliases]
+q = "--raw --no-color"
+fast = "-P fast --no-fallback"
+deep = "-t --search"
+```
+
+Usage:
+```bash
+ask q what is rust           # Expands to: ask --raw --no-color what is rust
+ask deep explain quantum     # Expands to: ask -t --search explain quantum
 ```
 
 ## Custom Prompts

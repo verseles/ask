@@ -74,16 +74,23 @@ pub struct Args {
     pub think: Option<bool>, // -t, --think[=bool]
     pub model: Option<String>,
     pub provider: Option<String>,
+    pub profile: Option<String>,  // -P, --profile
+    pub api_key: Option<String>,  // -k, --api-key
+    pub non_interactive: bool,    // -n, --non-interactive
+    pub verbose: bool,            // -v, --verbose
+    pub list_profiles: bool,      // profiles subcommand
+    pub make_config: bool,        // --make-config
     pub query: Vec<String>, // Free text parts
     // ...
 }
 ```
 
 The parser:
-1. Iterates through arguments
-2. Identifies flags (starting with `-`)
-3. Collects remaining text as the query
-4. Handles combined short flags (`-cy`)
+1. Expands aliases from config before parsing
+2. Iterates through arguments
+3. Identifies flags (starting with `-`)
+4. Collects remaining text as the query
+5. Handles combined short flags (`-cy`)
 
 ### Configuration (`src/config/`)
 
@@ -103,13 +110,17 @@ Key structures:
 - `BehaviorConfig` - Execution behavior settings
 - `ContextConfig` - Context/history settings
 - `ConfigManager` - Helper struct for interactive config management
+- `aliases: HashMap<String, String>` - Command-line aliases
 
 Key functions:
 - `init_config()` - Interactive configuration menu
+- `init_config_non_interactive()` - Non-interactive setup (for scripts)
+- `load_aliases_only()` - Fast alias loading for early argument expansion
 - `configure_defaults()` - Configure default provider/model
 - `configure_profile()` - Configure a single profile
 - `manage_profiles()` - Profile management submenu
 - `show_current_config()` - Display current config formatted
+- `list_profiles()` - List all profiles with details
 - `get_thinking_config()` - Get unified thinking settings (enabled, value)
 - `get_thinking_level()` - Get Gemini thinking level from profile
 - `get_reasoning_effort()` - Get OpenAI reasoning effort from profile
@@ -224,13 +235,14 @@ model = "claude-3-opus" # Optional override
 ## Data Flow
 
 1. **Input**: User runs `ask how to list docker containers`
-2. **Parsing**: `Args::parse_flexible()` extracts flags and query
-3. **Config**: Load configuration with precedence
-4. **Provider**: Create appropriate provider based on config
-5. **Intent**: Classify intent (COMMAND/QUESTION/CODE)
-6. **Generation**: Send to AI with appropriate system prompt
-7. **Output**: Stream or display response
-8. **Execution**: For commands, optionally execute with safety checks
+2. **Alias Expansion**: Aliases from config are expanded (e.g., `q` → `--raw --no-color`)
+3. **Parsing**: `Args::parse_flexible()` extracts flags and query
+4. **Config**: Load configuration with precedence
+5. **Provider**: Create appropriate provider based on config
+6. **Intent**: Classify intent (COMMAND/QUESTION/CODE)
+7. **Generation**: Send to AI with appropriate system prompt
+8. **Output**: Stream or display response
+9. **Execution**: For commands, optionally execute with safety checks
 
 ## Testing
 
