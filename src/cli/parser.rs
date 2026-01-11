@@ -197,13 +197,13 @@ impl Args {
                         result.model = Some(args[i].clone());
                     }
                 }
-                "-p" | "--provider" => {
+                "-P" | "--provider" => {
                     i += 1;
                     if i < args.len() {
                         result.provider = Some(args[i].clone());
                     }
                 }
-                "-P" | "--profile" => {
+                "-p" | "--profile" => {
                     i += 1;
                     if i < args.len() {
                         result.profile = Some(args[i].clone());
@@ -397,10 +397,10 @@ OPTIONS:
     -y, --yes             Auto-execute commands without confirmation
     -t, --think[=bool]    Enable/disable thinking mode (--think or --think=false)
     -m, --model <MODEL>   Override configured model
-    -p, --provider <NAME> Override configured provider
-    -P, --profile <NAME>  Use named profile from config
+    -p, --profile <NAME>  Use named profile from config
+    -P, --provider <NAME> Override configured provider
     -k, --api-key <KEY>   API key (for use with init -n)
-    -n, --non-interactive Non-interactive init (use with -p, -m, -k)
+    -n, --non-interactive Non-interactive init (use with -P, -m, -k)
         --no-fallback     Disable fallback to other profiles on error
     -s, --search          Enable web search for this query
         --citations       Show citations from web search results

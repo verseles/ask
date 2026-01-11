@@ -2,8 +2,10 @@
 
 mod defaults;
 mod loader;
+mod thinking;
 
 pub use defaults::*;
+pub use thinking::{format_thinking_config, select_thinking_config};
 
 use crate::cli::Args;
 use anyhow::Result;
@@ -133,7 +135,7 @@ pub struct CustomCommand {
     pub model: Option<String>,
 }
 
-/// Named profile configuration - overrides default settings
+/// Named profile configuration - all settings for a profile
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ProfileConfig {
     /// Provider name (gemini, openai, anthropic)
@@ -144,7 +146,7 @@ pub struct ProfileConfig {
     #[serde(default)]
     pub model: Option<String>,
 
-    /// API key (overrides provider's api_key)
+    /// API key for this profile
     #[serde(default)]
     pub api_key: Option<String>,
 
@@ -152,21 +154,25 @@ pub struct ProfileConfig {
     #[serde(default)]
     pub base_url: Option<String>,
 
+    /// Enable streaming responses
+    #[serde(default)]
+    pub stream: Option<bool>,
+
     /// Fallback profile name ("none" to disable, "any" for first available)
     #[serde(default)]
     pub fallback: Option<String>,
 
-    /// Thinking level for Gemini (none, low, medium, high)
+    /// Thinking level for Gemini 3 (minimal, low, medium, high)
     #[serde(default)]
     pub thinking_level: Option<String>,
 
-    /// Reasoning effort for OpenAI (none, minimal, low, medium, high)
+    /// Thinking budget for Gemini 2.5 (0, 1024-32768, -1 for dynamic)
+    #[serde(default)]
+    pub thinking_budget: Option<i64>,
+
+    /// Reasoning effort for OpenAI (none, minimal, low, medium, high, xhigh)
     #[serde(default)]
     pub reasoning_effort: Option<String>,
-
-    /// Thinking budget for Anthropic (token count)
-    #[serde(default)]
-    pub thinking_budget: Option<u64>,
 
     /// Enable web search for this profile
     #[serde(default)]
@@ -306,10 +312,25 @@ impl Config {
 
     /// Get active profile name (if any)
     pub fn active_profile(&self, args: &Args) -> Option<String> {
-        args.profile
-            .clone()
-            .or_else(|| self.default_profile.clone())
-            .or_else(|| self.profiles.keys().next().cloned())
+        // 1. CLI argument takes precedence
+        if let Some(ref profile) = args.profile {
+            return Some(profile.clone());
+        }
+
+        // 2. If only one profile exists, use it automatically
+        if self.profiles.len() == 1 {
+            return self.profiles.keys().next().cloned();
+        }
+
+        // 3. Use configured default_profile
+        if let Some(ref default) = self.default_profile {
+            if self.profiles.contains_key(default) {
+                return Some(default.clone());
+            }
+        }
+
+        // 4. Fall back to first available profile
+        self.profiles.keys().next().cloned()
     }
 
     /// Get fallback profile for the active profile
@@ -360,8 +381,28 @@ impl Config {
             return Some(key);
         }
 
-        // Then check config
-        self.providers.get(provider).and_then(|p| p.api_key.clone())
+        // Then check providers config (which may have been set from profile)
+        if let Some(key) = self.providers.get(provider).and_then(|p| p.api_key.clone()) {
+            return Some(key);
+        }
+
+        // Finally check profile directly
+        if let Some(profile_name) = &self.default_profile {
+            if let Some(profile) = self.profiles.get(profile_name) {
+                if let Some(ref key) = profile.api_key {
+                    return Some(key.clone());
+                }
+            }
+        }
+
+        // Check first profile
+        for profile in self.profiles.values() {
+            if let Some(ref key) = profile.api_key {
+                return Some(key.clone());
+            }
+        }
+
+        None
     }
 
     /// Get base URL for the active provider
@@ -425,7 +466,7 @@ impl Config {
         None
     }
 
-    pub fn get_thinking_budget(&self) -> Option<u64> {
+    pub fn get_thinking_budget(&self) -> Option<i64> {
         for profile in self.profiles.values() {
             if let Some(budget) = profile.thinking_budget {
                 return Some(budget);
@@ -472,6 +513,24 @@ fn mask_api_key(key: &str) -> String {
     }
     let suffix = &key[key.len() - 4..];
     format!("****{}", suffix)
+}
+
+/// Helper for numbered selection menus
+/// Formats items as "[1] item", "[2] item", etc. and returns the selected index
+fn numbered_select<T: ToString>(prompt: &str, items: &[T], default: usize) -> Result<usize> {
+    let numbered_items: Vec<String> = items
+        .iter()
+        .enumerate()
+        .map(|(i, item)| format!("[{}] {}", i + 1, item.to_string()))
+        .collect();
+
+    let idx = Select::new()
+        .with_prompt(prompt)
+        .items(&numbered_items)
+        .default(default)
+        .interact()?;
+
+    Ok(idx)
 }
 
 /// Helper struct for config management
@@ -521,14 +580,6 @@ impl ConfigManager {
         val.as_bool().unwrap_or(default)
     }
 
-    fn get_int(&self, keys: &[&str]) -> Option<i64> {
-        let mut val = self.existing.as_ref()?;
-        for k in keys {
-            val = val.get(*k)?;
-        }
-        val.as_integer()
-    }
-
     fn get_profiles(&self) -> Vec<String> {
         self.existing
             .as_ref()
@@ -574,11 +625,8 @@ fn configure_defaults(mgr: &ConfigManager) -> Result<(String, String, String, bo
         _ => 0,
     };
 
-    let provider_idx = Select::new()
-        .with_prompt("Select default provider")
-        .items(&providers)
-        .default(default_provider_idx)
-        .interact()?;
+    let provider_idx =
+        numbered_select("Select default provider", &providers, default_provider_idx)?;
 
     let (provider, default_model_for_provider) = match provider_idx {
         0 => ("gemini", defaults::DEFAULT_MODEL),
@@ -625,35 +673,10 @@ fn configure_defaults(mgr: &ConfigManager) -> Result<(String, String, String, bo
         .default(existing_stream)
         .interact()?;
 
-    let (thinking_param, thinking_default) = match provider {
-        "gemini" => ("thinking_level", "low"),
-        "openai" => ("reasoning_effort", "low"),
-        "anthropic" => ("thinking_budget", "5000"),
-        _ => ("thinking_level", "low"),
-    };
-
-    let existing_thinking = if provider == "anthropic" {
-        mgr.get_int(&["providers", provider, thinking_param])
-            .map(|i| i.to_string())
+    let thinking_config = if let Some((key, value)) = select_thinking_config(provider, &model)? {
+        format_thinking_config(&key, &value)
     } else {
-        mgr.get_str(&["providers", provider, thinking_param])
-    };
-
-    let thinking_existing = existing_thinking
-        .filter(|s| !s.is_empty())
-        .unwrap_or_else(|| thinking_default.to_string());
-
-    let thinking_value: String = Input::new()
-        .with_prompt(format!("Thinking mode ({}, 0 to disable)", thinking_param))
-        .default(thinking_existing)
-        .interact_text()?;
-
-    let thinking_config = if thinking_value == "0" {
         String::new()
-    } else if provider == "anthropic" {
-        format!("\nthinking_budget = {}", thinking_value)
-    } else {
-        format!("\n{} = \"{}\"", thinking_param, thinking_value)
     };
 
     let web_search = Confirm::new()
@@ -698,11 +721,7 @@ fn configure_profile(mgr: &ConfigManager, profile_name: Option<&str>) -> Result<
         _ => 0,
     };
 
-    let provider_idx = Select::new()
-        .with_prompt("Provider for this profile")
-        .items(&providers)
-        .default(default_idx)
-        .interact()?;
+    let provider_idx = numbered_select("Provider for this profile", &providers, default_idx)?;
 
     let (provider, default_model) = match provider_idx {
         0 => ("gemini", defaults::DEFAULT_MODEL),
@@ -758,6 +777,12 @@ fn configure_profile(mgr: &ConfigManager, profile_name: Option<&str>) -> Result<
         .default(existing_web_search)
         .interact()?;
 
+    let thinking_config = if let Some((key, value)) = select_thinking_config(provider, &model)? {
+        format_thinking_config(&key, &value)
+    } else {
+        String::new()
+    };
+
     let fallback_options = vec![
         "Inherit from default",
         "Use any available profile",
@@ -773,11 +798,8 @@ fn configure_profile(mgr: &ConfigManager, profile_name: Option<&str>) -> Result<
         None => 0,
     };
 
-    let fallback_idx = Select::new()
-        .with_prompt("Fallback behavior")
-        .items(&fallback_options)
-        .default(default_fallback_idx)
-        .interact()?;
+    let fallback_idx =
+        numbered_select("Fallback behavior", &fallback_options, default_fallback_idx)?;
 
     let fallback = match fallback_idx {
         0 => String::new(),
@@ -811,6 +833,10 @@ model = "{}""#,
 
     if web_search {
         profile_toml.push_str("\nweb_search = true");
+    }
+
+    if !thinking_config.is_empty() {
+        profile_toml.push_str(&thinking_config);
     }
 
     if !fallback.is_empty() {
@@ -986,11 +1012,7 @@ fn manage_profiles(mgr: &mut ConfigManager) -> Result<()> {
         }
         options.push("Back to main menu".to_string());
 
-        let choice = Select::new()
-            .with_prompt("Manage Profiles")
-            .items(&options)
-            .default(0)
-            .interact()?;
+        let choice = numbered_select("Manage Profiles", &options, 0)?;
 
         let back_idx = options.len() - 1;
 
@@ -1018,11 +1040,7 @@ fn manage_profiles(mgr: &mut ConfigManager) -> Result<()> {
                 let mut items: Vec<String> = profiles.clone();
                 items.push("Cancel".to_string());
 
-                let idx = Select::new()
-                    .with_prompt("Select profile to edit")
-                    .items(&items)
-                    .default(0)
-                    .interact()?;
+                let idx = numbered_select("Select profile to edit", &items, 0)?;
 
                 if idx < profiles.len() {
                     let profile_name = &profiles[idx];
@@ -1054,11 +1072,7 @@ fn manage_profiles(mgr: &mut ConfigManager) -> Result<()> {
                 let mut items: Vec<String> = profiles.clone();
                 items.push("Cancel".to_string());
 
-                let idx = Select::new()
-                    .with_prompt("Select profile to delete")
-                    .items(&items)
-                    .default(0)
-                    .interact()?;
+                let idx = numbered_select("Select profile to delete", &items, 0)?;
 
                 if idx < profiles.len() {
                     let profile_name = &profiles[idx];
@@ -1094,11 +1108,7 @@ fn manage_profiles(mgr: &mut ConfigManager) -> Result<()> {
                     .and_then(|d| profiles.iter().position(|p| p == d))
                     .unwrap_or(0);
 
-                let idx = Select::new()
-                    .with_prompt("Select default profile")
-                    .items(&profiles)
-                    .default(default_idx)
-                    .interact()?;
+                let idx = numbered_select("Select default profile", &profiles, default_idx)?;
 
                 let profile_name = &profiles[idx];
 
@@ -1158,11 +1168,7 @@ pub async fn init_config() -> Result<()> {
             vec!["Quick setup (recommended)", "Exit"]
         };
 
-        let choice = Select::new()
-            .with_prompt("What would you like to do?")
-            .items(&menu_options)
-            .default(0)
-            .interact()?;
+        let choice = numbered_select("What would you like to do?", &menu_options, 0)?;
 
         if mgr.existing.is_none() {
             match choice {
@@ -1182,13 +1188,16 @@ pub async fn init_config() -> Result<()> {
                         r#"# ask configuration
 # Generated by 'ask init'
 
-[default]
+# Default profile to use
+default_profile = "first"
+
+# All configuration lives in profiles
+# Switch profiles with: ask -p <profile_name>
+[profiles.first]
 provider = "{provider}"
 model = "{model}"
-stream = {stream}{web_search_config}
-
-[providers.{provider}]
-api_key = "{api_key}"{thinking_config}
+api_key = "{api_key}"
+stream = {stream}{thinking_config}{web_search_config}
 
 [behavior]
 auto_execute = false
@@ -1201,6 +1210,7 @@ max_messages = 20
 
 [update]
 auto_check = true
+aggressive = true
 check_interval_hours = 24
 channel = "stable"
 
@@ -1222,7 +1232,8 @@ channel = "stable"
                         mgr.config_path.display().to_string().bright_white()
                     );
                     println!();
-                    println!("You're all set! Try: {}", "ask how to list files".cyan());
+                    println!("Profile '{}' created and set as default!", "first".cyan());
+                    println!("Try: {}", "ask how to list files".cyan());
                 }
                 1 => {
                     println!("{}", "Goodbye!".bright_black());
@@ -1312,11 +1323,7 @@ channel = "stable"
                     mgr.backup()?;
 
                     let providers_list = vec!["Gemini", "OpenAI", "Anthropic Claude", "Back"];
-                    let idx = Select::new()
-                        .with_prompt("Which provider API key?")
-                        .items(&providers_list)
-                        .default(0)
-                        .interact()?;
+                    let idx = numbered_select("Which provider API key?", &providers_list, 0)?;
 
                     if idx < 3 {
                         let provider = match idx {
@@ -1399,11 +1406,11 @@ channel = "stable"
                         _ => 0,
                     };
 
-                    let idx = Select::new()
-                        .with_prompt("Default fallback behavior when provider fails?")
-                        .items(&fallback_options)
-                        .default(default_idx)
-                        .interact()?;
+                    let idx = numbered_select(
+                        "Default fallback behavior when provider fails?",
+                        &fallback_options,
+                        default_idx,
+                    )?;
 
                     let fallback_value = match idx {
                         0 => "any",

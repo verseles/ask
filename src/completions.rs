@@ -48,17 +48,17 @@ fn build_cli() -> Command {
                 .value_name("MODEL"),
         )
         .arg(
-            Arg::new("provider")
+            Arg::new("profile")
                 .short('p')
-                .long("provider")
-                .help("Override configured provider")
+                .long("profile")
+                .help("Use named profile from config")
                 .value_name("NAME"),
         )
         .arg(
-            Arg::new("profile")
+            Arg::new("provider")
                 .short('P')
-                .long("profile")
-                .help("Use named profile from config")
+                .long("provider")
+                .help("Override configured provider")
                 .value_name("NAME"),
         )
         .arg(
@@ -72,7 +72,7 @@ fn build_cli() -> Command {
             Arg::new("non-interactive")
                 .short('n')
                 .long("non-interactive")
-                .help("Non-interactive init (use with -p, -m, -k)")
+                .help("Non-interactive init (use with -P, -m, -k)")
                 .action(clap::ArgAction::SetTrue),
         )
         .arg(

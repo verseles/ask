@@ -94,10 +94,10 @@ OPTIONS:
     -y, --yes             Auto-execute commands without confirmation
     -t, --think[=bool]    Enable/disable thinking mode (--think or --think=false)
     -m, --model <MODEL>   Override configured model
-    -p, --provider <NAME> Override configured provider
-    -P, --profile <NAME>  Use named profile (e.g., -P work, --profile=local)
+    -p, --profile <NAME>  Use named profile (e.g., -p work, --profile=local)
+    -P, --provider <NAME> Override configured provider
     -k, --api-key <KEY>   API key (for use with init -n)
-    -n, --non-interactive Non-interactive init (use with -p, -m, -k)
+    -n, --non-interactive Non-interactive init (use with -P, -m, -k)
         --no-fallback     Disable profile fallback for this query
     -s, --search          Enable web search for this query
         --citations       Show citations from web search results
@@ -196,7 +196,7 @@ max_messages = 20
 # Command-line aliases
 [aliases]
 # q = "--raw --no-color"
-# fast = "-P fast --no-fallback"
+# fast = "-p fast --no-fallback"
 # deep = "-t --search"
 
 # Custom commands
@@ -291,16 +291,16 @@ Named profiles let you switch between different configurations quickly, like rcl
 ask profiles
 
 # Use work profile
-ask -P work how to deploy to kubernetes
+ask -p work how to deploy to kubernetes
 
 # Use local profile (Ollama)
 ask --profile=local explain this error
 
 # Disable fallback for a single query
-ask --no-fallback -P work critical query
+ask --no-fallback -p work critical query
 
 # Verbose mode shows which profile is active
-ask -v -P work what is kubernetes
+ask -v -p work what is kubernetes
 ```
 
 <details>
@@ -450,7 +450,7 @@ Define short aliases for common flag combinations:
 ```toml
 [aliases]
 q = "--raw --no-color"
-fast = "-P fast --no-fallback"
+fast = "-p fast --no-fallback"
 deep = "-t --search"
 ```
 

@@ -12,35 +12,51 @@ pub const DEFAULT_TIMEOUT: u64 = 30;
 pub const DEFAULT_CONFIG_TEMPLATE: &str = r##"# ask - Configuration File
 # Place this file at: ~/.config/ask/config.toml or ~/ask.toml
 
-# Default settings
-[default]
+# Default profile to use (required when multiple profiles exist)
+default_profile = "first"
+
+# Profiles - all configuration lives in profiles
+# Switch profiles with: ask -p <profile_name>
+[profiles.first]
 provider = "gemini"           # gemini, openai, anthropic
 model = "gemini-3-flash-preview"
+api_key = "YOUR_API_KEY"
 stream = true                 # Stream responses token by token
+# thinking_level = "low"      # For Gemini 3: minimal, low, medium, high
+# thinking_budget = 1024      # For Gemini 2.5: 0 (off), 1024-32768, -1 (dynamic)
+# web_search = false          # Enable web search by default
+# fallback = "none"           # Profile to use on errors: "any", "none", or profile name
 
-# Provider-specific settings
-[providers.gemini]
-api_key = "YOUR_GEMINI_API_KEY"
-# base_url = "https://generativelanguage.googleapis.com"  # Optional custom endpoint
-# thinking_level = "low"      # none, low, medium, high
+# Example: Work profile with OpenAI
+# [profiles.work]
+# provider = "openai"
+# model = "gpt-5"
+# api_key = "sk-..."
+# reasoning_effort = "medium" # For o1/o3/gpt-5: none, minimal, low, medium, high, xhigh
+# fallback = "first"
 
-[providers.openai]
-api_key = "YOUR_OPENAI_API_KEY"
-# base_url = "https://api.openai.com/v1"  # Or use http://localhost:11434/v1 for Ollama
-# reasoning_effort = "low"    # none, minimal, low, medium, high (for o-series models)
+# Example: Local profile with Ollama
+# [profiles.local]
+# provider = "openai"
+# base_url = "http://localhost:11434/v1"
+# model = "llama3"
+# api_key = "ollama"          # Dummy key for local servers
+# fallback = "none"
 
-[providers.anthropic]
-api_key = "YOUR_ANTHROPIC_API_KEY"
-# base_url = "https://api.anthropic.com"
-# thinking_budget = 5000      # Token budget for extended thinking
+# Example: Research profile with Claude
+# [profiles.research]
+# provider = "anthropic"
+# model = "claude-sonnet-4-20250514"
+# thinking_budget = 16000     # For Claude: 0 (off), 1024-128000
+# web_search = true
 
-# Behavior settings
+# Behavior settings (global)
 [behavior]
 auto_execute = false          # Auto-execute safe commands without prompting
 confirm_destructive = true    # Confirm before running destructive commands
 timeout = 30                  # Request timeout in seconds
 
-# Context/history settings
+# Context/history settings (global)
 [context]
 max_age_minutes = 30          # Context TTL (0 = permanent)
 max_messages = 20             # Maximum messages to keep
@@ -52,31 +68,6 @@ auto_check = true             # Check for updates in background
 aggressive = true             # Check every execution (not every 24h)
 check_interval_hours = 24     # Hours between checks (when aggressive=false)
 channel = "stable"            # stable, beta
-
-# Named profiles - switch with: ask -P <profile_name>
-# Profiles inherit from [default] and [providers.*] sections
-
-# [profiles.work]
-# provider = "openai"
-# model = "gpt-5"
-# api_key = "sk-work-key..."
-# fallback = "personal"       # Retry with this profile on errors
-
-# [profiles.local]
-# provider = "openai"
-# base_url = "http://localhost:11434/v1"  # Ollama
-# model = "llama3"
-# api_key = "ollama"          # Dummy key for local servers
-# fallback = "none"           # Don't retry with another profile
-
-# [profiles.research]
-# provider = "anthropic"
-# model = "claude-sonnet-4-20250514"
-# web_search = true           # Enable web search for this profile
-# thinking_budget = 10000
-
-# Set default profile (optional)
-# default_profile = "work"
 
 # Custom commands - use with: ask <command_name> or pipe: git diff | ask cm
 [commands.cm]
@@ -90,13 +81,12 @@ inherit_flags = true
 
 # [commands.review]
 # system = "Review this code for bugs, security issues, and improvements."
-# provider = "anthropic"
-# model = "claude-sonnet-4-20250514"
+# profile = "research"        # Use specific profile for this command
 
 # Command-line aliases - expand short aliases to full flags
 # Usage: ask q how to list files -> ask --raw --no-color how to list files
 [aliases]
 # q = "--raw --no-color"
-# fast = "-P fast --no-fallback"
+# fast = "-p fast --no-fallback"
 # deep = "-t --search"
 "##;

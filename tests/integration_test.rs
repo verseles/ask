@@ -121,8 +121,8 @@ fn make_config_flag_outputs_template() {
 
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("[default]"));
-    assert!(stdout.contains("[providers"));
+    assert!(stdout.contains("[profiles.first]"));
+    assert!(stdout.contains("default_profile"));
     assert!(stdout.contains("[behavior]"));
 }
 
