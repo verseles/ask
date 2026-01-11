@@ -816,7 +816,7 @@ model = "{}""#,
 fn show_current_config(mgr: &ConfigManager) {
     println!();
     println!("{}", "Current Configuration".cyan().bold());
-    println!("{}", "─".repeat(40).bright_black());
+    println!("{}", "─".repeat(50).bright_black());
 
     if mgr.existing.is_none() {
         println!("{}", "No configuration file found.".yellow());
@@ -832,34 +832,76 @@ fn show_current_config(mgr: &ConfigManager) {
         .unwrap_or_else(|| "not set".to_string());
     let stream = mgr.get_bool(&["default", "stream"], true);
     let web_search = mgr.get_bool(&["default", "web_search"], false);
-    let default_profile = mgr.get_str(&["default", "default_profile"]);
+    let default_profile = mgr.get_str(&["default_profile"]);
     let fallback = mgr.get_str(&["default", "default_fallback"]);
 
     println!();
-    println!("{}", "[default]".green());
-    println!("  provider: {}", provider.bright_white());
-    println!("  model: {}", model.bright_white());
-    println!("  stream: {}", stream.to_string().bright_white());
-    println!("  web_search: {}", web_search.to_string().bright_white());
+    println!("{}", "[default]".green().bold());
+    println!(
+        "  {} {}",
+        "provider:".yellow(),
+        provider.bright_white().bold()
+    );
+    println!("  {} {}", "model:".yellow(), model.cyan());
+    println!(
+        "  {} {}",
+        "stream:".yellow(),
+        if stream {
+            "true".green()
+        } else {
+            "false".red()
+        }
+    );
+    println!(
+        "  {} {}",
+        "web_search:".yellow(),
+        if web_search {
+            "true".green()
+        } else {
+            "false".bright_black()
+        }
+    );
     if let Some(dp) = default_profile {
-        println!("  default_profile: {}", dp.bright_white());
+        println!("  {} {}", "default_profile:".yellow(), dp.cyan().bold());
     }
     if let Some(fb) = fallback {
-        println!("  default_fallback: {}", fb.bright_white());
+        println!("  {} {}", "default_fallback:".yellow(), fb.bright_black());
     }
 
     println!();
-    println!("{}", "[providers]".green());
+    println!("{}", "[providers]".green().bold());
     for p in &["gemini", "openai", "anthropic"] {
-        if let Some(key) = mgr.get_str(&["providers", p, "api_key"]) {
-            println!("  {}: {}", p, mask_api_key(&key).bright_black());
+        let key_exists = mgr.get_str(&["providers", p, "api_key"]).is_some();
+        let thinking = match *p {
+            "gemini" => mgr.get_str(&["providers", p, "thinking_level"]),
+            "openai" => mgr.get_str(&["providers", p, "reasoning_effort"]),
+            "anthropic" => mgr
+                .get_str(&["providers", p, "thinking_budget"])
+                .map(|v| format!("{} tokens", v)),
+            _ => None,
+        };
+
+        if key_exists {
+            let key = mgr.get_str(&["providers", p, "api_key"]).unwrap();
+            let thinking_str = thinking
+                .map(|t| format!(" [think: {}]", t).bright_black().to_string())
+                .unwrap_or_default();
+            println!(
+                "  {} {} {}{}",
+                p.bright_white(),
+                "✓".green(),
+                mask_api_key(&key).bright_black(),
+                thinking_str
+            );
+        } else {
+            println!("  {} {}", p.bright_black(), "✗".red());
         }
     }
 
     let profiles = mgr.get_profiles();
     if !profiles.is_empty() {
         println!();
-        println!("{}", "[profiles]".green());
+        println!("{}", "[profiles]".green().bold());
         for name in &profiles {
             let p_provider = mgr
                 .get_str(&["profiles", name, "provider"])
@@ -870,17 +912,56 @@ fn show_current_config(mgr: &ConfigManager) {
             let p_fallback = mgr
                 .get_str(&["profiles", name, "fallback"])
                 .unwrap_or_else(|| "default".to_string());
+            let p_web_search = mgr
+                .get_str(&["profiles", name, "web_search"])
+                .map(|v| v == "true")
+                .unwrap_or(false);
+
+            let web_indicator = if p_web_search {
+                " [search]".cyan().to_string()
+            } else {
+                String::new()
+            };
 
             println!(
-                "  {}: {} / {} (fallback: {})",
-                name.cyan(),
+                "  {} {} {} {}{}",
+                name.cyan().bold(),
                 p_provider.bright_white(),
-                p_model.bright_white(),
-                p_fallback.bright_black()
+                p_model.bright_black(),
+                format!("(fallback: {})", p_fallback).bright_black(),
+                web_indicator
             );
         }
     }
 
+    let commands: Vec<String> = mgr
+        .existing
+        .as_ref()
+        .and_then(|doc| doc.get("commands"))
+        .and_then(|c| c.as_table())
+        .map(|t| t.keys().cloned().collect())
+        .unwrap_or_default();
+
+    if !commands.is_empty() {
+        println!();
+        println!("{}", "[commands]".green().bold());
+        for cmd in &commands {
+            let cmd_type = mgr
+                .get_str(&["commands", cmd, "type"])
+                .unwrap_or_else(|| "text".to_string());
+            println!(
+                "  {} {}",
+                cmd.cyan(),
+                format!("({})", cmd_type).bright_black()
+            );
+        }
+    }
+
+    println!();
+    println!(
+        "{}",
+        format!("Config: {}", mgr.config_path.display()).bright_black()
+    );
     println!();
 }
 
