@@ -160,8 +160,16 @@ impl GeminiProvider {
         }
     }
 
+    fn supports_thinking(&self) -> bool {
+        let model = self.model.to_lowercase();
+        model.contains("gemini-3")
+            || model.contains("gemini-2.5")
+            || model.contains("2.5-flash")
+            || model.contains("2.5-pro")
+    }
+
     fn build_generation_config(&self, options: &ProviderOptions) -> GenerationConfig {
-        let thinking_config = if options.thinking_enabled {
+        let thinking_config = if options.thinking_enabled && self.supports_thinking() {
             let value = options
                 .thinking_value
                 .as_ref()
@@ -196,7 +204,7 @@ impl GeminiProvider {
         };
 
         GenerationConfig {
-            temperature: if options.thinking_enabled {
+            temperature: if options.thinking_enabled && self.supports_thinking() {
                 None
             } else {
                 Some(0.7)
