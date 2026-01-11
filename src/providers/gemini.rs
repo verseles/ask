@@ -210,7 +210,7 @@ impl GeminiProvider {
             } else {
                 Some(0.7)
             },
-            max_output_tokens: Some(8192),
+            max_output_tokens: Some(65536),
             thinking_config,
         }
     }
