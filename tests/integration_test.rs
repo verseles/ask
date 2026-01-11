@@ -148,8 +148,20 @@ fn api_key_flag_is_recognized() {
 
 #[test]
 fn profile_flag_is_recognized() {
+    // -p is for profile (changed in v0.16.0)
     let output = Command::new("cargo")
-        .args(["run", "--", "-P", "test", "--help"])
+        .args(["run", "--", "-p", "test", "--help"])
+        .output()
+        .expect("Failed to execute command");
+
+    assert!(output.status.success());
+}
+
+#[test]
+fn provider_flag_is_recognized() {
+    // -P is for provider (changed in v0.16.0)
+    let output = Command::new("cargo")
+        .args(["run", "--", "-P", "gemini", "--help"])
         .output()
         .expect("Failed to execute command");
 
