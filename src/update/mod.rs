@@ -23,6 +23,11 @@ struct GitHubAsset {
     browser_download_url: String,
 }
 
+#[derive(Debug, Deserialize)]
+struct GitHubError {
+    message: String,
+}
+
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct UpdateNotification {
     pub old_version: String,
@@ -272,7 +277,20 @@ pub async fn background_update_check() -> Result<()> {
         .user_agent(format!("ask/{}", current_version))
         .build()?;
 
-    let release: GitHubRelease = client.get(RELEASES_URL).send().await?.json().await?;
+    let response = client.get(RELEASES_URL).send().await?;
+    let status = response.status();
+    let body = response.text().await?;
+
+    // Check for API errors (rate limit, not found, etc.)
+    if !status.is_success() {
+        if let Ok(error) = serde_json::from_str::<GitHubError>(&body) {
+            return Err(anyhow!("GitHub API error: {}", error.message));
+        }
+        return Err(anyhow!("GitHub API error: HTTP {}", status));
+    }
+
+    let release: GitHubRelease =
+        serde_json::from_str(&body).map_err(|e| anyhow!("Failed to parse release info: {}", e))?;
 
     let remote_version = parse_version(&release.tag_name);
 
@@ -348,7 +366,20 @@ pub async fn check_and_update() -> Result<()> {
         .user_agent(format!("ask/{}", current_version))
         .build()?;
 
-    let release: GitHubRelease = client.get(RELEASES_URL).send().await?.json().await?;
+    let response = client.get(RELEASES_URL).send().await?;
+    let status = response.status();
+    let body = response.text().await?;
+
+    // Check for API errors (rate limit, not found, etc.)
+    if !status.is_success() {
+        if let Ok(error) = serde_json::from_str::<GitHubError>(&body) {
+            return Err(anyhow!("GitHub API error: {}", error.message));
+        }
+        return Err(anyhow!("GitHub API error: HTTP {}", status));
+    }
+
+    let release: GitHubRelease =
+        serde_json::from_str(&body).map_err(|e| anyhow!("Failed to parse release info: {}", e))?;
 
     let remote_version = parse_version(&release.tag_name);
 
