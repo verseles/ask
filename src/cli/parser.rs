@@ -78,6 +78,9 @@ pub struct Args {
     /// Verbose mode - show profile and other debug info
     pub verbose: bool,
 
+    /// List available profiles
+    pub list_profiles: bool,
+
     /// The actual query text (all non-flag arguments concatenated)
     pub query: Vec<String>,
 }
@@ -148,6 +151,7 @@ impl Args {
 
                 // Subcommands
                 "init" | "config" if query_parts.is_empty() => result.init = true,
+                "profiles" if query_parts.is_empty() => result.list_profiles = true,
                 "--clear" => result.clear_context = true,
                 "--history" => result.show_history = true,
 
@@ -373,6 +377,7 @@ OPTIONS:
 
 SUBCOMMANDS:
     init, config          Initialize/manage configuration interactively
+    profiles              List all available profiles
     --clear              Clear current directory context (use with -c)
     --history            Show context history (use with -c)
 

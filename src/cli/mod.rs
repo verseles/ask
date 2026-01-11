@@ -74,6 +74,10 @@ pub async fn run() -> Result<()> {
         return crate::config::init_config().await;
     }
 
+    if args.list_profiles {
+        return list_profiles(&config);
+    }
+
     // Handle context commands
     if args.has_context() {
         let manager = ContextManager::with_ttl(&config, args.context_ttl())?;
@@ -542,4 +546,98 @@ fn is_likely_command(text: &str) -> bool {
     command_starters
         .iter()
         .any(|cmd| first_word.starts_with(cmd))
+}
+
+fn list_profiles(config: &Config) -> Result<()> {
+    let default_name = config.default_profile.as_deref();
+
+    println!("{}", "Profiles".cyan().bold());
+    println!();
+
+    if config.profiles.is_empty() {
+        println!(
+            "  {} {} {}",
+            "(default)".bright_black(),
+            config.default.provider.bright_white(),
+            config.default.model.bright_black()
+        );
+        println!();
+        println!(
+            "{}",
+            "No custom profiles configured. Run 'ask init' to create one.".bright_black()
+        );
+        return Ok(());
+    }
+
+    let mut profile_names: Vec<_> = config.profiles.keys().collect();
+    profile_names.sort();
+
+    for name in profile_names {
+        let profile = &config.profiles[name];
+        let is_default = default_name == Some(name.as_str());
+        let provider = profile
+            .provider
+            .as_ref()
+            .unwrap_or(&config.default.provider);
+        let model = profile.model.as_ref().unwrap_or(&config.default.model);
+        let fallback = profile
+            .fallback
+            .as_ref()
+            .map(|f| format!(" [fallback: {}]", f))
+            .unwrap_or_default();
+        let thinking = match provider.as_str() {
+            "gemini" => profile
+                .thinking_level
+                .as_ref()
+                .map(|v| format!("think:{}", v)),
+            "openai" => profile
+                .reasoning_effort
+                .as_ref()
+                .map(|v| format!("reason:{}", v)),
+            "anthropic" => profile.thinking_budget.map(|v| format!("budget:{}", v)),
+            _ => None,
+        }
+        .map(|s| format!(" [{}]", s))
+        .unwrap_or_default();
+        let web_search = if profile.web_search == Some(true) {
+            " [search]"
+        } else {
+            ""
+        };
+
+        if is_default {
+            println!(
+                "  {} {} {}{}{}{}",
+                name.green().bold(),
+                provider.bright_white(),
+                model.bright_black(),
+                fallback.bright_black(),
+                thinking.bright_black(),
+                web_search.cyan()
+            );
+        } else {
+            println!(
+                "  {} {} {}{}{}{}",
+                name.white(),
+                provider.bright_white(),
+                model.bright_black(),
+                fallback.bright_black(),
+                thinking.bright_black(),
+                web_search.cyan()
+            );
+        }
+    }
+
+    if let Some(default) = default_name {
+        println!();
+        println!("Default profile: {}", default.green().bold());
+    }
+
+    println!();
+    println!(
+        "{}",
+        "Use 'ask -P <profile>' to use a specific profile.".bright_black()
+    );
+
+    Ok(())
 }

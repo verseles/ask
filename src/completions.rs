@@ -55,6 +55,13 @@ fn build_cli() -> Command {
                 .value_name("NAME"),
         )
         .arg(
+            Arg::new("profile")
+                .short('P')
+                .long("profile")
+                .help("Use named profile from config")
+                .value_name("NAME"),
+        )
+        .arg(
             Arg::new("json")
                 .long("json")
                 .help("Output in JSON format")
@@ -82,6 +89,25 @@ fn build_cli() -> Command {
             Arg::new("no-follow")
                 .long("no-follow")
                 .help("Disable result echo after execution")
+                .action(clap::ArgAction::SetTrue),
+        )
+        .arg(
+            Arg::new("no-fallback")
+                .long("no-fallback")
+                .help("Disable fallback to other profiles on error")
+                .action(clap::ArgAction::SetTrue),
+        )
+        .arg(
+            Arg::new("search")
+                .short('s')
+                .long("search")
+                .help("Enable web search for this query")
+                .action(clap::ArgAction::SetTrue),
+        )
+        .arg(
+            Arg::new("citations")
+                .long("citations")
+                .help("Show citations from web search results")
                 .action(clap::ArgAction::SetTrue),
         )
         .arg(
@@ -123,6 +149,8 @@ fn build_cli() -> Command {
                 .trailing_var_arg(true),
         )
         .subcommand(Command::new("init").about("Initialize configuration interactively"))
+        .subcommand(Command::new("config").about("Initialize configuration interactively"))
+        .subcommand(Command::new("profiles").about("List available profiles"))
 }
 
 /// Generate shell completions and print to stdout
