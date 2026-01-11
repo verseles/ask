@@ -1531,163 +1531,162 @@ channel = "stable"
 
 #[cfg(test)]
 mod tests {
-            use super::*;
-        
-            #[test]
-            fn test_apply_profile_inheritance() {
-                let mut config = Config::default();
-                config.default.provider = "gemini".to_string();
-                config.default.model = "gemini-flash".to_string();
-        
-                let profile = ProfileConfig {
-                    provider: Some("anthropic".to_string()),
-                    model: None, // Should keep default
-                    api_key: Some("test-key".to_string()),
-                    ..Default::default()
-                };
-        
-                let new_config = config.apply_profile(profile);
-        
-                assert_eq!(new_config.default.provider, "anthropic");
-                assert_eq!(new_config.default.model, "gemini-flash");
-                assert_eq!(
-                    new_config.providers.get("anthropic").unwrap().api_key,
-                    Some("test-key".to_string())
-                );
-            }
-        
-            #[test]
-            fn test_cli_overrides_precedence() {
-                let mut config = Config::default();
-                config.profiles.insert(
-                    "work".to_string(),
-                    ProfileConfig {
-                        provider: Some("openai".to_string()),
-                        model: Some("gpt-4".to_string()),
-                        ..Default::default()
-                    },
-                );
-        
-                // Case 1: Just profile
-                let args_profile = Args {
-                    profile: Some("work".to_string()),
-                    ..Default::default()
-                };
-                let cfg1 = config.clone().with_cli_overrides(&args_profile);
-                assert_eq!(cfg1.default.provider, "openai");
-                assert_eq!(cfg1.default.model, "gpt-4");
-        
-                // Case 2: Profile + Provider Override
-                let args_override = Args {
-                    profile: Some("work".to_string()),
-                    provider: Some("anthropic".to_string()),
-                    ..Default::default()
-                };
-                let cfg2 = config.clone().with_cli_overrides(&args_override);
-                assert_eq!(cfg2.default.provider, "anthropic"); // CLI wins
-                assert_eq!(cfg2.default.model, "gpt-4"); // Profile keeps model
-        
-                // Case 3: Profile + Model Override
-                let args_model = Args {
-                    profile: Some("work".to_string()),
-                    model: Some("claude-3".to_string()),
-                    ..Default::default()
-                };
-                let cfg3 = config.clone().with_cli_overrides(&args_model);
-                assert_eq!(cfg3.default.provider, "openai");
-                assert_eq!(cfg3.default.model, "claude-3"); // CLI wins
-            }
-        
-            #[test]
-            fn test_thinking_config_logic() {
-                let mut config = Config::default();
-        
-                // Gemini Thinking
-                config.default.provider = "gemini".to_string();
-                config.profiles.insert(
-                    "thinker".to_string(),
-                    ProfileConfig {
-                        thinking_level: Some("high".to_string()),
-                        ..Default::default()
-                    },
-                );
-                let cfg_gem = config
-                    .clone()
-                    .apply_profile(config.profiles.get("thinker").unwrap().clone());
-                let (enabled, value) = cfg_gem.get_thinking_config();
-                assert!(enabled);
-                assert_eq!(value, Some("high".to_string()));
-        
-                // Anthropic Thinking
-                let mut config_anth = Config::default();
-                config_anth.default.provider = "anthropic".to_string();
-                config_anth.profiles.insert(
-                    "thinker".to_string(),
-                    ProfileConfig {
-                        thinking_budget: Some(2048),
-                        ..Default::default()
-                    },
-                );
-                let cfg_anth = config_anth
-                    .clone()
-                    .apply_profile(config_anth.profiles.get("thinker").unwrap().clone());
-                let (enabled, value) = cfg_anth.get_thinking_config();
-                assert!(enabled);
-                assert_eq!(value, Some("2048".to_string()));
-        
-                // OpenAI Reasoning
-                let mut config_oai = Config::default();
-                config_oai.default.provider = "openai".to_string();
-                config_oai.profiles.insert(
-                    "thinker".to_string(),
-                    ProfileConfig {
-                        reasoning_effort: Some("medium".to_string()),
-                        ..Default::default()
-                    },
-                );
-                let cfg_oai = config_oai
-                    .clone()
-                    .apply_profile(config_oai.profiles.get("thinker").unwrap().clone());
-                let (enabled, value) = cfg_oai.get_thinking_config();
-                assert!(enabled);
-                assert_eq!(value, Some("medium".to_string()));
-            }
-        
-            #[test]
-            fn test_fallback_profile_selection() {
-                let mut config = Config::default();
-                config.profiles.insert(
-                    "p1".to_string(),
-                    ProfileConfig {
-                        fallback: Some("p2".to_string()),
-                        ..Default::default()
-                    },
-                );
-                config.profiles.insert(
-                    "p2".to_string(),
-                    ProfileConfig {
-                        fallback: Some("none".to_string()),
-                        ..Default::default()
-                    },
-                );
-                config.profiles.insert(
-                    "p3".to_string(),
-                    ProfileConfig {
-                        fallback: Some("any".to_string()),
-                        ..Default::default()
-                    },
-                );
-        
-                // Specific fallback
-                assert_eq!(config.fallback_profile("p1"), Some("p2".to_string()));
-        
-                // None fallback
-                assert_eq!(config.fallback_profile("p2"), None);
-        
-                // Any fallback (should return another profile, e.g., p1 or p2)
-                let fallback_any = config.fallback_profile("p3");
-                assert!(fallback_any.is_some());
-                assert_ne!(fallback_any.unwrap(), "p3");
-            }
-        }
-        
+    use super::*;
+
+    #[test]
+    fn test_apply_profile_inheritance() {
+        let mut config = Config::default();
+        config.default.provider = "gemini".to_string();
+        config.default.model = "gemini-flash".to_string();
+
+        let profile = ProfileConfig {
+            provider: Some("anthropic".to_string()),
+            model: None, // Should keep default
+            api_key: Some("test-key".to_string()),
+            ..Default::default()
+        };
+
+        let new_config = config.apply_profile(profile);
+
+        assert_eq!(new_config.default.provider, "anthropic");
+        assert_eq!(new_config.default.model, "gemini-flash");
+        assert_eq!(
+            new_config.providers.get("anthropic").unwrap().api_key,
+            Some("test-key".to_string())
+        );
+    }
+
+    #[test]
+    fn test_cli_overrides_precedence() {
+        let mut config = Config::default();
+        config.profiles.insert(
+            "work".to_string(),
+            ProfileConfig {
+                provider: Some("openai".to_string()),
+                model: Some("gpt-4".to_string()),
+                ..Default::default()
+            },
+        );
+
+        // Case 1: Just profile
+        let args_profile = Args {
+            profile: Some("work".to_string()),
+            ..Default::default()
+        };
+        let cfg1 = config.clone().with_cli_overrides(&args_profile);
+        assert_eq!(cfg1.default.provider, "openai");
+        assert_eq!(cfg1.default.model, "gpt-4");
+
+        // Case 2: Profile + Provider Override
+        let args_override = Args {
+            profile: Some("work".to_string()),
+            provider: Some("anthropic".to_string()),
+            ..Default::default()
+        };
+        let cfg2 = config.clone().with_cli_overrides(&args_override);
+        assert_eq!(cfg2.default.provider, "anthropic"); // CLI wins
+        assert_eq!(cfg2.default.model, "gpt-4"); // Profile keeps model
+
+        // Case 3: Profile + Model Override
+        let args_model = Args {
+            profile: Some("work".to_string()),
+            model: Some("claude-3".to_string()),
+            ..Default::default()
+        };
+        let cfg3 = config.clone().with_cli_overrides(&args_model);
+        assert_eq!(cfg3.default.provider, "openai");
+        assert_eq!(cfg3.default.model, "claude-3"); // CLI wins
+    }
+
+    #[test]
+    fn test_thinking_config_logic() {
+        let mut config = Config::default();
+
+        // Gemini Thinking
+        config.default.provider = "gemini".to_string();
+        config.profiles.insert(
+            "thinker".to_string(),
+            ProfileConfig {
+                thinking_level: Some("high".to_string()),
+                ..Default::default()
+            },
+        );
+        let cfg_gem = config
+            .clone()
+            .apply_profile(config.profiles.get("thinker").unwrap().clone());
+        let (enabled, value) = cfg_gem.get_thinking_config();
+        assert!(enabled);
+        assert_eq!(value, Some("high".to_string()));
+
+        // Anthropic Thinking
+        let mut config_anth = Config::default();
+        config_anth.default.provider = "anthropic".to_string();
+        config_anth.profiles.insert(
+            "thinker".to_string(),
+            ProfileConfig {
+                thinking_budget: Some(2048),
+                ..Default::default()
+            },
+        );
+        let cfg_anth = config_anth
+            .clone()
+            .apply_profile(config_anth.profiles.get("thinker").unwrap().clone());
+        let (enabled, value) = cfg_anth.get_thinking_config();
+        assert!(enabled);
+        assert_eq!(value, Some("2048".to_string()));
+
+        // OpenAI Reasoning
+        let mut config_oai = Config::default();
+        config_oai.default.provider = "openai".to_string();
+        config_oai.profiles.insert(
+            "thinker".to_string(),
+            ProfileConfig {
+                reasoning_effort: Some("medium".to_string()),
+                ..Default::default()
+            },
+        );
+        let cfg_oai = config_oai
+            .clone()
+            .apply_profile(config_oai.profiles.get("thinker").unwrap().clone());
+        let (enabled, value) = cfg_oai.get_thinking_config();
+        assert!(enabled);
+        assert_eq!(value, Some("medium".to_string()));
+    }
+
+    #[test]
+    fn test_fallback_profile_selection() {
+        let mut config = Config::default();
+        config.profiles.insert(
+            "p1".to_string(),
+            ProfileConfig {
+                fallback: Some("p2".to_string()),
+                ..Default::default()
+            },
+        );
+        config.profiles.insert(
+            "p2".to_string(),
+            ProfileConfig {
+                fallback: Some("none".to_string()),
+                ..Default::default()
+            },
+        );
+        config.profiles.insert(
+            "p3".to_string(),
+            ProfileConfig {
+                fallback: Some("any".to_string()),
+                ..Default::default()
+            },
+        );
+
+        // Specific fallback
+        assert_eq!(config.fallback_profile("p1"), Some("p2".to_string()));
+
+        // None fallback
+        assert_eq!(config.fallback_profile("p2"), None);
+
+        // Any fallback (should return another profile, e.g., p1 or p2)
+        let fallback_any = config.fallback_profile("p3");
+        assert!(fallback_any.is_some());
+        assert_ne!(fallback_any.unwrap(), "p3");
+    }
+}
