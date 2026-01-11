@@ -1,6 +1,14 @@
 use super::markdown::print_markdown;
 use crate::cli::Args;
+use crate::update::UpdateNotification;
 use std::io::IsTerminal;
+
+#[derive(serde::Serialize)]
+struct UpdateInfo {
+    from: String,
+    to: String,
+    changelog: String,
+}
 
 pub struct OutputFormatter {
     json: bool,
@@ -8,6 +16,7 @@ pub struct OutputFormatter {
     raw: bool,
     #[allow(dead_code)]
     no_color: bool,
+    update_notification: Option<UpdateNotification>,
 }
 
 impl OutputFormatter {
@@ -19,7 +28,14 @@ impl OutputFormatter {
             markdown: args.markdown || (!args.raw && !args.json && !is_piped),
             raw: args.raw || is_piped,
             no_color: args.no_color || is_piped,
+            update_notification: None,
         }
+    }
+
+    #[allow(dead_code)]
+    pub fn with_update(mut self, notification: Option<UpdateNotification>) -> Self {
+        self.update_notification = notification;
+        self
     }
 
     /// Format and print the response
@@ -36,10 +52,24 @@ impl OutputFormatter {
     }
 
     fn format_json(&self, text: &str) {
-        let output = serde_json::json!({
-            "response": text,
-            "success": true
+        let update_info = self.update_notification.as_ref().map(|n| UpdateInfo {
+            from: n.old_version.clone(),
+            to: n.new_version.clone(),
+            changelog: n.changelog.clone(),
         });
+
+        let output = if update_info.is_some() {
+            serde_json::json!({
+                "response": text,
+                "success": true,
+                "update": update_info
+            })
+        } else {
+            serde_json::json!({
+                "response": text,
+                "success": true
+            })
+        };
         println!(
             "{}",
             serde_json::to_string_pretty(&output).unwrap_or_default()

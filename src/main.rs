@@ -23,11 +23,14 @@ async fn main() -> Result<()> {
         return update::background_update_check().await;
     }
 
-    // Check for update notification from previous run
-    let _ = update::check_and_show_notification();
+    // Get pending notification (don't print yet - will be handled by run())
+    let update_notification = update::get_pending_notification();
+
+    // Load config to check aggressive mode
+    let config = config::Config::load().unwrap_or_default();
 
     // Spawn background update check
-    update::check_updates_background();
+    update::check_updates_background(config.update.aggressive);
 
-    run().await
+    run(update_notification).await
 }

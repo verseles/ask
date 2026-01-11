@@ -35,8 +35,28 @@ fn is_retryable_error(err: &anyhow::Error) -> bool {
 }
 
 /// Main entry point for the CLI
-pub async fn run() -> Result<()> {
+pub async fn run(update_notification: Option<crate::update::UpdateNotification>) -> Result<()> {
     let args = Args::parse_flexible();
+
+    // Show update notification (unless JSON or raw mode)
+    if let Some(ref notification) = update_notification {
+        if !args.json && !args.raw {
+            println!(
+                "{} {} {} {}",
+                "Updated:".green().bold(),
+                notification.old_version.bright_black(),
+                "→".bright_black(),
+                notification.new_version.green()
+            );
+            if !notification.changelog.is_empty() {
+                let changelog = crate::update::format_changelog(&notification.changelog, 10);
+                for line in changelog.lines() {
+                    println!("  {}", line.bright_black());
+                }
+            }
+            println!();
+        }
+    }
 
     // Handle internal --inject-raw command first (used by background injection)
     if let Some(ref cmd) = args.inject_raw {

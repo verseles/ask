@@ -250,6 +250,9 @@ impl Config {
         if let Ok(channel) = std::env::var("ASK_UPDATE_CHANNEL") {
             config.update.channel = channel;
         }
+        if let Ok(val) = std::env::var("ASK_UPDATE_AGGRESSIVE") {
+            config.update.aggressive = parse_bool(&val);
+        }
 
         config
     }

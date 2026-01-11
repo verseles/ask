@@ -107,6 +107,9 @@ pub struct UpdateConfig {
 
     #[serde(default = "default_channel")]
     pub channel: String,
+
+    #[serde(default = "default_true")]
+    pub aggressive: bool,
 }
 
 /// Custom command definition
@@ -251,6 +254,7 @@ impl Default for UpdateConfig {
             auto_check: true,
             check_interval_hours: default_check_interval(),
             channel: default_channel(),
+            aggressive: true,
         }
     }
 }

@@ -32,6 +32,28 @@ pub struct UpdateNotification {
     pub timestamp: i64,
 }
 
+#[allow(dead_code)]
+pub fn should_check_update(aggressive: bool, last_check: Option<i64>) -> bool {
+    if aggressive {
+        return true;
+    }
+    match last_check {
+        None => true,
+        Some(timestamp) => {
+            let now = chrono::Utc::now().timestamp();
+            now - timestamp > 86400
+        }
+    }
+}
+
+pub fn format_changelog(changelog: &str, max_lines: usize) -> String {
+    changelog
+        .lines()
+        .take(max_lines)
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 /// Get the update notification file path
 fn notification_path() -> Result<PathBuf> {
     let data_dir = dirs::data_local_dir()
@@ -41,6 +63,30 @@ fn notification_path() -> Result<PathBuf> {
     Ok(data_dir.join("update_notification.json"))
 }
 
+/// Get pending update notification if exists
+pub fn get_pending_notification() -> Option<UpdateNotification> {
+    let path = notification_path().ok()?;
+    if !path.exists() {
+        return None;
+    }
+
+    let content = fs::read_to_string(&path).ok()?;
+    let notification: UpdateNotification = serde_json::from_str(&content).ok()?;
+
+    // Check if notification is less than 24 hours old
+    let now = chrono::Utc::now().timestamp();
+    if now - notification.timestamp > 86400 {
+        let _ = fs::remove_file(&path);
+        return None;
+    }
+
+    // Remove notification after reading
+    let _ = fs::remove_file(&path);
+
+    Some(notification)
+}
+
+#[allow(dead_code)]
 /// Check if an update notification exists and display it
 pub fn check_and_show_notification() -> Result<bool> {
     let path = notification_path()?;
@@ -157,26 +203,25 @@ fn is_newer_version(current: &str, remote: &str) -> bool {
 }
 
 /// Check for updates in background (non-blocking)
-pub fn check_updates_background() {
-    // Check if updates are disabled
+pub fn check_updates_background(aggressive: bool) {
     if std::env::var("ASK_NO_UPDATE").is_ok() {
         return;
     }
 
-    // Check last update check time
     let data_dir = match dirs::data_local_dir() {
         Some(d) => d.join("ask"),
         None => return,
     };
 
-    let last_check_file = data_dir.join("last_update_check");
-    if last_check_file.exists() {
-        if let Ok(content) = fs::read_to_string(&last_check_file) {
-            if let Ok(timestamp) = content.trim().parse::<i64>() {
-                let now = chrono::Utc::now().timestamp();
-                // Only check every 24 hours
-                if now - timestamp < 86400 {
-                    return;
+    if !aggressive {
+        let last_check_file = data_dir.join("last_update_check");
+        if last_check_file.exists() {
+            if let Ok(content) = fs::read_to_string(&last_check_file) {
+                if let Ok(timestamp) = content.trim().parse::<i64>() {
+                    let now = chrono::Utc::now().timestamp();
+                    if now - timestamp < 86400 {
+                        return;
+                    }
                 }
             }
         }
@@ -429,4 +474,59 @@ pub async fn check_and_update() -> Result<()> {
     );
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_is_newer_version() {
+        assert!(is_newer_version("0.14.4", "0.15.0"));
+        assert!(is_newer_version("0.14.4", "0.14.5"));
+        assert!(is_newer_version("1.0.0", "2.0.0"));
+        assert!(!is_newer_version("0.15.0", "0.14.4"));
+        assert!(!is_newer_version("0.14.4", "0.14.4"));
+        assert!(!is_newer_version("2.0.0", "1.0.0"));
+    }
+
+    #[test]
+    fn test_parse_version() {
+        assert_eq!(parse_version("v0.14.4"), "0.14.4");
+        assert_eq!(parse_version("0.14.4"), "0.14.4");
+        assert_eq!(parse_version("v1.0.0"), "1.0.0");
+    }
+
+    #[test]
+    fn test_should_check_update_aggressive() {
+        assert!(should_check_update(true, None));
+        assert!(should_check_update(true, Some(0)));
+        assert!(should_check_update(
+            true,
+            Some(chrono::Utc::now().timestamp())
+        ));
+    }
+
+    #[test]
+    fn test_should_check_update_normal() {
+        let now = chrono::Utc::now().timestamp();
+        assert!(!should_check_update(false, Some(now)));
+        assert!(!should_check_update(false, Some(now - 3600)));
+        assert!(should_check_update(false, Some(now - 86401)));
+        assert!(should_check_update(false, None));
+    }
+
+    #[test]
+    fn test_format_changelog() {
+        let changelog = "Line 1\nLine 2\nLine 3\nLine 4\nLine 5";
+        assert_eq!(format_changelog(changelog, 3), "Line 1\nLine 2\nLine 3");
+        assert_eq!(format_changelog(changelog, 10), changelog);
+        assert_eq!(format_changelog("", 5), "");
+    }
+
+    #[test]
+    fn test_get_asset_name() {
+        let name = get_asset_name();
+        assert!(name.starts_with("ask-"));
+    }
 }

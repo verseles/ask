@@ -49,7 +49,8 @@ max_messages = 20             # Maximum messages to keep
 # Auto-update settings
 [update]
 auto_check = true             # Check for updates in background
-check_interval_hours = 24     # Hours between update checks
+aggressive = true             # Check every execution (not every 24h)
+check_interval_hours = 24     # Hours between checks (when aggressive=false)
 channel = "stable"            # stable, beta
 
 # Named profiles - switch with: ask -P <profile_name>

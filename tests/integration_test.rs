@@ -165,3 +165,39 @@ fn search_flag_is_recognized() {
 
     assert!(output.status.success());
 }
+
+#[test]
+fn make_config_includes_aggressive_option() {
+    let output = Command::new("cargo")
+        .args(["run", "--", "--make-config"])
+        .output()
+        .expect("Failed to execute command");
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("[update]"));
+    assert!(stdout.contains("aggressive"));
+}
+
+#[test]
+fn help_env_includes_update_aggressive() {
+    let output = Command::new("cargo")
+        .args(["run", "--", "--help-env"])
+        .output()
+        .expect("Failed to execute command");
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("ASK_UPDATE_AGGRESSIVE") || stdout.contains("ASK_UPDATE"));
+}
+
+#[test]
+fn update_aggressive_env_is_recognized() {
+    let output = Command::new("cargo")
+        .env("ASK_UPDATE_AGGRESSIVE", "false")
+        .args(["run", "--", "--help"])
+        .output()
+        .expect("Failed to execute command");
+
+    assert!(output.status.success());
+}
