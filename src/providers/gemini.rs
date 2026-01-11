@@ -166,6 +166,7 @@ impl GeminiProvider {
             || model.contains("gemini-2.5")
             || model.contains("2.5-flash")
             || model.contains("2.5-pro")
+            || model.contains("-latest")
     }
 
     fn build_generation_config(&self, options: &ProviderOptions) -> GenerationConfig {
