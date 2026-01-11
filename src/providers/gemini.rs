@@ -42,6 +42,14 @@ struct GenerationConfig {
     temperature: Option<f32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     max_output_tokens: Option<u32>,
+    #[serde(rename = "thinkingConfig", skip_serializing_if = "Option::is_none")]
+    thinking_config: Option<ThinkingConfig>,
+}
+
+#[derive(Serialize)]
+struct ThinkingConfig {
+    #[serde(rename = "thinkingMode")]
+    thinking_mode: String,
 }
 
 #[derive(Deserialize)]
@@ -150,6 +158,31 @@ impl GeminiProvider {
         }
     }
 
+    fn build_generation_config(&self, options: &ProviderOptions) -> GenerationConfig {
+        let thinking_config = if options.thinking_enabled {
+            let mode = options
+                .thinking_value
+                .as_ref()
+                .map(|v| v.to_uppercase())
+                .unwrap_or_else(|| "LOW".to_string());
+            Some(ThinkingConfig {
+                thinking_mode: mode,
+            })
+        } else {
+            None
+        };
+
+        GenerationConfig {
+            temperature: if options.thinking_enabled {
+                None
+            } else {
+                Some(0.7)
+            },
+            max_output_tokens: Some(8192),
+            thinking_config,
+        }
+    }
+
     fn extract_citations(&self, candidate: &GeminiCandidate) -> Vec<Citation> {
         let mut citations = Vec::new();
         if let Some(ref metadata) = candidate.grounding_metadata {
@@ -183,10 +216,7 @@ impl Provider for GeminiProvider {
 
         let request = GeminiRequest {
             contents: self.convert_messages(messages),
-            generation_config: Some(GenerationConfig {
-                temperature: Some(0.7),
-                max_output_tokens: Some(8192),
-            }),
+            generation_config: Some(self.build_generation_config(options)),
             tools: self.build_tools(options),
         };
 
@@ -240,10 +270,7 @@ impl Provider for GeminiProvider {
 
         let request = GeminiRequest {
             contents: self.convert_messages(messages),
-            generation_config: Some(GenerationConfig {
-                temperature: Some(0.7),
-                max_output_tokens: Some(8192),
-            }),
+            generation_config: Some(self.build_generation_config(options)),
             tools: self.build_tools(options),
         };
 

@@ -27,6 +27,8 @@ struct OpenAIRequest {
     max_tokens: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     max_completion_tokens: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    reasoning_effort: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -215,6 +217,16 @@ impl Provider for OpenAIProvider {
         let url = format!("{}/chat/completions", self.base_url);
 
         let is_reasoning = self.is_reasoning_model();
+        let reasoning_effort = if options.thinking_enabled && is_reasoning {
+            Some(
+                options
+                    .thinking_value
+                    .clone()
+                    .unwrap_or_else(|| "medium".to_string()),
+            )
+        } else {
+            None
+        };
         let request = OpenAIRequest {
             model: self.model.clone(),
             messages: self.convert_messages(messages),
@@ -222,6 +234,7 @@ impl Provider for OpenAIProvider {
             temperature: if is_reasoning { None } else { Some(0.7) },
             max_tokens: if is_reasoning { None } else { Some(4096) },
             max_completion_tokens: if is_reasoning { Some(4096) } else { None },
+            reasoning_effort,
         };
 
         let response = self
@@ -263,11 +276,21 @@ impl Provider for OpenAIProvider {
         &self,
         messages: &[Message],
         mut callback: StreamCallback,
-        _options: &ProviderOptions,
+        options: &ProviderOptions,
     ) -> Result<()> {
         let url = format!("{}/chat/completions", self.base_url);
 
         let is_reasoning = self.is_reasoning_model();
+        let reasoning_effort = if options.thinking_enabled && is_reasoning {
+            Some(
+                options
+                    .thinking_value
+                    .clone()
+                    .unwrap_or_else(|| "medium".to_string()),
+            )
+        } else {
+            None
+        };
         let request = OpenAIRequest {
             model: self.model.clone(),
             messages: self.convert_messages(messages),
@@ -275,6 +298,7 @@ impl Provider for OpenAIProvider {
             temperature: if is_reasoning { None } else { Some(0.7) },
             max_tokens: if is_reasoning { None } else { Some(4096) },
             max_completion_tokens: if is_reasoning { Some(4096) } else { None },
+            reasoning_effort,
         };
 
         let response = self

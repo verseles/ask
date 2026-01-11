@@ -26,6 +26,15 @@ struct AnthropicRequest {
     stream: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     tools: Option<Vec<Value>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    thinking: Option<ThinkingConfig>,
+}
+
+#[derive(Serialize)]
+struct ThinkingConfig {
+    #[serde(rename = "type")]
+    thinking_type: String,
+    budget_tokens: u64,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -144,6 +153,24 @@ impl AnthropicProvider {
         }
         citations
     }
+
+    fn build_thinking(&self, options: &ProviderOptions) -> Option<ThinkingConfig> {
+        if !options.thinking_enabled {
+            return None;
+        }
+
+        let budget = options
+            .thinking_value
+            .as_ref()
+            .and_then(|v| v.parse::<u64>().ok())
+            .unwrap_or(5000)
+            .max(1024);
+
+        Some(ThinkingConfig {
+            thinking_type: "enabled".to_string(),
+            budget_tokens: budget,
+        })
+    }
 }
 
 #[async_trait]
@@ -163,6 +190,7 @@ impl Provider for AnthropicProvider {
             system,
             stream: false,
             tools: self.build_tools(options),
+            thinking: self.build_thinking(options),
         };
 
         let response = self
@@ -217,6 +245,7 @@ impl Provider for AnthropicProvider {
             system,
             stream: true,
             tools: self.build_tools(options),
+            thinking: self.build_thinking(options),
         };
 
         let response = self

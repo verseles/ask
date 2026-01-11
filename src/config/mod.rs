@@ -398,6 +398,64 @@ impl Config {
         }
         (None, None)
     }
+
+    pub fn get_thinking_level(&self) -> Option<String> {
+        for profile in self.profiles.values() {
+            if let Some(ref level) = profile.thinking_level {
+                return Some(level.clone());
+            }
+        }
+        None
+    }
+
+    pub fn get_reasoning_effort(&self) -> Option<String> {
+        for profile in self.profiles.values() {
+            if let Some(ref effort) = profile.reasoning_effort {
+                return Some(effort.clone());
+            }
+        }
+        None
+    }
+
+    pub fn get_thinking_budget(&self) -> Option<u64> {
+        for profile in self.profiles.values() {
+            if let Some(budget) = profile.thinking_budget {
+                return Some(budget);
+            }
+        }
+        None
+    }
+
+    pub fn get_thinking_config(&self) -> (bool, Option<String>) {
+        let provider = self.active_provider();
+        match provider {
+            "gemini" => {
+                if let Some(level) = self.get_thinking_level() {
+                    let enabled = level.to_lowercase() != "none" && level != "0";
+                    (enabled, Some(level))
+                } else {
+                    (false, None)
+                }
+            }
+            "openai" | "openai_compatible" => {
+                if let Some(effort) = self.get_reasoning_effort() {
+                    let enabled = effort.to_lowercase() != "none";
+                    (enabled, Some(effort))
+                } else {
+                    (false, None)
+                }
+            }
+            "anthropic" | "claude" => {
+                if let Some(budget) = self.get_thinking_budget() {
+                    let enabled = budget > 0;
+                    (enabled, Some(budget.to_string()))
+                } else {
+                    (false, None)
+                }
+            }
+            _ => (false, None),
+        }
+    }
 }
 
 fn mask_api_key(key: &str) -> String {

@@ -110,6 +110,10 @@ Key functions:
 - `configure_profile()` - Configure a single profile
 - `manage_profiles()` - Profile management submenu
 - `show_current_config()` - Display current config formatted
+- `get_thinking_config()` - Get unified thinking settings (enabled, value)
+- `get_thinking_level()` - Get Gemini thinking level from profile
+- `get_reasoning_effort()` - Get OpenAI reasoning effort from profile
+- `get_thinking_budget()` - Get Anthropic thinking budget from profile
 
 ### Providers (`src/providers/`)
 
@@ -126,9 +130,14 @@ pub trait Provider: Send + Sync {
 ```
 
 Supported providers:
-- **GeminiProvider**: Google Gemini API
-- **OpenAIProvider**: OpenAI and compatible APIs
-- **AnthropicProvider**: Anthropic Claude API
+- **GeminiProvider**: Google Gemini API (thinking via `thinkingConfig`)
+- **OpenAIProvider**: OpenAI and compatible APIs (reasoning via `reasoning_effort`)
+- **AnthropicProvider**: Anthropic Claude API (thinking via `thinking.budget_tokens`)
+
+**Thinking Mode Support**:
+Each provider implements thinking/reasoning differently:
+- `ProviderOptions.thinking_enabled` - Whether thinking is active
+- `ProviderOptions.thinking_value` - Provider-specific value (level/effort/budget)
 
 The unified prompt system handles intent detection inline (command vs question vs code) without a separate API call. Key functions:
 - `build_unified_prompt()` - Builds the system prompt with context

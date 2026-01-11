@@ -283,10 +283,23 @@ fn build_provider_options(args: &Args, config: &Config) -> ProviderOptions {
     let web_search = args.search || config.get_profile_web_search();
     let (allowed_domains, blocked_domains) = config.get_profile_domain_filters();
 
+    let (config_thinking_enabled, config_thinking_value) = config.get_thinking_config();
+
+    let (thinking_enabled, thinking_value) = match args.think {
+        Some(true) => (
+            true,
+            config_thinking_value.or_else(|| Some("medium".to_string())),
+        ),
+        Some(false) => (false, None),
+        None => (config_thinking_enabled, config_thinking_value),
+    };
+
     ProviderOptions {
         web_search,
         allowed_domains,
         blocked_domains,
+        thinking_enabled,
+        thinking_value,
     }
 }
 

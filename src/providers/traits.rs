@@ -34,6 +34,8 @@ pub struct ProviderOptions {
     pub web_search: bool,
     pub allowed_domains: Option<Vec<String>>,
     pub blocked_domains: Option<Vec<String>>,
+    pub thinking_enabled: bool,
+    pub thinking_value: Option<String>,
 }
 
 /// Callback type for streaming responses
