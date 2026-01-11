@@ -320,12 +320,21 @@ impl Provider for GeminiProvider {
         }
 
         let mut stream = response.bytes_stream();
+        let mut buffer = String::new();
 
         while let Some(chunk) = stream.next().await {
             let chunk = chunk?;
-            let text = String::from_utf8_lossy(&chunk);
+            buffer.push_str(&String::from_utf8_lossy(&chunk));
 
-            for line in text.lines() {
+            // Process complete lines from buffer
+            while let Some(newline_pos) = buffer.find('\n') {
+                let line = buffer[..newline_pos].trim().to_string();
+                buffer = buffer[newline_pos + 1..].to_string();
+
+                if line.is_empty() {
+                    continue;
+                }
+
                 if let Some(data) = line.strip_prefix("data: ") {
                     if let Ok(response) = serde_json::from_str::<GeminiStreamResponse>(data) {
                         if let Some(candidates) = response.candidates {
@@ -334,6 +343,23 @@ impl Provider for GeminiProvider {
                                     if let Some(text) = part.text {
                                         callback(&text);
                                     }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Process any remaining data in buffer after stream ends
+        if !buffer.trim().is_empty() {
+            if let Some(data) = buffer.trim().strip_prefix("data: ") {
+                if let Ok(response) = serde_json::from_str::<GeminiStreamResponse>(data) {
+                    if let Some(candidates) = response.candidates {
+                        for candidate in candidates {
+                            for part in candidate.content.parts {
+                                if let Some(text) = part.text {
+                                    callback(&text);
                                 }
                             }
                         }
