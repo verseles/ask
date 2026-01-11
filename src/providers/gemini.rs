@@ -48,8 +48,10 @@ struct GenerationConfig {
 
 #[derive(Serialize)]
 struct ThinkingConfig {
-    #[serde(rename = "thinkingMode")]
-    thinking_mode: String,
+    #[serde(rename = "thinkingLevel", skip_serializing_if = "Option::is_none")]
+    thinking_level: Option<String>,
+    #[serde(rename = "thinkingBudget", skip_serializing_if = "Option::is_none")]
+    thinking_budget: Option<i32>,
 }
 
 #[derive(Deserialize)]
@@ -160,14 +162,35 @@ impl GeminiProvider {
 
     fn build_generation_config(&self, options: &ProviderOptions) -> GenerationConfig {
         let thinking_config = if options.thinking_enabled {
-            let mode = options
+            let value = options
                 .thinking_value
                 .as_ref()
                 .map(|v| v.to_uppercase())
                 .unwrap_or_else(|| "LOW".to_string());
-            Some(ThinkingConfig {
-                thinking_mode: mode,
-            })
+
+            // Gemini 3 models use thinkingLevel (minimal, low, medium, high)
+            // Gemini 2.5 models use thinkingBudget (number of tokens)
+            let is_gemini_3 = self.model.contains("gemini-3");
+
+            if is_gemini_3 {
+                Some(ThinkingConfig {
+                    thinking_level: Some(value),
+                    thinking_budget: None,
+                })
+            } else {
+                // For Gemini 2.5, convert level to budget or parse as number
+                let budget = match value.as_str() {
+                    "MINIMAL" => 1024,
+                    "LOW" => 4096,
+                    "MEDIUM" => 8192,
+                    "HIGH" => 16384,
+                    _ => value.parse::<i32>().unwrap_or(4096),
+                };
+                Some(ThinkingConfig {
+                    thinking_level: None,
+                    thinking_budget: Some(budget),
+                })
+            }
         } else {
             None
         };
