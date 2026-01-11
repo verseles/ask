@@ -117,6 +117,18 @@ fn build_cli() -> Command {
                 .action(clap::ArgAction::SetTrue),
         )
         .arg(
+            Arg::new("make-prompt")
+                .long("make-prompt")
+                .help("Export default prompt template to stdout")
+                .action(clap::ArgAction::SetTrue),
+        )
+        .arg(
+            Arg::new("make-config")
+                .long("make-config")
+                .help("Export example config.toml to stdout")
+                .action(clap::ArgAction::SetTrue),
+        )
+        .arg(
             Arg::new("verbose")
                 .short('v')
                 .long("verbose")

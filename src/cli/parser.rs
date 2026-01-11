@@ -81,6 +81,9 @@ pub struct Args {
     /// List available profiles
     pub list_profiles: bool,
 
+    /// Export example config template
+    pub make_config: bool,
+
     /// The actual query text (all non-flag arguments concatenated)
     pub query: Vec<String>,
 }
@@ -138,6 +141,7 @@ impl Args {
                 "--think=false" => result.think = Some(false),
                 "--update" => result.update = true,
                 "--make-prompt" => result.make_prompt = true,
+                "--make-config" => result.make_config = true,
                 "-v" | "--verbose" => result.verbose = true,
                 "--version" | "-V" => result.version = true,
                 "--help" | "-h" => {
@@ -368,6 +372,7 @@ OPTIONS:
         --color=bool      Enable/disable colorized output
         --no-follow       Disable result echo after execution
         --make-prompt     Export default prompt template to stdout
+        --make-config     Export example config.toml to stdout
         --help-env        Show all environment variables
         --update          Check and install updates
         --completions <SHELL>  Generate shell completions (bash, zsh, fish, powershell, elvish)

@@ -59,6 +59,11 @@ pub async fn run() -> Result<()> {
         return Ok(());
     }
 
+    if args.make_config {
+        println!("{}", crate::config::DEFAULT_CONFIG_TEMPLATE);
+        return Ok(());
+    }
+
     // Handle completions generation
     if let Some(ref shell) = args.completions {
         crate::completions::generate_completions(shell);
