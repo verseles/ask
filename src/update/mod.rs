@@ -159,20 +159,9 @@ fn save_notification(
 fn get_asset_name() -> String {
     let os = std::env::consts::OS;
     let arch = std::env::consts::ARCH;
-
-    let os_name = match os {
-        "linux" => "linux",
-        "macos" => "darwin",
-        "windows" => "windows",
-        _ => os,
-    };
-
-    // arch is already in the correct format for our asset names
-    let arch_name = arch;
-
     let extension = if os == "windows" { ".exe" } else { "" };
 
-    format!("ask-{}-{}{}", os_name, arch_name, extension)
+    format!("ask-{}-{}{}", os, arch, extension)
 }
 
 /// Parse version string (removes 'v' prefix if present)
