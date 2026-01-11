@@ -311,6 +311,24 @@ async fn handle_query(
     formatter: &OutputFormatter,
     custom_cmd: Option<&crate::config::CustomCommand>,
 ) -> Result<()> {
+    if args.verbose {
+        let profile_name = config.active_profile(args);
+        let (thinking_enabled, thinking_value) = config.get_thinking_config();
+        eprintln!(
+            "{} provider={}, model={}, profile={}, thinking={}",
+            "[verbose]".bright_black(),
+            provider.name().cyan(),
+            provider.model().cyan(),
+            profile_name.as_deref().unwrap_or("default").cyan(),
+            if thinking_enabled {
+                thinking_value.as_deref().unwrap_or("on").to_string()
+            } else {
+                "off".to_string()
+            }
+            .cyan()
+        );
+    }
+
     let mut messages = Vec::new();
 
     if args.has_context() {

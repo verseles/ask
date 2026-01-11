@@ -91,6 +91,13 @@ fn build_cli() -> Command {
                 .action(clap::ArgAction::SetTrue),
         )
         .arg(
+            Arg::new("verbose")
+                .short('v')
+                .long("verbose")
+                .help("Show verbose output (profile, provider info)")
+                .action(clap::ArgAction::SetTrue),
+        )
+        .arg(
             Arg::new("clear")
                 .long("clear")
                 .help("Clear current directory context (use with -c)")

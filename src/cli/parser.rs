@@ -75,6 +75,9 @@ pub struct Args {
     /// Export default prompt template
     pub make_prompt: bool,
 
+    /// Verbose mode - show profile and other debug info
+    pub verbose: bool,
+
     /// The actual query text (all non-flag arguments concatenated)
     pub query: Vec<String>,
 }
@@ -132,6 +135,7 @@ impl Args {
                 "--think=false" => result.think = Some(false),
                 "--update" => result.update = true,
                 "--make-prompt" => result.make_prompt = true,
+                "-v" | "--verbose" => result.verbose = true,
                 "--version" | "-V" => result.version = true,
                 "--help" | "-h" => {
                     print_help();
@@ -224,6 +228,7 @@ impl Args {
                                     'x' => result.command_mode = true,
                                     'y' => result.yes = true,
                                     't' => result.think = Some(true),
+                                    'v' => result.verbose = true,
                                     'V' => result.version = true,
                                     'h' => {
                                         print_help();
@@ -242,6 +247,7 @@ impl Args {
                                 'y' => result.yes = true,
                                 't' => result.think = Some(true),
                                 's' => result.search = true,
+                                'v' => result.verbose = true,
                                 'V' => result.version = true,
                                 'h' => {
                                     print_help();
@@ -361,6 +367,7 @@ OPTIONS:
         --help-env        Show all environment variables
         --update          Check and install updates
         --completions <SHELL>  Generate shell completions (bash, zsh, fish, powershell, elvish)
+    -v, --verbose         Show verbose output (profile, provider info)
     -V, --version         Show version
     -h, --help            Show this help
 
