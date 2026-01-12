@@ -163,13 +163,14 @@ pub async fn run(update_notification: Option<crate::update::UpdateNotification>)
         .provider
         .clone()
         .or_else(|| std::env::var("ASK_PROVIDER").ok());
-    if ad_hoc_provider.is_some() && config.active.api_key.is_none() {
-        let provider = ad_hoc_provider.unwrap();
-        anyhow::bail!(
-            "Ad-hoc mode requires an API key.\n\
-             Provide --api-key (-k) or set ASK_{}_API_KEY environment variable",
-            provider.to_uppercase()
-        );
+    if let Some(provider) = ad_hoc_provider {
+        if config.active.api_key.is_none() {
+            anyhow::bail!(
+                "Ad-hoc mode requires an API key.\n\
+                 Provide --api-key (-k) or set ASK_{}_API_KEY environment variable",
+                provider.to_uppercase()
+            );
+        }
     }
 
     execute_with_fallback(&config, &args).await
