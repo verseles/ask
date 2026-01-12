@@ -356,7 +356,10 @@ fn build_provider_options(args: &Args, config: &Config) -> ProviderOptions {
     let (thinking_enabled, thinking_value) = match args.think {
         Some(true) => (
             true,
-            config_thinking_value.or_else(|| Some("medium".to_string())),
+            args.think_level
+                .clone()
+                .or(config_thinking_value)
+                .or_else(|| Some("medium".to_string())),
         ),
         Some(false) => (false, None),
         None => (config_thinking_enabled, config_thinking_value),
@@ -401,12 +404,13 @@ async fn handle_query(
         );
 
         eprintln!(
-            "{} flags: context={:?}, command_mode={}, yes={}, think={:?}, json={}, markdown={}, raw={}, no_color={}, no_follow={}, no_fallback={}, search={}, citations={}, update={}, init={}, clear_context={}, show_history={}, make_prompt={}, make_config={}, list_profiles={}, non_interactive={}",
+            "{} flags: context={:?}, command_mode={}, yes={}, think={:?}, think_level={:?}, json={}, markdown={}, raw={}, no_color={}, no_follow={}, no_fallback={}, search={}, citations={}, update={}, init={}, clear_context={}, show_history={}, make_prompt={}, make_config={}, list_profiles={}, non_interactive={}",
             "[verbose]".bright_black(),
             args.context,
             args.command_mode,
             args.yes,
             args.think,
+            args.think_level,
             args.json,
             args.markdown,
             args.raw,

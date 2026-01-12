@@ -27,6 +27,10 @@ pub struct Args {
     /// None = use config default, Some(true) = enable, Some(false) = disable
     pub think: Option<bool>,
 
+    /// Thinking level (minimal, low, medium, high, etc.)
+    /// Used when --think=LEVEL or --think LEVEL is specified
+    pub think_level: Option<String>,
+
     /// Output in JSON format
     pub json: bool,
 
@@ -152,7 +156,15 @@ impl Args {
                 // Boolean flags (short)
                 "-x" => result.command_mode = true,
                 "-y" => result.yes = true,
-                "-t" => result.think = Some(true),
+                "-t" => {
+                    if i + 1 < args.len() && is_think_level(&args[i + 1]) {
+                        i += 1;
+                        result.think = Some(true);
+                        result.think_level = Some(args[i].clone());
+                    } else {
+                        result.think = Some(true);
+                    }
+                }
                 "-s" => result.search = true,
 
                 // Boolean flags (long)
@@ -167,8 +179,28 @@ impl Args {
                 "--no-fallback" => result.no_fallback = true,
                 "--search" => result.search = true,
                 "--citations" => result.citations = true,
-                "--think" | "--think=true" => result.think = Some(true),
+                "--think" => {
+                    if i + 1 < args.len() && is_think_level(&args[i + 1]) {
+                        i += 1;
+                        result.think = Some(true);
+                        result.think_level = Some(args[i].clone());
+                    } else {
+                        result.think = Some(true);
+                    }
+                }
+                "--think=true" => result.think = Some(true),
                 "--think=false" => result.think = Some(false),
+                s if s.starts_with("--think=") => {
+                    let value = s.strip_prefix("--think=").unwrap();
+                    if value == "0" {
+                        result.think = Some(false);
+                    } else if value == "1" {
+                        result.think = Some(true);
+                    } else {
+                        result.think = Some(true);
+                        result.think_level = Some(value.to_string());
+                    }
+                }
                 "--update" => result.update = true,
                 "--make-prompt" => result.make_prompt = true,
                 "--make-config" => result.make_config = true,
@@ -292,6 +324,11 @@ impl Args {
                                     }
                                     s if s.starts_with('1') => {
                                         result.think = Some(true);
+                                        break;
+                                    }
+                                    s if is_think_level(s) => {
+                                        result.think = Some(true);
+                                        result.think_level = Some(s.to_string());
                                         break;
                                     }
                                     _ => result.think = Some(true),
@@ -482,6 +519,14 @@ Run 'ask --help-env' for all environment variables.
     );
 }
 
+fn is_think_level(s: &str) -> bool {
+    let lower = s.to_lowercase();
+    matches!(
+        lower.as_str(),
+        "none" | "minimal" | "low" | "medium" | "high" | "xhigh"
+    ) || s.parse::<i64>().is_ok()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -524,5 +569,66 @@ mod tests {
         };
         assert!(args.has_context());
         assert_eq!(args.context_ttl(), 0);
+    }
+
+    #[test]
+    fn test_parse_think_with_level_equals() {
+        let args = Args::parse_args(vec!["--think=minimal".into(), "hello".into()]);
+        assert_eq!(args.think, Some(true));
+        assert_eq!(args.think_level, Some("minimal".to_string()));
+        assert_eq!(args.query, vec!["hello"]);
+    }
+
+    #[test]
+    fn test_parse_think_with_level_space() {
+        let args = Args::parse_args(vec!["--think".into(), "low".into(), "hello".into()]);
+        assert_eq!(args.think, Some(true));
+        assert_eq!(args.think_level, Some("low".to_string()));
+        assert_eq!(args.query, vec!["hello"]);
+    }
+
+    #[test]
+    fn test_parse_think_short_with_level() {
+        let args = Args::parse_args(vec!["-t".into(), "medium".into(), "hello".into()]);
+        assert_eq!(args.think, Some(true));
+        assert_eq!(args.think_level, Some("medium".to_string()));
+        assert_eq!(args.query, vec!["hello"]);
+    }
+
+    #[test]
+    fn test_parse_think_numeric_level() {
+        let args = Args::parse_args(vec!["--think=4096".into(), "hello".into()]);
+        assert_eq!(args.think, Some(true));
+        assert_eq!(args.think_level, Some("4096".to_string()));
+    }
+
+    #[test]
+    fn test_parse_think_combined_tminimal() {
+        let args = Args::parse_args(vec!["-tminimal".into(), "hello".into()]);
+        assert_eq!(args.think, Some(true));
+        assert_eq!(args.think_level, Some("minimal".to_string()));
+        assert_eq!(args.query, vec!["hello"]);
+    }
+
+    #[test]
+    fn test_parse_think_false_does_not_consume_next() {
+        let args = Args::parse_args(vec!["--think=false".into(), "hello".into()]);
+        assert_eq!(args.think, Some(false));
+        assert_eq!(args.think_level, None);
+        assert_eq!(args.query, vec!["hello"]);
+    }
+
+    #[test]
+    fn test_is_think_level() {
+        assert!(is_think_level("minimal"));
+        assert!(is_think_level("low"));
+        assert!(is_think_level("medium"));
+        assert!(is_think_level("high"));
+        assert!(is_think_level("xhigh"));
+        assert!(is_think_level("none"));
+        assert!(is_think_level("4096"));
+        assert!(is_think_level("-1"));
+        assert!(!is_think_level("hello"));
+        assert!(!is_think_level("test"));
     }
 }

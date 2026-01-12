@@ -128,6 +128,35 @@ impl OpenAIProvider {
             || model.starts_with("gpt-5")
     }
 
+    fn supports_none_reasoning(&self) -> bool {
+        let model = self.model.to_lowercase();
+        model.contains("gpt-5.1") || model.contains("gpt-5.2") || model.contains("gpt-5.3")
+    }
+
+    fn normalize_reasoning_effort(&self, level: &str) -> String {
+        if level == "none" && !self.supports_none_reasoning() {
+            "minimal".to_string()
+        } else {
+            level.to_string()
+        }
+    }
+
+    fn build_reasoning_effort(&self, options: &ProviderOptions) -> Option<String> {
+        if !self.is_reasoning_model() {
+            return None;
+        }
+
+        if options.thinking_enabled {
+            let level = options
+                .thinking_value
+                .clone()
+                .unwrap_or_else(|| "medium".to_string());
+            Some(self.normalize_reasoning_effort(&level))
+        } else {
+            Some("minimal".to_string())
+        }
+    }
+
     fn is_official_openai(&self) -> bool {
         self.base_url.contains("api.openai.com")
     }
@@ -217,16 +246,7 @@ impl Provider for OpenAIProvider {
         let url = format!("{}/chat/completions", self.base_url);
 
         let is_reasoning = self.is_reasoning_model();
-        let reasoning_effort = if options.thinking_enabled && is_reasoning {
-            Some(
-                options
-                    .thinking_value
-                    .clone()
-                    .unwrap_or_else(|| "medium".to_string()),
-            )
-        } else {
-            None
-        };
+        let reasoning_effort = self.build_reasoning_effort(options);
         let request = OpenAIRequest {
             model: self.model.clone(),
             messages: self.convert_messages(messages),
@@ -281,16 +301,7 @@ impl Provider for OpenAIProvider {
         let url = format!("{}/chat/completions", self.base_url);
 
         let is_reasoning = self.is_reasoning_model();
-        let reasoning_effort = if options.thinking_enabled && is_reasoning {
-            Some(
-                options
-                    .thinking_value
-                    .clone()
-                    .unwrap_or_else(|| "medium".to_string()),
-            )
-        } else {
-            None
-        };
+        let reasoning_effort = self.build_reasoning_effort(options);
         let request = OpenAIRequest {
             model: self.model.clone(),
             messages: self.convert_messages(messages),
@@ -351,5 +362,93 @@ impl Provider for OpenAIProvider {
 
     fn model(&self) -> &str {
         &self.model
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_is_reasoning_model() {
+        let provider = OpenAIProvider::new("key".into(), "url".into(), "gpt-5-nano".into());
+        assert!(provider.is_reasoning_model());
+
+        let provider = OpenAIProvider::new("key".into(), "url".into(), "o1-preview".into());
+        assert!(provider.is_reasoning_model());
+
+        let provider = OpenAIProvider::new("key".into(), "url".into(), "gpt-4o".into());
+        assert!(!provider.is_reasoning_model());
+    }
+
+    #[test]
+    fn test_supports_none_reasoning() {
+        let provider = OpenAIProvider::new("key".into(), "url".into(), "gpt-5.1".into());
+        assert!(provider.supports_none_reasoning());
+
+        let provider = OpenAIProvider::new("key".into(), "url".into(), "gpt-5.2-turbo".into());
+        assert!(provider.supports_none_reasoning());
+
+        let provider = OpenAIProvider::new("key".into(), "url".into(), "gpt-5-nano".into());
+        assert!(!provider.supports_none_reasoning());
+
+        let provider = OpenAIProvider::new("key".into(), "url".into(), "gpt-5-mini".into());
+        assert!(!provider.supports_none_reasoning());
+    }
+
+    #[test]
+    fn test_normalize_reasoning_effort() {
+        let provider = OpenAIProvider::new("key".into(), "url".into(), "gpt-5-nano".into());
+        assert_eq!(provider.normalize_reasoning_effort("none"), "minimal");
+        assert_eq!(provider.normalize_reasoning_effort("minimal"), "minimal");
+        assert_eq!(provider.normalize_reasoning_effort("medium"), "medium");
+
+        let provider = OpenAIProvider::new("key".into(), "url".into(), "gpt-5.1".into());
+        assert_eq!(provider.normalize_reasoning_effort("none"), "none");
+    }
+
+    #[test]
+    fn test_build_reasoning_effort_disabled() {
+        let provider = OpenAIProvider::new("key".into(), "url".into(), "gpt-5-nano".into());
+        let options = ProviderOptions {
+            thinking_enabled: false,
+            thinking_value: None,
+            web_search: false,
+            allowed_domains: None,
+            blocked_domains: None,
+        };
+        assert_eq!(
+            provider.build_reasoning_effort(&options),
+            Some("minimal".to_string())
+        );
+    }
+
+    #[test]
+    fn test_build_reasoning_effort_enabled() {
+        let provider = OpenAIProvider::new("key".into(), "url".into(), "gpt-5-nano".into());
+        let options = ProviderOptions {
+            thinking_enabled: true,
+            thinking_value: Some("high".to_string()),
+            web_search: false,
+            allowed_domains: None,
+            blocked_domains: None,
+        };
+        assert_eq!(
+            provider.build_reasoning_effort(&options),
+            Some("high".to_string())
+        );
+    }
+
+    #[test]
+    fn test_build_reasoning_effort_non_reasoning_model() {
+        let provider = OpenAIProvider::new("key".into(), "url".into(), "gpt-4o".into());
+        let options = ProviderOptions {
+            thinking_enabled: true,
+            thinking_value: Some("high".to_string()),
+            web_search: false,
+            allowed_domains: None,
+            blocked_domains: None,
+        };
+        assert_eq!(provider.build_reasoning_effort(&options), None);
     }
 }
