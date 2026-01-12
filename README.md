@@ -92,7 +92,8 @@ OPTIONS:
                           Examples: -c (30 min), -c60 (1 hour), --context=0 (permanent)
     -x, --command         Force command mode (bypass auto-detection)
     -y, --yes             Auto-execute commands without confirmation
-    -t, --think[=bool]    Enable/disable thinking mode (--think or --think=false)
+    -t, --think[=VAL]     Enable thinking mode with optional level (min/low/med/high)
+                          Examples: -t, --think, --think=high, -tlow
     -m, --model <MODEL>   Override configured model
     -p, --profile <NAME>  Use named profile (e.g., -p work, --profile=local)
     -P, --provider <NAME> Override configured provider

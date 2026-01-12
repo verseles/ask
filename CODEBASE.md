@@ -71,7 +71,8 @@ pub struct Args {
     pub context: Option<u64>, // -c, --context[=MIN]
     pub command_mode: bool,   // -x, --command
     pub yes: bool,            // -y, --yes
-    pub think: Option<bool>,  // -t, --think[=bool]
+    pub think: Option<bool>,  // -t, --think[=VAL]
+    pub think_level: Option<String>, // thinking level (minimal, low, etc.)
     pub model: Option<String>,
     pub provider: Option<String>, // -P, --provider
     pub profile: Option<String>,  // -p, --profile
