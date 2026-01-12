@@ -154,24 +154,29 @@ pub fn get_thinking_options(thinking_type: ThinkingType) -> Vec<ThinkingOption> 
         ],
         ThinkingType::AnthropicBudget => vec![
             ThinkingOption {
-                label: "Disable (0 tokens)".to_string(),
+                label: "Disable".to_string(),
                 config_value: "0".to_string(),
                 config_key: "thinking_budget",
             },
             ThinkingOption {
-                label: "Low (~8000 tokens)".to_string(),
-                config_value: "8000".to_string(),
-                config_key: "thinking_budget",
+                label: "Low (4k tokens)".to_string(),
+                config_value: "low".to_string(),
+                config_key: "thinking_level",
             },
             ThinkingOption {
-                label: "Medium (~16000 tokens)".to_string(),
-                config_value: "16000".to_string(),
-                config_key: "thinking_budget",
+                label: "Medium (8k tokens)".to_string(),
+                config_value: "medium".to_string(),
+                config_key: "thinking_level",
             },
             ThinkingOption {
-                label: "High (~32000 tokens)".to_string(),
-                config_value: "32000".to_string(),
-                config_key: "thinking_budget",
+                label: "High (16k tokens)".to_string(),
+                config_value: "high".to_string(),
+                config_key: "thinking_level",
+            },
+            ThinkingOption {
+                label: "XHigh (32k tokens)".to_string(),
+                config_value: "xhigh".to_string(),
+                config_key: "thinking_level",
             },
             ThinkingOption {
                 label: "Custom (enter token count)".to_string(),

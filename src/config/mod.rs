@@ -456,7 +456,10 @@ impl Config {
                 }
             }
             "anthropic" | "claude" => {
-                if let Some(budget) = self.get_thinking_budget() {
+                if let Some(level) = self.get_thinking_level() {
+                    let enabled = level.to_lowercase() != "none" && level != "0";
+                    (enabled, Some(level))
+                } else if let Some(budget) = self.get_thinking_budget() {
                     let enabled = budget > 0;
                     (enabled, Some(budget.to_string()))
                 } else {
@@ -1602,6 +1605,28 @@ mod tests {
         let (enabled, value) = cfg.get_thinking_config();
         assert!(enabled);
         assert_eq!(value, Some("high".to_string()));
+    }
+
+    #[test]
+    fn test_thinking_config_anthropic_level() {
+        let mut config = Config::default();
+        config.profiles.insert(
+            "anthropic_thinker".to_string(),
+            ProfileConfig {
+                provider: Some("anthropic".to_string()),
+                thinking_level: Some("medium".to_string()),
+                ..Default::default()
+            },
+        );
+
+        let args = Args {
+            profile: Some("anthropic_thinker".to_string()),
+            ..Default::default()
+        };
+        let cfg = config.with_cli_overrides(&args);
+        let (enabled, value) = cfg.get_thinking_config();
+        assert!(enabled);
+        assert_eq!(value, Some("medium".to_string()));
     }
 
     #[test]
