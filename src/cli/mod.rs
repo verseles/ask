@@ -349,15 +349,19 @@ async fn handle_query(
 ) -> Result<()> {
     if args.verbose {
         let profile_name = config.active_profile(args);
-        let (thinking_enabled, thinking_value) = config.get_thinking_config();
+        let options = build_provider_options(args, config);
         eprintln!(
             "{} provider={}, model={}, profile={}, thinking={}",
             "[verbose]".bright_black(),
             provider.name().cyan(),
             provider.model().cyan(),
             profile_name.as_deref().unwrap_or("default").cyan(),
-            if thinking_enabled {
-                thinking_value.as_deref().unwrap_or("on").to_string()
+            if options.thinking_enabled {
+                options
+                    .thinking_value
+                    .as_deref()
+                    .unwrap_or("on")
+                    .to_string()
             } else {
                 "off".to_string()
             }
