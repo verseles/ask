@@ -474,7 +474,8 @@ async fn handle_query(
 
     let options = build_provider_options(args, config);
 
-    if config.active.stream && !args.json && !args.raw {
+    // Disable streaming when web_search is enabled - Responses API doesn't support streaming
+    if config.active.stream && !args.json && !args.raw && !options.web_search {
         use std::sync::{Arc, Mutex};
         let full_response = Arc::new(Mutex::new(String::new()));
         let response_clone = full_response.clone();

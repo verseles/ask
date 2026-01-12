@@ -53,7 +53,6 @@ struct OpenAIResponse {
 
 #[derive(Deserialize)]
 struct ResponsesAPIResponse {
-    output_text: Option<String>,
     output: Option<Vec<ResponseOutput>>,
     error: Option<OpenAIError>,
 }
@@ -205,19 +204,27 @@ impl OpenAIProvider {
             return Err(anyhow!("OpenAI error: {}", error.message));
         }
 
-        let text = response.output_text.unwrap_or_default();
-
+        let mut text = String::new();
         let mut citations = Vec::new();
+
         if let Some(outputs) = response.output {
             for output in outputs {
+                if output.output_type.as_deref() != Some("message") {
+                    continue;
+                }
                 if let Some(contents) = output.content {
                     for content in contents {
-                        if let Some(annotations) = content.annotations {
+                        if content.content_type.as_deref() == Some("output_text") {
+                            if let Some(t) = &content.text {
+                                text.push_str(t);
+                            }
+                        }
+                        if let Some(annotations) = &content.annotations {
                             for annotation in annotations {
                                 if annotation.annotation_type.as_deref() == Some("url_citation") {
                                     citations.push(Citation {
-                                        url: annotation.url.unwrap_or_default(),
-                                        title: annotation.title.unwrap_or_default(),
+                                        url: annotation.url.clone().unwrap_or_default(),
+                                        title: annotation.title.clone().unwrap_or_default(),
                                         snippet: None,
                                     });
                                 }
