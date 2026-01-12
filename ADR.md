@@ -717,3 +717,45 @@ api_key = "sk-..."
 - `ActiveConfig` struct holds runtime-resolved configuration
 - First profile is used by default (no need to set `default_profile` for single-profile configs)
 
+---
+
+## ADR-022: Unified Thinking Levels
+
+**Status**: Accepted
+
+**Context**: Different providers implement "thinking" or "reasoning" capabilities with different parameters:
+- **Gemini**: `thinking_level` (none, low, medium, high) or `thinking_budget` (tokens)
+- **OpenAI**: `reasoning_effort` (low, medium, high)
+- **Anthropic**: `thinking.budget_tokens` (integer)
+
+This inconsistency makes it difficult for users to switch providers without changing their configuration or CLI flags.
+
+**Decision**: Unify the thinking configuration to use abstract levels (`low`, `medium`, `high`) across all providers, while still allowing raw values for advanced users.
+
+**Mappings**:
+
+| Level | Gemini (Level) | OpenAI (Effort) | Anthropic (Tokens) |
+|-------|---------------|-----------------|-------------------|
+| `minimal` | `minimal` | `minimal` | 2048 |
+| `low` | `low` | `low` | 4096 |
+| `medium` | `medium` | `medium` | 8192 |
+| `high` | `high` | `high` | 16384 |
+| `xhigh` | - | - | 32768 |
+
+**Implementation**:
+- **CLI**: `-t`/`--think` accepts both booleans and values (e.g., `-t`, `-t high`, `--think=low`)
+- **Config**: `thinking_level` in profiles is the primary configuration knob
+- **Providers**: Each provider implements normalization logic to map these abstract levels to their specific API parameters
+- **Fallbacks**: If a provider supports specific numeric values (like Anthropic), users can still provide raw numbers (e.g., `--think=5000`)
+
+**Rationale**:
+- **Consistency**: Users learn one set of values that works everywhere
+- **Portability**: Profiles can be switched between providers without breaking thinking settings
+- **Simplicity**: Abstract levels are easier to reason about than raw token counts
+
+**Consequences**:
+- Anthropic users can now use "low"/"medium"/"high" instead of just numbers
+- Default token budgets for Anthropic are opinionated but reasonable
+- Advanced users can still use specific values if needed
+
+
