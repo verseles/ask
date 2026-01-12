@@ -665,3 +665,55 @@ Default profile: personal
 - Verbose output goes to stderr (doesn't pollute stdout)
 - Profiles shows all settings at a glance
 - Slightly more verbose output when using `-v`, but significantly better for debugging and testing
+
+---
+
+## ADR-021: Profile-Only Architecture
+
+**Status**: Accepted
+
+**Context**: The original configuration had three separate sections: `[default]` for default provider/model, `[providers.*]` for API keys, and `[profiles.*]` for named configurations. This created confusion about where settings should go and required complex inheritance logic.
+
+**Decision**: Simplify to a profile-only architecture where all configuration lives in `[profiles.*]`. Remove `[default]` and `[providers]` sections entirely.
+
+**New Structure**:
+```toml
+# First profile is default unless default_profile is set
+# default_profile = "work"
+
+[profiles.main]
+provider = "gemini"
+model = "gemini-3-flash-preview"
+api_key = "AIza..."
+stream = true
+
+[profiles.work]
+provider = "openai"
+model = "gpt-5"
+api_key = "sk-..."
+```
+
+**Ad-hoc Mode**: Use `-P provider -k key` for one-off queries without any config file.
+
+**Precedence**:
+1. CLI flags (`-p`, `-P`, `-m`, `-k`)
+2. Environment variables (`ASK_PROFILE`, `ASK_PROVIDER`, `ASK_*_API_KEY`)
+3. Profile config
+4. Hardcoded defaults
+
+**Mutual Exclusivity**:
+- `-p` (profile) and `-P` (provider) cannot be used together
+- `ASK_PROFILE` and `ASK_PROVIDER` cannot be set together
+
+**Rationale**:
+- Simpler mental model: everything is a profile
+- No confusion about inheritance between sections
+- Ad-hoc mode enables use without config file
+- Cleaner codebase with less merge logic
+
+**Consequences**:
+- Breaking change for existing configs using `[default]`/`[providers]`
+- Migration path: move settings into `[profiles.main]`
+- `ActiveConfig` struct holds runtime-resolved configuration
+- First profile is used by default (no need to set `default_profile` for single-profile configs)
+

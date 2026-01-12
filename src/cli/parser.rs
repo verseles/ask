@@ -358,12 +358,12 @@ fn print_help_env() {
 All configuration options can be set via environment variables with the ASK_ prefix.
 These override config file values but are overridden by CLI arguments.
 
-PROVIDER & MODEL:
-    ASK_PROVIDER              Default provider (gemini, openai, anthropic)
-    ASK_MODEL                 Default model name
-    ASK_STREAM                Enable streaming (true/false, 1/0)
+PROFILE & PROVIDER SELECTION:
+    ASK_PROFILE               Select profile (like -p), mutually exclusive with ASK_PROVIDER
+    ASK_PROVIDER              Ad-hoc mode provider (like -P), mutually exclusive with ASK_PROFILE
+    ASK_MODEL                 Override model name
 
-API KEYS:
+API KEYS (used with ASK_PROVIDER or as fallback):
     ASK_GEMINI_API_KEY        Gemini API key
     ASK_OPENAI_API_KEY        OpenAI API key
     ASK_ANTHROPIC_API_KEY     Anthropic API key
@@ -393,14 +393,17 @@ DISPLAY:
     NO_COLOR                  Disable colored output (standard env var)
 
 EXAMPLES:
-    # Set default provider and model
-    export ASK_PROVIDER=anthropic
-    export ASK_MODEL=claude-3-5-haiku
+    # Use a specific profile
+    export ASK_PROFILE=work
+
+    # Ad-hoc mode with Gemini (no config file needed)
+    export ASK_PROVIDER=gemini
+    export ASK_GEMINI_API_KEY=AIza...
 
     # Use Ollama locally via OpenAI-compatible API
+    export ASK_PROVIDER=openai
     export ASK_OPENAI_BASE_URL=http://localhost:11434/v1
     export ASK_OPENAI_API_KEY=ollama
-    export ASK_PROVIDER=openai
     export ASK_MODEL=llama3
 
     # Disable update checks

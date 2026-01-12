@@ -167,22 +167,35 @@ Configuration is loaded from multiple sources (in order of precedence):
 ### Example config.toml
 
 ```toml
-[default]
+# All configuration lives in profiles
+# First profile is used by default (set default_profile to change)
+# Switch profiles with: ask -p <profile_name>
+
+# Optional: explicitly set default profile
+# default_profile = "work"
+
+[profiles.main]
 provider = "gemini"
 model = "gemini-3-flash-preview"
-stream = true
-
-[providers.gemini]
 api_key = "YOUR_API_KEY_HERE"
-thinking_level = "low"  # optional: none, low, medium, high
+stream = true
+# thinking_level = "low"      # For Gemini 3: minimal, low, medium, high
+# web_search = false          # Enable web search by default
+# fallback = "none"           # Profile to use on errors: "any", "none", or profile name
 
-[providers.openai]
-api_key = "sk-..."
-reasoning_effort = "low"  # optional: none, minimal, low, medium, high
+# Example: Work profile with OpenAI
+# [profiles.work]
+# provider = "openai"
+# model = "gpt-5"
+# api_key = "sk-..."
+# reasoning_effort = "medium" # For o1/o3/gpt-5: none, minimal, low, medium, high
 
-[providers.anthropic]
-api_key = "sk-ant-..."
-thinking_budget = 5000  # optional: token budget for reasoning
+# Example: Local profile with Ollama
+# [profiles.local]
+# provider = "openai"
+# base_url = "http://localhost:11434/v1"
+# model = "llama3"
+# api_key = "ollama"          # Dummy key for local servers
 
 [behavior]
 auto_execute = false
@@ -214,12 +227,12 @@ All configuration options can be set via environment variables. Run `ask --help-
 <summary>Click to expand full environment variables list</summary>
 
 ```bash
-# Default settings
-ASK_PROVIDER=gemini              # Default provider
-ASK_MODEL=gemini-3-flash-preview # Default model
-ASK_STREAM=true                  # Enable streaming (true/false/1/0)
+# Profile/Provider selection
+ASK_PROFILE=main             # Select profile (like -p)
+ASK_PROVIDER=gemini          # Ad-hoc mode (like -P), mutually exclusive with ASK_PROFILE
+ASK_MODEL=gemini-3-flash     # Override model
 
-# API Keys
+# API Keys (used with ASK_PROVIDER or as fallback)
 ASK_GEMINI_API_KEY=...           # Gemini API key
 ASK_OPENAI_API_KEY=sk-...        # OpenAI API key
 ASK_ANTHROPIC_API_KEY=sk-ant-... # Anthropic API key
@@ -296,6 +309,9 @@ ask -p work how to deploy to kubernetes
 # Use local profile (Ollama)
 ask --profile=local explain this error
 
+# Ad-hoc mode: use provider without config (requires API key)
+ask -P gemini -k YOUR_KEY what is rust
+
 # Disable fallback for a single query
 ask --no-fallback -p work critical query
 
@@ -307,7 +323,7 @@ ask -v -p work what is kubernetes
 <summary>Profile Configuration Examples</summary>
 
 ```toml
-# Set default profile
+# Optional: explicitly set default profile (otherwise first profile is used)
 default_profile = "work"
 
 # Work profile with cloud provider
@@ -321,6 +337,7 @@ fallback = "personal"  # retry with personal on errors
 [profiles.personal]
 provider = "anthropic"
 model = "claude-haiku-4-5"
+api_key = "sk-ant-..."
 fallback = "none"  # don't retry with another profile
 
 # Local profile for Ollama/LM Studio
@@ -331,7 +348,7 @@ model = "llama3"
 api_key = "ollama"  # dummy key for local servers
 ```
 
-**Inheritance**: Profiles inherit from `[default]` and `[providers.*]` sections - only specify what you want to override.
+**Profile Resolution**: First profile is used by default. Set `default_profile` to explicitly choose a different default.
 
 **Fallback Options**:
 - `fallback = "profile-name"` - Use specific profile on provider errors

@@ -94,30 +94,30 @@ The parser:
 
 ### Configuration (`src/config/`)
 
-Configuration is loaded with precedence (Profile-First):
-1. CLI arguments (highest)
-2. Profile settings (selected via `-p` or `default_profile`)
-3. Environment variables (`ASK_*`)
+Configuration is loaded with precedence (Profile-Only Architecture):
+1. CLI arguments (highest): `-p`, `-P`, `-m`, `-k`
+2. Environment variables: `ASK_PROFILE`, `ASK_PROVIDER`, `ASK_MODEL`, `ASK_*_API_KEY`
+3. Profile config (`[profiles.*]`)
 4. Local config (`./ask.toml`)
 5. Home config (`~/ask.toml`)
 6. XDG config (`~/.config/ask/config.toml`)
-7. Defaults (lowest)
+7. Hardcoded defaults (lowest)
 
 Key structures:
-- `Config` - Main config container
-- `DefaultConfig` - Default provider/model settings
-- `ProviderConfig` - Per-provider API keys and URLs
-- `ProfileConfig` - Named profile settings (provider, model, api_key, base_url, fallback)
+- `Config` - Main config container with profiles, behavior, context, update, commands, aliases
+- `ActiveConfig` - Runtime-resolved config (provider, model, api_key, base_url, stream, profile_name)
+- `ProfileConfig` - Named profile settings (provider, model, api_key, base_url, stream, fallback, thinking settings)
 - `BehaviorConfig` - Execution behavior settings
 - `ContextConfig` - Context/history settings
 - `ConfigManager` - Helper struct for interactive config management
 - `aliases: HashMap<String, String>` - Command-line aliases
 
 Key functions:
+- `with_cli_overrides()` - Resolves active config from CLI args, ENV, and profiles
 - `init_config()` - Interactive configuration menu
 - `init_config_non_interactive()` - Non-interactive setup (for scripts)
 - `load_aliases_only()` - Fast alias loading for early argument expansion
-- `configure_defaults()` - Configure default provider/model
+- `configure_defaults()` - Configure default/first profile
 - `configure_profile()` - Configure a single profile
 - `manage_profiles()` - Profile management submenu
 - `show_current_config()` - Display current config formatted

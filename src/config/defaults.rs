@@ -12,12 +12,10 @@ pub const DEFAULT_TIMEOUT: u64 = 30;
 pub const DEFAULT_CONFIG_TEMPLATE: &str = r##"# ask - Configuration File
 # Place this file at: ~/.config/ask/config.toml or ~/ask.toml
 
-# Default profile to use (required when multiple profiles exist)
-default_profile = "first"
-
-# Profiles - all configuration lives in profiles
+# All configuration lives in profiles
+# First profile is used by default unless default_profile is set
 # Switch profiles with: ask -p <profile_name>
-[profiles.first]
+[profiles.main]
 provider = "gemini"           # gemini, openai, anthropic
 model = "gemini-3-flash-preview"
 api_key = "YOUR_API_KEY"
@@ -33,7 +31,7 @@ stream = true                 # Stream responses token by token
 # model = "gpt-5"
 # api_key = "sk-..."
 # reasoning_effort = "medium" # For o1/o3/gpt-5: none, minimal, low, medium, high, xhigh
-# fallback = "first"
+# fallback = "main"
 
 # Example: Local profile with Ollama
 # [profiles.local]

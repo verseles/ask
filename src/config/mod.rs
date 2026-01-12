@@ -16,11 +16,14 @@ use std::collections::HashMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Config {
+    /// Named profiles - all provider/model config lives here
     #[serde(default)]
-    pub default: DefaultConfig,
+    pub profiles: HashMap<String, ProfileConfig>,
 
+    /// Default profile name (only set when user explicitly chooses)
+    /// If not set, first profile is used automatically
     #[serde(default)]
-    pub providers: HashMap<String, ProviderConfig>,
+    pub default_profile: Option<String>,
 
     #[serde(default)]
     pub behavior: BehaviorConfig,
@@ -34,42 +37,23 @@ pub struct Config {
     #[serde(default)]
     pub commands: HashMap<String, CustomCommand>,
 
-    /// Named profiles for different configurations
-    #[serde(default)]
-    pub profiles: HashMap<String, ProfileConfig>,
-
-    /// Default profile name (if not set, uses first profile or base config)
-    #[serde(default)]
-    pub default_profile: Option<String>,
-
     /// Command-line aliases (e.g., "q" = "--raw --no-color")
     #[serde(default)]
     pub aliases: HashMap<String, String>,
+
+    /// Active profile data (set after profile resolution, not from TOML)
+    #[serde(skip)]
+    pub active: ActiveConfig,
 }
 
-/// Default provider and model settings
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DefaultConfig {
-    #[serde(default = "default_provider")]
+#[derive(Debug, Clone, Default)]
+pub struct ActiveConfig {
     pub provider: String,
-
-    #[serde(default = "default_model")]
     pub model: String,
-
-    #[serde(default = "default_true")]
-    pub stream: bool,
-}
-
-/// Provider-specific configuration
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct ProviderConfig {
     pub api_key: Option<String>,
-
-    #[serde(default)]
     pub base_url: Option<String>,
-
-    #[serde(default)]
-    pub model: Option<String>,
+    pub stream: bool,
+    pub profile_name: Option<String>,
 }
 
 /// Behavior settings
@@ -196,10 +180,6 @@ fn default_provider() -> String {
     "gemini".to_string()
 }
 
-fn default_model() -> String {
-    "gemini-3-flash-preview".to_string()
-}
-
 fn default_true() -> bool {
     true
 }
@@ -222,16 +202,6 @@ fn default_check_interval() -> u64 {
 
 fn default_channel() -> String {
     "stable".to_string()
-}
-
-impl Default for DefaultConfig {
-    fn default() -> Self {
-        Self {
-            provider: default_provider(),
-            model: default_model(),
-            stream: true,
-        }
-    }
 }
 
 impl Default for BehaviorConfig {
@@ -266,76 +236,104 @@ impl Default for UpdateConfig {
 }
 
 impl Config {
-    /// Apply CLI argument overrides and profile selection
     pub fn with_cli_overrides(mut self, args: &Args) -> Self {
-        // First apply profile if specified (CLI > default_profile > first profile)
+        let ad_hoc_provider = args
+            .provider
+            .clone()
+            .or_else(|| std::env::var("ASK_PROVIDER").ok());
+
+        if let Some(ref provider) = ad_hoc_provider {
+            self.active = ActiveConfig {
+                provider: provider.clone(),
+                model: args
+                    .model
+                    .clone()
+                    .or_else(|| std::env::var("ASK_MODEL").ok())
+                    .unwrap_or_else(|| self.default_model_for_provider(provider)),
+                api_key: args.api_key.clone().or_else(|| self.env_api_key(provider)),
+                base_url: self.env_base_url(provider),
+                stream: true,
+                profile_name: None,
+            };
+            return self;
+        }
+
+        // Profile mode: resolve profile (CLI -p > ENV > default_profile > first)
         let profile_name = args
             .profile
             .clone()
+            .or_else(|| std::env::var("ASK_PROFILE").ok())
             .or_else(|| self.default_profile.clone())
             .or_else(|| self.profiles.keys().next().cloned());
 
         if let Some(ref name) = profile_name {
             if let Some(profile) = self.profiles.get(name) {
-                self = self.apply_profile(profile.clone());
+                let provider = profile.provider.clone().unwrap_or_else(default_provider);
+                self.active = ActiveConfig {
+                    provider: provider.clone(),
+                    model: args
+                        .model
+                        .clone()
+                        .or_else(|| profile.model.clone())
+                        .unwrap_or_else(|| self.default_model_for_provider(&provider)),
+                    api_key: profile
+                        .api_key
+                        .clone()
+                        .or_else(|| self.env_api_key(&provider)),
+                    base_url: profile
+                        .base_url
+                        .clone()
+                        .or_else(|| self.env_base_url(&provider)),
+                    stream: profile.stream.unwrap_or(true),
+                    profile_name: Some(name.clone()),
+                };
             }
         }
 
-        // Then apply direct CLI overrides (these take precedence over profile)
-        if let Some(ref provider) = args.provider {
-            self.default.provider = provider.clone();
-        }
-        if let Some(ref model) = args.model {
-            self.default.model = model.clone();
-        }
         self
     }
 
-    /// Apply profile settings over current config (inheritance)
-    fn apply_profile(&mut self, profile: ProfileConfig) -> Self {
-        if let Some(provider) = profile.provider {
-            self.default.provider = provider;
+    fn default_model_for_provider(&self, provider: &str) -> String {
+        match provider {
+            "openai" => defaults::DEFAULT_OPENAI_MODEL.to_string(),
+            "anthropic" => defaults::DEFAULT_ANTHROPIC_MODEL.to_string(),
+            _ => defaults::DEFAULT_MODEL.to_string(),
         }
-        if let Some(model) = profile.model {
-            self.default.model = model;
-        }
-        if let Some(api_key) = profile.api_key {
-            let provider_name = self.default.provider.clone();
-            self.providers.entry(provider_name).or_default().api_key = Some(api_key);
-        }
-        if let Some(base_url) = profile.base_url {
-            let provider_name = self.default.provider.clone();
-            self.providers.entry(provider_name).or_default().base_url = Some(base_url);
-        }
-        self.clone()
     }
 
-    /// Get active profile name (if any)
+    fn env_api_key(&self, provider: &str) -> Option<String> {
+        let env_key = format!("ASK_{}_API_KEY", provider.to_uppercase());
+        std::env::var(&env_key).ok()
+    }
+
+    fn env_base_url(&self, provider: &str) -> Option<String> {
+        let env_key = format!("ASK_{}_BASE_URL", provider.to_uppercase());
+        std::env::var(&env_key).ok()
+    }
+
     pub fn active_profile(&self, args: &Args) -> Option<String> {
-        // 1. CLI argument takes precedence
-        if let Some(ref profile) = args.profile {
-            return Some(profile.clone());
+        if args.provider.is_some() {
+            return None; // Ad-hoc mode has no profile
         }
 
-        // 2. If only one profile exists, use it automatically
-        if self.profiles.len() == 1 {
-            return self.profiles.keys().next().cloned();
-        }
-
-        // 3. Use configured default_profile
-        if let Some(ref default) = self.default_profile {
-            if self.profiles.contains_key(default) {
-                return Some(default.clone());
-            }
-        }
-
-        // 4. Fall back to first available profile
-        self.profiles.keys().next().cloned()
+        args.profile
+            .clone()
+            .or_else(|| std::env::var("ASK_PROFILE").ok())
+            .or_else(|| {
+                if self.profiles.len() == 1 {
+                    self.profiles.keys().next().cloned()
+                } else {
+                    None
+                }
+            })
+            .or_else(|| {
+                self.default_profile
+                    .clone()
+                    .filter(|dp| self.profiles.contains_key(dp))
+            })
+            .or_else(|| self.profiles.keys().next().cloned())
     }
 
-    /// Get fallback profile for the active profile
-    /// Returns None if fallback = "none", Some(name) for specific profile,
-    /// or first available profile for fallback = "any" or default behavior
     pub fn fallback_profile(&self, active_profile: &str) -> Option<String> {
         let profile = self.profiles.get(active_profile)?;
 
@@ -361,55 +359,20 @@ impl Config {
         }
     }
 
-    /// Get the active provider name
     pub fn active_provider(&self) -> &str {
-        &self.default.provider
+        &self.active.provider
     }
 
-    /// Get the active model
     pub fn active_model(&self) -> &str {
-        &self.default.model
+        &self.active.model
     }
 
-    /// Get API key for the active provider
     pub fn api_key(&self) -> Option<String> {
-        let provider = self.active_provider();
-
-        // First check environment variable
-        let env_key = format!("ASK_{}_API_KEY", provider.to_uppercase());
-        if let Ok(key) = std::env::var(&env_key) {
-            return Some(key);
-        }
-
-        // Then check providers config (which may have been set from profile)
-        if let Some(key) = self.providers.get(provider).and_then(|p| p.api_key.clone()) {
-            return Some(key);
-        }
-
-        // Finally check profile directly
-        if let Some(profile_name) = &self.default_profile {
-            if let Some(profile) = self.profiles.get(profile_name) {
-                if let Some(ref key) = profile.api_key {
-                    return Some(key.clone());
-                }
-            }
-        }
-
-        // Check first profile
-        for profile in self.profiles.values() {
-            if let Some(ref key) = profile.api_key {
-                return Some(key.clone());
-            }
-        }
-
-        None
+        self.active.api_key.clone()
     }
 
-    /// Get base URL for the active provider
     pub fn base_url(&self) -> Option<String> {
-        self.providers
-            .get(self.active_provider())
-            .and_then(|p| p.base_url.clone())
+        self.active.base_url.clone()
     }
 
     /// Get context storage path
@@ -425,20 +388,18 @@ impl Config {
         }
     }
 
-    /// Get web_search setting from active profile
     pub fn get_profile_web_search(&self) -> bool {
-        for profile in self.profiles.values() {
-            if let Some(web_search) = profile.web_search {
-                return web_search;
+        if let Some(ref name) = self.active.profile_name {
+            if let Some(profile) = self.profiles.get(name) {
+                return profile.web_search.unwrap_or(false);
             }
         }
         false
     }
 
-    /// Get domain filters from active profile (Anthropic)
     pub fn get_profile_domain_filters(&self) -> (Option<Vec<String>>, Option<Vec<String>>) {
-        for profile in self.profiles.values() {
-            if profile.allowed_domains.is_some() || profile.blocked_domains.is_some() {
+        if let Some(ref name) = self.active.profile_name {
+            if let Some(profile) = self.profiles.get(name) {
                 return (
                     profile.allowed_domains.clone(),
                     profile.blocked_domains.clone(),
@@ -449,27 +410,27 @@ impl Config {
     }
 
     pub fn get_thinking_level(&self) -> Option<String> {
-        for profile in self.profiles.values() {
-            if let Some(ref level) = profile.thinking_level {
-                return Some(level.clone());
+        if let Some(ref name) = self.active.profile_name {
+            if let Some(profile) = self.profiles.get(name) {
+                return profile.thinking_level.clone();
             }
         }
         None
     }
 
     pub fn get_reasoning_effort(&self) -> Option<String> {
-        for profile in self.profiles.values() {
-            if let Some(ref effort) = profile.reasoning_effort {
-                return Some(effort.clone());
+        if let Some(ref name) = self.active.profile_name {
+            if let Some(profile) = self.profiles.get(name) {
+                return profile.reasoning_effort.clone();
             }
         }
         None
     }
 
     pub fn get_thinking_budget(&self) -> Option<i64> {
-        for profile in self.profiles.values() {
-            if let Some(budget) = profile.thinking_budget {
-                return Some(budget);
+        if let Some(ref name) = self.active.profile_name {
+            if let Some(profile) = self.profiles.get(name) {
+                return profile.thinking_budget;
             }
         }
         None
@@ -607,12 +568,25 @@ impl ConfigManager {
     }
 }
 
-/// Configure default provider and model
+/// Configure default provider and model (edits the default/first profile)
 fn configure_defaults(mgr: &ConfigManager) -> Result<(String, String, String, bool, String, bool)> {
-    let existing_provider = mgr.get_str(&["default", "provider"]);
-    let existing_model = mgr.get_str(&["default", "model"]);
-    let existing_stream = mgr.get_bool(&["default", "stream"], true);
-    let existing_web_search = mgr.get_bool(&["default", "web_search"], false);
+    let profiles = mgr.get_profiles();
+    let default_profile = mgr
+        .get_str(&["default_profile"])
+        .or_else(|| profiles.first().cloned());
+
+    let profile_name = default_profile.unwrap_or_else(|| "main".to_string());
+
+    let existing_provider = mgr.get_str(&["profiles", &profile_name, "provider"]);
+    let existing_model = mgr.get_str(&["profiles", &profile_name, "model"]);
+    let existing_stream = mgr
+        .get_str(&["profiles", &profile_name, "stream"])
+        .map(|s| s == "true")
+        .unwrap_or(true);
+    let existing_web_search = mgr
+        .get_str(&["profiles", &profile_name, "web_search"])
+        .map(|s| s == "true")
+        .unwrap_or(false);
 
     let providers = vec!["Gemini (recommended)", "OpenAI", "Anthropic Claude"];
     let default_provider_idx = match existing_provider.as_deref() {
@@ -650,7 +624,7 @@ fn configure_defaults(mgr: &ConfigManager) -> Result<(String, String, String, bo
     };
 
     let existing_api_key = mgr
-        .get_str(&["providers", provider, "api_key"])
+        .get_str(&["profiles", &profile_name, "api_key"])
         .unwrap_or_default();
 
     let api_key: String = if !existing_api_key.is_empty() {
@@ -906,114 +880,79 @@ fn show_current_config(mgr: &ConfigManager) {
         return;
     }
 
-    let provider = mgr
-        .get_str(&["default", "provider"])
-        .unwrap_or_else(|| "gemini".to_string());
-    let model = mgr
-        .get_str(&["default", "model"])
-        .unwrap_or_else(|| "not set".to_string());
-    let stream = mgr.get_bool(&["default", "stream"], true);
-    let web_search = mgr.get_bool(&["default", "web_search"], false);
     let default_profile = mgr.get_str(&["default_profile"]);
-    let fallback = mgr.get_str(&["default", "default_fallback"]);
-
-    println!();
-    println!("{}", "[default]".green().bold());
-    println!(
-        "  {} {}",
-        "provider:".yellow(),
-        provider.bright_white().bold()
-    );
-    println!("  {} {}", "model:".yellow(), model.cyan());
-    println!(
-        "  {} {}",
-        "stream:".yellow(),
-        if stream {
-            "true".green()
-        } else {
-            "false".red()
-        }
-    );
-    println!(
-        "  {} {}",
-        "web_search:".yellow(),
-        if web_search {
-            "true".green()
-        } else {
-            "false".bright_black()
-        }
-    );
-    if let Some(dp) = default_profile {
-        println!("  {} {}", "default_profile:".yellow(), dp.cyan().bold());
-    }
-    if let Some(fb) = fallback {
-        println!("  {} {}", "default_fallback:".yellow(), fb.bright_black());
-    }
-
-    println!();
-    println!("{}", "[providers]".green().bold());
-    for p in &["gemini", "openai", "anthropic"] {
-        let key_exists = mgr.get_str(&["providers", p, "api_key"]).is_some();
-        let thinking = match *p {
-            "gemini" => mgr.get_str(&["providers", p, "thinking_level"]),
-            "openai" => mgr.get_str(&["providers", p, "reasoning_effort"]),
-            "anthropic" => mgr
-                .get_str(&["providers", p, "thinking_budget"])
-                .map(|v| format!("{} tokens", v)),
-            _ => None,
-        };
-
-        if key_exists {
-            let key = mgr.get_str(&["providers", p, "api_key"]).unwrap();
-            let thinking_str = thinking
-                .map(|t| format!(" [think: {}]", t).bright_black().to_string())
-                .unwrap_or_default();
-            println!(
-                "  {} {} {}{}",
-                p.bright_white(),
-                "✓".green(),
-                mask_api_key(&key).bright_black(),
-                thinking_str
-            );
-        } else {
-            println!("  {} {}", p.bright_black(), "✗".red());
-        }
-    }
-
     let profiles = mgr.get_profiles();
+
+    if let Some(dp) = &default_profile {
+        println!();
+        println!(
+            "{} {}",
+            "default_profile =".yellow(),
+            format!("\"{}\"", dp).cyan().bold()
+        );
+    } else if !profiles.is_empty() {
+        println!();
+        println!(
+            "{}",
+            "(First profile will be used by default)".bright_black()
+        );
+    }
+
     if !profiles.is_empty() {
         println!();
         println!("{}", "[profiles]".green().bold());
         for name in &profiles {
+            let is_default = default_profile.as_ref().map(|d| d == name).unwrap_or(false)
+                || (default_profile.is_none()
+                    && profiles.first().map(|f| f == name).unwrap_or(false));
+
             let p_provider = mgr
                 .get_str(&["profiles", name, "provider"])
-                .unwrap_or_else(|| "inherited".to_string());
+                .unwrap_or_else(|| "gemini".to_string());
             let p_model = mgr
                 .get_str(&["profiles", name, "model"])
-                .unwrap_or_else(|| "inherited".to_string());
-            let p_fallback = mgr
-                .get_str(&["profiles", name, "fallback"])
                 .unwrap_or_else(|| "default".to_string());
+            let p_has_key = mgr.get_str(&["profiles", name, "api_key"]).is_some();
+            let p_fallback = mgr.get_str(&["profiles", name, "fallback"]);
             let p_web_search = mgr
                 .get_str(&["profiles", name, "web_search"])
                 .map(|v| v == "true")
                 .unwrap_or(false);
 
+            let default_marker = if is_default {
+                " (default)".green().bold().to_string()
+            } else {
+                String::new()
+            };
+            let key_indicator = if p_has_key {
+                "✓".green().to_string()
+            } else {
+                "✗".red().to_string()
+            };
             let web_indicator = if p_web_search {
                 " [search]".cyan().to_string()
             } else {
                 String::new()
             };
+            let fallback_str = p_fallback
+                .map(|f| format!(" (fallback: {})", f).bright_black().to_string())
+                .unwrap_or_default();
 
             println!(
-                "  {} {} {} {}{}",
+                "  {}{} {} {} {}{}{}",
                 name.cyan().bold(),
+                default_marker,
                 p_provider.bright_white(),
                 p_model.bright_black(),
-                format!("(fallback: {})", p_fallback).bright_black(),
+                key_indicator,
+                fallback_str,
                 web_indicator
             );
         }
+    } else {
+        println!();
+        println!("{}", "No profiles configured.".yellow());
+        println!("Run 'ask init' to create a profile.");
     }
 
     let commands: Vec<String> = mgr
@@ -1138,6 +1077,14 @@ fn manage_profiles(mgr: &mut ConfigManager) -> Result<()> {
                                 table.remove(profile_name);
                             }
                         }
+                        // If deleted profile was the default, remove default_profile setting
+                        if let Some(current_default) = doc.get("default_profile") {
+                            if current_default.as_str() == Some(profile_name) {
+                                if let Some(table) = doc.as_table_mut() {
+                                    table.remove("default_profile");
+                                }
+                            }
+                        }
                         std::fs::write(&mgr.config_path, toml::to_string_pretty(&doc)?)?;
                         mgr.reload()?;
                         println!("{}", "Profile deleted!".green());
@@ -1151,35 +1098,46 @@ fn manage_profiles(mgr: &mut ConfigManager) -> Result<()> {
                     continue;
                 }
 
-                let current_default = mgr.get_str(&["default", "default_profile"]);
+                let current_default = mgr.get_str(&["default_profile"]);
                 let default_idx = current_default
                     .as_ref()
                     .and_then(|d| profiles.iter().position(|p| p == d))
                     .unwrap_or(0);
 
-                let idx = numbered_select("Select default profile", &profiles, default_idx)?;
+                let mut items: Vec<String> = profiles.clone();
+                items.push("Use first profile (clear setting)".to_string());
 
-                let profile_name = &profiles[idx];
+                let idx = numbered_select("Select default profile", &items, default_idx)?;
 
                 let content = std::fs::read_to_string(&mgr.config_path).unwrap_or_default();
                 let mut doc: toml::Value = toml::from_str(&content)?;
 
-                if let Some(default_section) = doc.get_mut("default") {
-                    if let Some(table) = default_section.as_table_mut() {
+                if idx < profiles.len() {
+                    let profile_name = &profiles[idx];
+                    if let Some(table) = doc.as_table_mut() {
                         table.insert(
                             "default_profile".to_string(),
                             toml::Value::String(profile_name.clone()),
                         );
                     }
+                    std::fs::write(&mgr.config_path, toml::to_string_pretty(&doc)?)?;
+                    mgr.reload()?;
+                    println!(
+                        "{} {}",
+                        "Default profile set to:".green(),
+                        profile_name.cyan()
+                    );
+                } else {
+                    if let Some(table) = doc.as_table_mut() {
+                        table.remove("default_profile");
+                    }
+                    std::fs::write(&mgr.config_path, toml::to_string_pretty(&doc)?)?;
+                    mgr.reload()?;
+                    println!(
+                        "{}",
+                        "Default profile cleared (first profile will be used)".green()
+                    );
                 }
-
-                std::fs::write(&mgr.config_path, toml::to_string_pretty(&doc)?)?;
-                mgr.reload()?;
-                println!(
-                    "{} {}",
-                    "Default profile set to:".green(),
-                    profile_name.cyan()
-                );
             }
             _ => {}
         }
@@ -1237,12 +1195,10 @@ pub async fn init_config() -> Result<()> {
                         r#"# ask configuration
 # Generated by 'ask init'
 
-# Default profile to use
-default_profile = "first"
-
 # All configuration lives in profiles
+# First profile is used by default (set default_profile to change)
 # Switch profiles with: ask -p <profile_name>
-[profiles.first]
+[profiles.main]
 provider = "{provider}"
 model = "{model}"
 api_key = "{api_key}"
@@ -1281,7 +1237,7 @@ channel = "stable"
                         mgr.config_path.display().to_string().bright_white()
                     );
                     println!();
-                    println!("Profile '{}' created and set as default!", "first".cyan());
+                    println!("Profile '{}' created!", "main".cyan());
                     println!("Try: {}", "ask how to list files".cyan());
                 }
                 1 => {
@@ -1301,63 +1257,66 @@ channel = "stable"
                     let (provider, model, api_key, stream, thinking_config, web_search) =
                         configure_defaults(&mgr)?;
 
+                    let profiles = mgr.get_profiles();
+                    let default_profile_name = mgr
+                        .get_str(&["default_profile"])
+                        .or_else(|| profiles.first().cloned())
+                        .unwrap_or_else(|| "main".to_string());
+
                     let content = std::fs::read_to_string(&mgr.config_path).unwrap_or_default();
                     let mut doc: toml::Value = toml::from_str(&content)?;
 
-                    if let Some(default_section) = doc.get_mut("default") {
-                        if let Some(table) = default_section.as_table_mut() {
-                            table.insert(
-                                "provider".to_string(),
-                                toml::Value::String(provider.clone()),
-                            );
-                            table.insert("model".to_string(), toml::Value::String(model.clone()));
-                            table.insert("stream".to_string(), toml::Value::Boolean(stream));
-                            table
-                                .insert("web_search".to_string(), toml::Value::Boolean(web_search));
-                        }
-                    }
+                    let profiles_section = doc
+                        .as_table_mut()
+                        .unwrap()
+                        .entry("profiles".to_string())
+                        .or_insert(toml::Value::Table(toml::map::Map::new()));
 
-                    if let Some(providers_section) = doc.get_mut("providers") {
-                        if let Some(table) = providers_section.as_table_mut() {
-                            let provider_table = table
-                                .entry(provider.clone())
-                                .or_insert(toml::Value::Table(toml::map::Map::new()));
-                            if let Some(pt) = provider_table.as_table_mut() {
-                                pt.insert("api_key".to_string(), toml::Value::String(api_key));
-                                if !thinking_config.is_empty() {
-                                    if thinking_config.contains("thinking_budget") {
-                                        if let Some(val) = thinking_config
-                                            .split('=')
-                                            .nth(1)
-                                            .and_then(|s| s.trim().parse::<i64>().ok())
-                                        {
-                                            pt.insert(
-                                                "thinking_budget".to_string(),
-                                                toml::Value::Integer(val),
-                                            );
-                                        }
-                                    } else if thinking_config.contains("thinking_level") {
-                                        if let Some(val) = thinking_config
-                                            .split('=')
-                                            .nth(1)
-                                            .map(|s| s.trim().trim_matches('"').to_string())
-                                        {
-                                            pt.insert(
-                                                "thinking_level".to_string(),
-                                                toml::Value::String(val),
-                                            );
-                                        }
-                                    } else if thinking_config.contains("reasoning_effort") {
-                                        if let Some(val) = thinking_config
-                                            .split('=')
-                                            .nth(1)
-                                            .map(|s| s.trim().trim_matches('"').to_string())
-                                        {
-                                            pt.insert(
-                                                "reasoning_effort".to_string(),
-                                                toml::Value::String(val),
-                                            );
-                                        }
+                    if let Some(profiles_table) = profiles_section.as_table_mut() {
+                        let profile_table = profiles_table
+                            .entry(default_profile_name.clone())
+                            .or_insert(toml::Value::Table(toml::map::Map::new()));
+
+                        if let Some(pt) = profile_table.as_table_mut() {
+                            pt.insert("provider".to_string(), toml::Value::String(provider));
+                            pt.insert("model".to_string(), toml::Value::String(model));
+                            pt.insert("api_key".to_string(), toml::Value::String(api_key));
+                            pt.insert("stream".to_string(), toml::Value::Boolean(stream));
+                            pt.insert("web_search".to_string(), toml::Value::Boolean(web_search));
+
+                            if !thinking_config.is_empty() {
+                                if thinking_config.contains("thinking_budget") {
+                                    if let Some(val) = thinking_config
+                                        .split('=')
+                                        .nth(1)
+                                        .and_then(|s| s.trim().parse::<i64>().ok())
+                                    {
+                                        pt.insert(
+                                            "thinking_budget".to_string(),
+                                            toml::Value::Integer(val),
+                                        );
+                                    }
+                                } else if thinking_config.contains("thinking_level") {
+                                    if let Some(val) = thinking_config
+                                        .split('=')
+                                        .nth(1)
+                                        .map(|s| s.trim().trim_matches('"').to_string())
+                                    {
+                                        pt.insert(
+                                            "thinking_level".to_string(),
+                                            toml::Value::String(val),
+                                        );
+                                    }
+                                } else if thinking_config.contains("reasoning_effort") {
+                                    if let Some(val) = thinking_config
+                                        .split('=')
+                                        .nth(1)
+                                        .map(|s| s.trim().trim_matches('"').to_string())
+                                    {
+                                        pt.insert(
+                                            "reasoning_effort".to_string(),
+                                            toml::Value::String(val),
+                                        );
                                     }
                                 }
                             }
@@ -1366,29 +1325,38 @@ channel = "stable"
 
                     std::fs::write(&mgr.config_path, toml::to_string_pretty(&doc)?)?;
                     mgr.reload()?;
-                    println!("{}", "Default settings updated!".green());
+                    println!(
+                        "{} {}",
+                        "Profile".green(),
+                        format!("'{}' updated!", default_profile_name).green()
+                    );
                 }
                 2 => {
                     mgr.backup()?;
 
-                    let providers_list = vec!["Gemini", "OpenAI", "Anthropic Claude", "Back"];
-                    let idx = numbered_select("Which provider API key?", &providers_list, 0)?;
+                    let profiles = mgr.get_profiles();
+                    if profiles.is_empty() {
+                        println!(
+                            "{}",
+                            "No profiles configured. Create a profile first.".yellow()
+                        );
+                        continue;
+                    }
 
-                    if idx < 3 {
-                        let provider = match idx {
-                            0 => "gemini",
-                            1 => "openai",
-                            2 => "anthropic",
-                            _ => continue,
-                        };
+                    let mut items: Vec<String> = profiles.clone();
+                    items.push("Cancel".to_string());
 
+                    let idx = numbered_select("Select profile to update API key", &items, 0)?;
+
+                    if idx < profiles.len() {
+                        let profile_name = &profiles[idx];
                         let existing_key = mgr
-                            .get_str(&["providers", provider, "api_key"])
+                            .get_str(&["profiles", profile_name, "api_key"])
                             .unwrap_or_default();
 
                         let new_key: String = if !existing_key.is_empty() {
                             let masked = mask_api_key(&existing_key);
-                            let question = Question::input("provider_api_key")
+                            let question = Question::input("profile_api_key")
                                 .message(format!("API key [{}] (Enter to keep)", masked))
                                 .build();
                             requestty::prompt_one(question)?
@@ -1396,8 +1364,8 @@ channel = "stable"
                                 .unwrap_or_default()
                                 .to_string()
                         } else {
-                            let question = Question::input("provider_api_key")
-                                .message(format!("{} API key", provider))
+                            let question = Question::input("profile_api_key")
+                                .message("API key")
                                 .build();
                             requestty::prompt_one(question)?
                                 .as_string()
@@ -1416,32 +1384,26 @@ channel = "stable"
                                 std::fs::read_to_string(&mgr.config_path).unwrap_or_default();
                             let mut doc: toml::Value = toml::from_str(&content)?;
 
-                            if doc.get("providers").is_none() {
-                                if let Some(table) = doc.as_table_mut() {
-                                    table.insert(
-                                        "providers".to_string(),
-                                        toml::Value::Table(toml::map::Map::new()),
-                                    );
-                                }
-                            }
-
-                            if let Some(providers_section) = doc.get_mut("providers") {
-                                if let Some(table) = providers_section.as_table_mut() {
-                                    let provider_table = table
-                                        .entry(provider.to_string())
-                                        .or_insert(toml::Value::Table(toml::map::Map::new()));
-                                    if let Some(pt) = provider_table.as_table_mut() {
-                                        pt.insert(
-                                            "api_key".to_string(),
-                                            toml::Value::String(final_key),
-                                        );
+                            if let Some(profiles_section) = doc.get_mut("profiles") {
+                                if let Some(table) = profiles_section.as_table_mut() {
+                                    if let Some(profile_table) = table.get_mut(profile_name) {
+                                        if let Some(pt) = profile_table.as_table_mut() {
+                                            pt.insert(
+                                                "api_key".to_string(),
+                                                toml::Value::String(final_key),
+                                            );
+                                        }
                                     }
                                 }
                             }
 
                             std::fs::write(&mgr.config_path, toml::to_string_pretty(&doc)?)?;
                             mgr.reload()?;
-                            println!("{}", "API key updated!".green());
+                            println!(
+                                "{} {}",
+                                "API key updated for profile".green(),
+                                profile_name.cyan()
+                            );
                         }
                     }
                 }
@@ -1590,29 +1552,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_apply_profile_inheritance() {
-        let mut config = Config::default();
-        config.default.provider = "gemini".to_string();
-        config.default.model = "gemini-flash".to_string();
-
-        let profile = ProfileConfig {
-            provider: Some("anthropic".to_string()),
-            model: None, // Should keep default
-            api_key: Some("test-key".to_string()),
-            ..Default::default()
-        };
-
-        let new_config = config.apply_profile(profile);
-
-        assert_eq!(new_config.default.provider, "anthropic");
-        assert_eq!(new_config.default.model, "gemini-flash");
-        assert_eq!(
-            new_config.providers.get("anthropic").unwrap().api_key,
-            Some("test-key".to_string())
-        );
-    }
-
-    #[test]
     fn test_cli_overrides_precedence() {
         let mut config = Config::default();
         config.profiles.insert(
@@ -1620,93 +1559,49 @@ mod tests {
             ProfileConfig {
                 provider: Some("openai".to_string()),
                 model: Some("gpt-4".to_string()),
+                api_key: Some("test-key".to_string()),
                 ..Default::default()
             },
         );
 
-        // Case 1: Just profile
-        let args_profile = Args {
+        let args = Args {
             profile: Some("work".to_string()),
             ..Default::default()
         };
-        let cfg1 = config.clone().with_cli_overrides(&args_profile);
-        assert_eq!(cfg1.default.provider, "openai");
-        assert_eq!(cfg1.default.model, "gpt-4");
+        let cfg = config.clone().with_cli_overrides(&args);
+        assert_eq!(cfg.active_provider(), "openai");
+        assert_eq!(cfg.active_model(), "gpt-4");
 
-        // Case 2: Profile + Provider Override
-        let args_override = Args {
-            profile: Some("work".to_string()),
-            provider: Some("anthropic".to_string()),
-            ..Default::default()
-        };
-        let cfg2 = config.clone().with_cli_overrides(&args_override);
-        assert_eq!(cfg2.default.provider, "anthropic"); // CLI wins
-        assert_eq!(cfg2.default.model, "gpt-4"); // Profile keeps model
-
-        // Case 3: Profile + Model Override
         let args_model = Args {
             profile: Some("work".to_string()),
             model: Some("claude-3".to_string()),
             ..Default::default()
         };
-        let cfg3 = config.clone().with_cli_overrides(&args_model);
-        assert_eq!(cfg3.default.provider, "openai");
-        assert_eq!(cfg3.default.model, "claude-3"); // CLI wins
+        let cfg2 = config.clone().with_cli_overrides(&args_model);
+        assert_eq!(cfg2.active_provider(), "openai");
+        assert_eq!(cfg2.active_model(), "claude-3");
     }
 
     #[test]
     fn test_thinking_config_logic() {
         let mut config = Config::default();
-
-        // Gemini Thinking
-        config.default.provider = "gemini".to_string();
         config.profiles.insert(
             "thinker".to_string(),
             ProfileConfig {
+                provider: Some("gemini".to_string()),
                 thinking_level: Some("high".to_string()),
                 ..Default::default()
             },
         );
-        let cfg_gem = config
-            .clone()
-            .apply_profile(config.profiles.get("thinker").unwrap().clone());
-        let (enabled, value) = cfg_gem.get_thinking_config();
+
+        let args = Args {
+            profile: Some("thinker".to_string()),
+            ..Default::default()
+        };
+        let cfg = config.with_cli_overrides(&args);
+        let (enabled, value) = cfg.get_thinking_config();
         assert!(enabled);
         assert_eq!(value, Some("high".to_string()));
-
-        // Anthropic Thinking
-        let mut config_anth = Config::default();
-        config_anth.default.provider = "anthropic".to_string();
-        config_anth.profiles.insert(
-            "thinker".to_string(),
-            ProfileConfig {
-                thinking_budget: Some(2048),
-                ..Default::default()
-            },
-        );
-        let cfg_anth = config_anth
-            .clone()
-            .apply_profile(config_anth.profiles.get("thinker").unwrap().clone());
-        let (enabled, value) = cfg_anth.get_thinking_config();
-        assert!(enabled);
-        assert_eq!(value, Some("2048".to_string()));
-
-        // OpenAI Reasoning
-        let mut config_oai = Config::default();
-        config_oai.default.provider = "openai".to_string();
-        config_oai.profiles.insert(
-            "thinker".to_string(),
-            ProfileConfig {
-                reasoning_effort: Some("medium".to_string()),
-                ..Default::default()
-            },
-        );
-        let cfg_oai = config_oai
-            .clone()
-            .apply_profile(config_oai.profiles.get("thinker").unwrap().clone());
-        let (enabled, value) = cfg_oai.get_thinking_config();
-        assert!(enabled);
-        assert_eq!(value, Some("medium".to_string()));
     }
 
     #[test]
@@ -1734,13 +1629,9 @@ mod tests {
             },
         );
 
-        // Specific fallback
         assert_eq!(config.fallback_profile("p1"), Some("p2".to_string()));
-
-        // None fallback
         assert_eq!(config.fallback_profile("p2"), None);
 
-        // Any fallback (should return another profile, e.g., p1 or p2)
         let fallback_any = config.fallback_profile("p3");
         assert!(fallback_any.is_some());
         assert_ne!(fallback_any.unwrap(), "p3");

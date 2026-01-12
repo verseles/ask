@@ -90,6 +90,24 @@ pub async fn run(update_notification: Option<crate::update::UpdateNotification>)
         return Ok(());
     }
 
+    if args.profile.is_some() && args.provider.is_some() {
+        anyhow::bail!(
+            "Cannot use --profile (-p) and --provider (-P) together.\n\
+             Use --profile to select a configured profile, or\n\
+             Use --provider for ad-hoc mode (requires --api-key or ASK_{{PROVIDER}}_API_KEY)"
+        );
+    }
+
+    let env_profile = std::env::var("ASK_PROFILE").ok();
+    let env_provider = std::env::var("ASK_PROVIDER").ok();
+    if env_profile.is_some() && env_provider.is_some() {
+        anyhow::bail!(
+            "Cannot use ASK_PROFILE and ASK_PROVIDER together.\n\
+             Use ASK_PROFILE to select a configured profile, or\n\
+             Use ASK_PROVIDER for ad-hoc mode"
+        );
+    }
+
     // Load configuration
     let config = Config::load()?;
     let config = config.with_cli_overrides(&args);
@@ -139,6 +157,19 @@ pub async fn run(update_notification: Option<crate::update::UpdateNotification>)
         println!("Run 'ask init' to configure your API keys.");
         println!("Run 'ask --help' for more options.");
         return Ok(());
+    }
+
+    let ad_hoc_provider = args
+        .provider
+        .clone()
+        .or_else(|| std::env::var("ASK_PROVIDER").ok());
+    if ad_hoc_provider.is_some() && config.active.api_key.is_none() {
+        let provider = ad_hoc_provider.unwrap();
+        anyhow::bail!(
+            "Ad-hoc mode requires an API key.\n\
+             Provide --api-key (-k) or set ASK_{}_API_KEY environment variable",
+            provider.to_uppercase()
+        );
     }
 
     execute_with_fallback(&config, &args).await
@@ -194,10 +225,10 @@ async fn execute_with_fallback(config: &Config, args: &Args) -> Result<()> {
     let config = if let Some(ref cmd) = custom_cmd {
         let mut cfg = config.clone();
         if let Some(ref provider) = cmd.provider {
-            cfg.default.provider = provider.clone();
+            cfg.active.provider = provider.clone();
         }
         if let Some(ref model) = cmd.model {
-            cfg.default.model = model.clone();
+            cfg.active.model = model.clone();
         }
         cfg
     } else {
@@ -258,10 +289,10 @@ async fn try_with_fallback(
         let fallback_config = if let Some(cmd) = custom_cmd {
             let mut cfg = fallback_config;
             if let Some(ref provider) = cmd.provider {
-                cfg.default.provider = provider.clone();
+                cfg.active.provider = provider.clone();
             }
             if let Some(ref model) = cmd.model {
-                cfg.default.model = model.clone();
+                cfg.active.model = model.clone();
             }
             cfg
         } else {
@@ -438,7 +469,7 @@ async fn handle_query(
 
     let options = build_provider_options(args, config);
 
-    if config.default.stream && !args.json && !args.raw {
+    if config.active.stream && !args.json && !args.raw {
         use std::sync::{Arc, Mutex};
         let full_response = Arc::new(Mutex::new(String::new()));
         let response_clone = full_response.clone();
@@ -617,18 +648,14 @@ fn list_profiles(config: &Config) -> Result<()> {
 
     if config.profiles.is_empty() {
         println!(
-            "  {} {} {}",
-            "(default)".bright_black(),
-            config.default.provider.bright_white(),
-            config.default.model.bright_black()
-        );
-        println!();
-        println!(
-            "{}",
-            "No custom profiles configured. Run 'ask init' to create one.".bright_black()
+            "  {}",
+            "No profiles configured. Run 'ask init' to create one.".bright_black()
         );
         return Ok(());
     }
+
+    let default_provider = "gemini".to_string();
+    let default_model = "gemini-3-flash-preview".to_string();
 
     let mut profile_names: Vec<_> = config.profiles.keys().collect();
     profile_names.sort();
@@ -636,11 +663,8 @@ fn list_profiles(config: &Config) -> Result<()> {
     for name in profile_names {
         let profile = &config.profiles[name];
         let is_default = default_name == Some(name.as_str());
-        let provider = profile
-            .provider
-            .as_ref()
-            .unwrap_or(&config.default.provider);
-        let model = profile.model.as_ref().unwrap_or(&config.default.model);
+        let provider = profile.provider.as_ref().unwrap_or(&default_provider);
+        let model = profile.model.as_ref().unwrap_or(&default_model);
         let fallback = profile
             .fallback
             .as_ref()

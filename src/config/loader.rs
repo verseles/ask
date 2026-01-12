@@ -123,36 +123,8 @@ impl Config {
         Ok(config)
     }
 
-    /// Merge two configs (overlay takes precedence)
-    /// For scalar values: overlay wins
-    /// For collections (providers, commands): merge with overlay winning conflicts
     fn merge(base: Config, overlay: Config) -> Config {
         Config {
-            // Overlay always wins for default settings
-            default: overlay.default,
-            // Merge providers: base + overlay, overlay wins conflicts
-            providers: {
-                let mut providers = base.providers;
-                for (k, v) in overlay.providers {
-                    providers.insert(k, v);
-                }
-                providers
-            },
-            // Overlay wins for behavior
-            behavior: overlay.behavior,
-            // Overlay wins for context
-            context: overlay.context,
-            // Overlay wins for update
-            update: overlay.update,
-            // Merge commands: base + overlay, overlay wins conflicts
-            commands: {
-                let mut commands = base.commands;
-                for (k, v) in overlay.commands {
-                    commands.insert(k, v);
-                }
-                commands
-            },
-            // Merge profiles: base + overlay, overlay wins conflicts
             profiles: {
                 let mut profiles = base.profiles;
                 for (k, v) in overlay.profiles {
@@ -160,9 +132,17 @@ impl Config {
                 }
                 profiles
             },
-            // Overlay wins for default_profile
             default_profile: overlay.default_profile.or(base.default_profile),
-            // Merge aliases: base + overlay, overlay wins conflicts
+            behavior: overlay.behavior,
+            context: overlay.context,
+            update: overlay.update,
+            commands: {
+                let mut commands = base.commands;
+                for (k, v) in overlay.commands {
+                    commands.insert(k, v);
+                }
+                commands
+            },
             aliases: {
                 let mut aliases = base.aliases;
                 for (k, v) in overlay.aliases {
@@ -170,47 +150,11 @@ impl Config {
                 }
                 aliases
             },
+            active: Default::default(),
         }
     }
 
-    /// Apply environment variable overrides
     fn apply_env_overrides(mut config: Config) -> Config {
-        // === Default settings ===
-        if let Ok(provider) = std::env::var("ASK_PROVIDER") {
-            config.default.provider = provider;
-        }
-        if let Ok(model) = std::env::var("ASK_MODEL") {
-            config.default.model = model;
-        }
-        if let Ok(stream) = std::env::var("ASK_STREAM") {
-            config.default.stream = parse_bool(&stream);
-        }
-
-        // === Provider settings ===
-        // Base URLs
-        if let Ok(url) = std::env::var("ASK_GEMINI_BASE_URL") {
-            config
-                .providers
-                .entry("gemini".to_string())
-                .or_default()
-                .base_url = Some(url);
-        }
-        if let Ok(url) = std::env::var("ASK_OPENAI_BASE_URL") {
-            config
-                .providers
-                .entry("openai".to_string())
-                .or_default()
-                .base_url = Some(url);
-        }
-        if let Ok(url) = std::env::var("ASK_ANTHROPIC_BASE_URL") {
-            config
-                .providers
-                .entry("anthropic".to_string())
-                .or_default()
-                .base_url = Some(url);
-        }
-
-        // === Behavior settings ===
         if let Ok(val) = std::env::var("ASK_AUTO_EXECUTE") {
             config.behavior.auto_execute = parse_bool(&val);
         }
@@ -223,7 +167,6 @@ impl Config {
             }
         }
 
-        // === Context settings ===
         if let Ok(val) = std::env::var("ASK_CONTEXT_MAX_AGE") {
             if let Ok(age) = val.parse() {
                 config.context.max_age_minutes = age;
@@ -238,7 +181,6 @@ impl Config {
             config.context.storage_path = Some(path);
         }
 
-        // === Update settings ===
         if let Ok(val) = std::env::var("ASK_UPDATE_AUTO_CHECK") {
             config.update.auto_check = parse_bool(&val);
         }
@@ -258,7 +200,6 @@ impl Config {
     }
 }
 
-/// Parse boolean from string (true/false/1/0/yes/no)
 fn parse_bool(s: &str) -> bool {
     matches!(s.to_lowercase().as_str(), "true" | "1" | "yes" | "on")
 }
@@ -279,9 +220,8 @@ mod tests {
     #[test]
     fn test_default_config() {
         let config = Config::default();
-        assert_eq!(config.default.provider, "gemini");
-        assert_eq!(config.default.model, "gemini-3-flash-preview");
-        assert!(config.default.stream);
+        assert!(config.profiles.is_empty());
+        assert!(config.default_profile.is_none());
         assert!(!config.behavior.auto_execute);
         assert!(config.behavior.confirm_destructive);
         assert_eq!(config.behavior.timeout, 30);
@@ -292,27 +232,29 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_minimal_config() {
+    fn test_parse_profile_config() {
         let toml = r#"
-[default]
+[profiles.main]
 provider = "openai"
+model = "gpt-5"
+api_key = "sk-test"
 "#;
         let config = Config::from_toml(toml).unwrap();
-        assert_eq!(config.default.provider, "openai");
-        // Model should use default since not specified
-        assert_eq!(config.default.model, "gemini-3-flash-preview");
+        assert_eq!(config.profiles.len(), 1);
+        let main = config.profiles.get("main").unwrap();
+        assert_eq!(main.provider.as_deref(), Some("openai"));
+        assert_eq!(main.model.as_deref(), Some("gpt-5"));
+        assert_eq!(main.api_key.as_deref(), Some("sk-test"));
     }
 
     #[test]
     fn test_parse_full_config() {
         let toml = r#"
-[default]
+[profiles.work]
 provider = "anthropic"
 model = "claude-3-opus"
-stream = false
-
-[providers.anthropic]
 api_key = "test-key"
+stream = false
 
 [behavior]
 auto_execute = true
@@ -334,9 +276,10 @@ type = "command"
 auto_execute = false
 "#;
         let config = Config::from_toml(toml).unwrap();
-        assert_eq!(config.default.provider, "anthropic");
-        assert_eq!(config.default.model, "claude-3-opus");
-        assert!(!config.default.stream);
+        let work = config.profiles.get("work").unwrap();
+        assert_eq!(work.provider.as_deref(), Some("anthropic"));
+        assert_eq!(work.model.as_deref(), Some("claude-3-opus"));
+        assert_eq!(work.stream, Some(false));
         assert!(config.behavior.auto_execute);
         assert!(!config.behavior.confirm_destructive);
         assert_eq!(config.behavior.timeout, 60);
@@ -350,58 +293,6 @@ auto_execute = false
         assert_eq!(cmd.system, "Generate commit message");
         assert_eq!(cmd.r#type.as_deref(), Some("command"));
         assert_eq!(cmd.auto_execute, Some(false));
-    }
-
-    #[test]
-    fn test_parse_provider_config() {
-        let toml = r#"
-[providers.gemini]
-api_key = "gemini-key"
-
-[providers.openai]
-api_key = "openai-key"
-base_url = "https://custom.openai.com"
-model = "gpt-4"
-
-[providers.anthropic]
-api_key = "anthropic-key"
-"#;
-        let config = Config::from_toml(toml).unwrap();
-
-        let gemini = config.providers.get("gemini").unwrap();
-        assert_eq!(gemini.api_key.as_deref(), Some("gemini-key"));
-
-        let openai = config.providers.get("openai").unwrap();
-        assert_eq!(openai.api_key.as_deref(), Some("openai-key"));
-        assert_eq!(
-            openai.base_url.as_deref(),
-            Some("https://custom.openai.com")
-        );
-        assert_eq!(openai.model.as_deref(), Some("gpt-4"));
-
-        let anthropic = config.providers.get("anthropic").unwrap();
-        assert_eq!(anthropic.api_key.as_deref(), Some("anthropic-key"));
-    }
-
-    #[test]
-    fn test_merge_configs() {
-        let base = Config::default();
-        let overlay_toml = r#"
-[default]
-provider = "openai"
-model = "gpt-5"
-
-[behavior]
-timeout = 120
-"#;
-        let overlay = Config::from_toml(overlay_toml).unwrap();
-        let merged = Config::merge(base, overlay);
-
-        assert_eq!(merged.default.provider, "openai");
-        assert_eq!(merged.default.model, "gpt-5");
-        assert_eq!(merged.behavior.timeout, 120);
-        // Base defaults should be preserved
-        assert!(!merged.behavior.auto_execute);
     }
 
     #[test]
@@ -428,31 +319,6 @@ model = "claude-3-opus"
         assert_eq!(fix.r#type.as_deref(), Some("code"));
         assert_eq!(fix.provider.as_deref(), Some("anthropic"));
         assert_eq!(fix.model.as_deref(), Some("claude-3-opus"));
-    }
-
-    #[test]
-    fn test_api_key_retrieval() {
-        let toml = r#"
-[default]
-provider = "gemini"
-
-[providers.gemini]
-api_key = "my-gemini-key"
-"#;
-        let config = Config::from_toml(toml).unwrap();
-        assert_eq!(config.api_key(), Some("my-gemini-key".to_string()));
-    }
-
-    #[test]
-    fn test_active_provider_and_model() {
-        let toml = r#"
-[default]
-provider = "openai"
-model = "gpt-4-turbo"
-"#;
-        let config = Config::from_toml(toml).unwrap();
-        assert_eq!(config.active_provider(), "openai");
-        assert_eq!(config.active_model(), "gpt-4-turbo");
     }
 
     #[test]
@@ -525,17 +391,10 @@ provider = "anthropic"
     }
 
     #[test]
-    fn test_profile_inheritance() {
+    fn test_profile_with_cli_overrides() {
         use crate::cli::Args;
 
         let toml = r#"
-[default]
-provider = "gemini"
-model = "gemini-flash"
-
-[providers.openai]
-api_key = "base-key"
-
 [profiles.work]
 provider = "openai"
 model = "gpt-5"
@@ -550,10 +409,7 @@ api_key = "profile-key"
 
         assert_eq!(applied.active_provider(), "openai");
         assert_eq!(applied.active_model(), "gpt-5");
-        assert_eq!(
-            applied.providers.get("openai").unwrap().api_key.as_deref(),
-            Some("profile-key")
-        );
+        assert_eq!(applied.api_key(), Some("profile-key".to_string()));
     }
 
     #[test]
@@ -579,7 +435,7 @@ provider = "anthropic"
     }
 
     #[test]
-    fn test_cli_overrides_profile() {
+    fn test_cli_model_override() {
         use crate::cli::Args;
 
         let toml = r#"
@@ -647,17 +503,44 @@ provider = "anthropic"
     }
 
     #[test]
-    fn test_fallback_profile_default() {
+    fn test_first_profile_as_default() {
+        use crate::cli::Args;
+
+        let toml = r#"
+[profiles.only_one]
+provider = "gemini"
+model = "gemini-flash"
+api_key = "test-key"
+"#;
+        let config = Config::from_toml(toml).unwrap();
+        let args = Args::default();
+        let applied = config.with_cli_overrides(&args);
+
+        assert_eq!(applied.active_provider(), "gemini");
+        assert_eq!(applied.active_model(), "gemini-flash");
+    }
+
+    #[test]
+    fn test_ad_hoc_mode() {
+        use crate::cli::Args;
+
         let toml = r#"
 [profiles.work]
 provider = "openai"
-
-[profiles.personal]
-provider = "anthropic"
+model = "gpt-5"
 "#;
         let config = Config::from_toml(toml).unwrap();
-        let fallback = config.fallback_profile("work");
-        assert!(fallback.is_some());
-        assert_ne!(fallback.as_deref(), Some("work"));
+        let args = Args {
+            provider: Some("anthropic".to_string()),
+            api_key: Some("ad-hoc-key".to_string()),
+            model: Some("claude-3".to_string()),
+            ..Default::default()
+        };
+        let applied = config.with_cli_overrides(&args);
+
+        assert_eq!(applied.active_provider(), "anthropic");
+        assert_eq!(applied.active_model(), "claude-3");
+        assert_eq!(applied.api_key(), Some("ad-hoc-key".to_string()));
+        assert!(applied.active.profile_name.is_none());
     }
 }
