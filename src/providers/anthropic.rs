@@ -184,51 +184,6 @@ impl AnthropicProvider {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_build_thinking_levels() {
-        let provider = AnthropicProvider::new("key".into(), "url".into(), "claude-3-7-sonnet".into());
-        
-        let cases = vec![
-            ("minimal", 2048),
-            ("low", 4096),
-            ("medium", 8192),
-            ("high", 16384),
-            ("12345", 12345),
-            ("invalid", 8192), // default
-        ];
-
-        for (input, expected) in cases {
-            let options = ProviderOptions {
-                thinking_enabled: true,
-                thinking_value: Some(input.to_string()),
-                web_search: false,
-                allowed_domains: None,
-                blocked_domains: None,
-            };
-            
-            let config = provider.build_thinking(&options).unwrap();
-            assert_eq!(config.budget_tokens, expected, "Failed for input: {}", input);
-        }
-    }
-    
-    #[test]
-    fn test_build_thinking_disabled() {
-        let provider = AnthropicProvider::new("key".into(), "url".into(), "claude-3-5-sonnet".into());
-        let options = ProviderOptions {
-            thinking_enabled: false,
-            thinking_value: Some("high".to_string()),
-            web_search: false,
-            allowed_domains: None,
-            blocked_domains: None,
-        };
-        assert!(provider.build_thinking(&options).is_none());
-    }
-}
-
 #[async_trait]
 impl Provider for AnthropicProvider {
     async fn complete_with_options(
@@ -349,5 +304,50 @@ impl Provider for AnthropicProvider {
 
     fn model(&self) -> &str {
         &self.model
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_build_thinking_levels() {
+        let provider = AnthropicProvider::new("key".into(), "url".into(), "claude-3-7-sonnet".into());
+        
+        let cases = vec![
+            ("minimal", 2048),
+            ("low", 4096),
+            ("medium", 8192),
+            ("high", 16384),
+            ("12345", 12345),
+            ("invalid", 8192), // default
+        ];
+
+        for (input, expected) in cases {
+            let options = ProviderOptions {
+                thinking_enabled: true,
+                thinking_value: Some(input.to_string()),
+                web_search: false,
+                allowed_domains: None,
+                blocked_domains: None,
+            };
+            
+            let config = provider.build_thinking(&options).unwrap();
+            assert_eq!(config.budget_tokens, expected, "Failed for input: {}", input);
+        }
+    }
+    
+    #[test]
+    fn test_build_thinking_disabled() {
+        let provider = AnthropicProvider::new("key".into(), "url".into(), "claude-3-5-sonnet".into());
+        let options = ProviderOptions {
+            thinking_enabled: false,
+            thinking_value: Some("high".to_string()),
+            web_search: false,
+            allowed_domains: None,
+            blocked_domains: None,
+        };
+        assert!(provider.build_thinking(&options).is_none());
     }
 }
