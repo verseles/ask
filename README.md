@@ -402,7 +402,7 @@ ask --no-think what time is it
 |----------|-----------------|--------|
 | Gemini | `thinking_level` | `none`, `low`, `medium`, `high` |
 | OpenAI | `reasoning_effort` | `none`, `minimal`, `low`, `medium`, `high` |
-| Anthropic | `thinking_budget` | Token count (e.g., `5000`) |
+| Anthropic | `thinking_budget` | Token count or level (`low`=4k, `medium`=8k, `high`=16k) |
 
 Configure during `ask init` or manually in your config file.
 
