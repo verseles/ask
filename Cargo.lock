@@ -127,6 +127,7 @@ dependencies = [
  "serde_json",
  "sha2",
  "shellexpand",
+ "tempfile",
  "termimad",
  "thiserror 1.0.69",
  "tokio",

@@ -54,3 +54,4 @@ strip = true
 
 [dev-dependencies]
 requestty-ui = "0.6"
+tempfile = "3"

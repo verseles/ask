@@ -97,23 +97,9 @@ impl Config {
         }
     }
 
-    /// Find project local config
+    /// Find project local config by searching upwards from current directory
     fn find_local_config() -> Option<PathBuf> {
-        let cwd = std::env::current_dir().ok()?;
-
-        // Try ask.toml first
-        let path = cwd.join("ask.toml");
-        if path.exists() {
-            return Some(path);
-        }
-
-        // Try .ask.toml
-        let path = cwd.join(".ask.toml");
-        if path.exists() {
-            return Some(path);
-        }
-
-        None
+        find_recursive_file(&["ask.toml", ".ask.toml"])
     }
 
     /// Load config from a specific file
@@ -198,6 +184,29 @@ impl Config {
 
         config
     }
+}
+
+/// Find a file by searching upwards from current directory
+pub fn find_recursive_file(names: &[&str]) -> Option<PathBuf> {
+    let cwd = std::env::current_dir().ok()?;
+    let mut current = cwd.as_path();
+
+    loop {
+        for name in names {
+            let path = current.join(name);
+            if path.exists() {
+                return Some(path);
+            }
+        }
+
+        // Move to parent directory
+        match current.parent() {
+            Some(parent) => current = parent,
+            None => break,
+        }
+    }
+
+    None
 }
 
 fn parse_bool(s: &str) -> bool {

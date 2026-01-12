@@ -162,17 +162,30 @@ Context: OS={os}, shell={shell}, cwd={cwd}, locale={locale}, now={now}
 "#;
 
 pub fn load_custom_prompt(command_name: Option<&str>) -> Option<String> {
+    use crate::config::loader::find_recursive_file;
     use std::path::PathBuf;
 
     let home = dirs::home_dir();
     let config_dir = dirs::config_dir().map(|p| p.join("ask"));
 
-    let search_paths: Vec<PathBuf> = if let Some(cmd) = command_name {
+    let local_file = if let Some(cmd) = command_name {
         let filename = format!("ask.{}.md", cmd);
         let dot_filename = format!(".ask.{}.md", cmd);
+        find_recursive_file(&[&filename, &dot_filename])
+    } else {
+        find_recursive_file(&["ask.md", ".ask.md"])
+    };
+
+    if let Some(path) = local_file {
+        if let Ok(content) = std::fs::read_to_string(&path) {
+            return Some(content);
+        }
+    }
+
+    // Fallback to home and config dir
+    let search_paths: Vec<PathBuf> = if let Some(cmd) = command_name {
+        let filename = format!("ask.{}.md", cmd);
         vec![
-            PathBuf::from(&filename),
-            PathBuf::from(&dot_filename),
             home.clone().map(|h| h.join(&filename)).unwrap_or_default(),
             config_dir
                 .clone()
@@ -181,8 +194,6 @@ pub fn load_custom_prompt(command_name: Option<&str>) -> Option<String> {
         ]
     } else {
         vec![
-            PathBuf::from("ask.md"),
-            PathBuf::from(".ask.md"),
             home.clone().map(|h| h.join("ask.md")).unwrap_or_default(),
             config_dir
                 .clone()

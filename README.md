@@ -494,13 +494,13 @@ ask --make-prompt > ask.md
 <summary>Custom Prompt Configuration</summary>
 
 **Search Order** (first found wins):
-1. `./ask.md` or `./.ask.md` (project directory)
+1. Recursive search for `./ask.md` or `./.ask.md` (traverses up from current directory to root)
 2. `~/ask.md` (home directory)
 3. `~/.config/ask/ask.md` (XDG config)
 
 **Command-Specific Prompts**:
-- `ask.cm.md` - Custom prompt for the `cm` command
-- `ask.explain.md` - Custom prompt for the `explain` command
+- `ask.cm.md` - Custom prompt for the `cm` command (also searched recursively)
+- `ask.explain.md` - Custom prompt for the `explain` command (also searched recursively)
 
 **Available Variables**:
 | Variable | Description |

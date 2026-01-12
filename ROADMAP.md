@@ -83,6 +83,15 @@ Description: Unified abstract thinking levels (low, medium, high) across provide
 - [x] 14.05 Add integration tests for --think flag variants
 - [x] 14.06 Add ADR-022: Unified Thinking Levels
 
+## Feature 15: Recursive Configuration Discovery
+
+Description: Support finding ask.toml by traversing up the directory tree (like git/cargo)
+
+- [x] 15.01 Refactor `find_local_config` to search recursively upwards
+- [x] 15.02 Ensure `load_aliases_only` also supports recursive discovery
+- [x] 15.03 Add tests for configuration discovery in subdirectories
+- [x] 15.04 Update documentation regarding project-local configuration
+
 ## Legend
 
 - [x] Complete

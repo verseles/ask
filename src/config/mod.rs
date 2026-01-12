@@ -1,7 +1,7 @@
 //! Configuration module - handles loading and merging configs
 
 mod defaults;
-mod loader;
+pub(crate) mod loader;
 mod thinking;
 
 pub use defaults::*;

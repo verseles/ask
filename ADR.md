@@ -758,4 +758,30 @@ This inconsistency makes it difficult for users to switch providers without chan
 - Default token budgets for Anthropic are opinionated but reasonable
 - Advanced users can still use specific values if needed
 
+---
+
+## ADR-023: Recursive Configuration Discovery
+
+**Status**: Accepted
+
+**Context**: Users working in subdirectories of a project expect the project-level configuration (API keys, aliases, custom commands) and prompts (`ask.md`) to be active without having to copy them to every subfolder.
+
+**Decision**: Implement recursive upward search for local configuration and prompt files, similar to how Git searches for `.git` or Cargo searches for `Cargo.toml`.
+
+**Discovery Logic**:
+1. Start at the current working directory.
+2. Search for `ask.toml` or `.ask.toml` (for config) or `ask.md`/`.ask.md` (for prompts).
+3. If not found, move to the parent directory and repeat.
+4. Stop when the file is found or the root directory is reached.
+
+**Rationale**:
+- **Workflow Efficiency**: Configuration defined at the project root applies to all subfolders.
+- **Convention**: Matches the behavior of most modern developer tools.
+- **Simplicity**: Avoids the need for complex global configuration management for project-specific needs.
+
+**Consequences**:
+- Configuration files in parent directories are now discovered automatically.
+- Performance impact is negligible as the number of directory levels is typically small.
+- Users can still override project-wide settings with a local `ask.toml` in a specific subfolder.
+
 

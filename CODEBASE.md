@@ -98,11 +98,10 @@ The parser:
 Configuration is loaded with precedence (Profile-Only Architecture):
 1. CLI arguments (highest): `-p`, `-P`, `-m`, `-k`
 2. Environment variables: `ASK_PROFILE`, `ASK_PROVIDER`, `ASK_MODEL`, `ASK_*_API_KEY`
-3. Profile config (`[profiles.*]`)
-4. Local config (`./ask.toml`)
-5. Home config (`~/ask.toml`)
-6. XDG config (`~/.config/ask/config.toml`)
-7. Hardcoded defaults (lowest)
+3. Project local config (recursive search upwards for `ask.toml` or `.ask.toml`)
+4. Home config (`~/ask.toml`)
+5. XDG config (`~/.config/ask/config.toml`)
+6. Hardcoded defaults (lowest)
 
 Key structures:
 - `Config` - Main config container with profiles, behavior, context, update, commands, aliases
