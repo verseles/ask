@@ -331,3 +331,91 @@ fn context_with_value_c60() {
         stderr
     );
 }
+
+#[test]
+fn think_with_equals_value() {
+    let output = Command::new("cargo")
+        .env("ASK_GEMINI_API_KEY", "dummy")
+        .env("ASK_PROVIDER", "gemini")
+        .args(["run", "--", "-v", "--think=high", "test query"])
+        .output()
+        .expect("Failed to execute command");
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("think=Some(true)"),
+        "Expected think=Some(true), got: {}",
+        stderr
+    );
+    assert!(
+        stderr.contains("think_level=Some(\"high\")"),
+        "Expected think_level=Some(\"high\"), got: {}",
+        stderr
+    );
+}
+
+#[test]
+fn think_with_space_value() {
+    let output = Command::new("cargo")
+        .env("ASK_GEMINI_API_KEY", "dummy")
+        .env("ASK_PROVIDER", "gemini")
+        .args(["run", "--", "-v", "--think", "high", "test query"])
+        .output()
+        .expect("Failed to execute command");
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("think=Some(true)"),
+        "Expected think=Some(true), got: {}",
+        stderr
+    );
+    assert!(
+        stderr.contains("think_level=Some(\"high\")"),
+        "Expected think_level=Some(\"high\"), got: {}",
+        stderr
+    );
+}
+
+#[test]
+fn think_short_with_space_value() {
+    let output = Command::new("cargo")
+        .env("ASK_GEMINI_API_KEY", "dummy")
+        .env("ASK_PROVIDER", "gemini")
+        .args(["run", "--", "-v", "-t", "low", "test query"])
+        .output()
+        .expect("Failed to execute command");
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("think=Some(true)"),
+        "Expected think=Some(true), got: {}",
+        stderr
+    );
+    assert!(
+        stderr.contains("think_level=Some(\"low\")"),
+        "Expected think_level=Some(\"low\"), got: {}",
+        stderr
+    );
+}
+
+#[test]
+fn think_short_combined_value() {
+    let output = Command::new("cargo")
+        .env("ASK_GEMINI_API_KEY", "dummy")
+        .env("ASK_PROVIDER", "gemini")
+        .args(["run", "--", "-v", "-tmedium", "test query"])
+        .output()
+        .expect("Failed to execute command");
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("think=Some(true)"),
+        "Expected think=Some(true), got: {}",
+        stderr
+    );
+    assert!(
+        stderr.contains("think_level=Some(\"medium\")"),
+        "Expected think_level=Some(\"medium\"), got: {}",
+        stderr
+    );
+}
