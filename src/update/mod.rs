@@ -412,10 +412,13 @@ pub async fn check_and_update() -> Result<()> {
     }
 
     // Ask for confirmation
-    let confirm = dialoguer::Confirm::new()
-        .with_prompt("Install update?")
-        .default(true)
-        .interact()?;
+    let confirm = {
+        let question = requestty::Question::confirm("install_update")
+            .message("Install update?")
+            .default(true)
+            .build();
+        requestty::prompt_one(question)?.as_bool().unwrap_or(false)
+    };
 
     if !confirm {
         println!("{}", "Update cancelled.".yellow());

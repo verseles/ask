@@ -308,7 +308,7 @@ Key crates:
 - `colored`: Terminal colors
 - `indicatif`: Progress spinners
 - `termimad`: Markdown rendering
-- `dialoguer`: Interactive prompts
+- `requestty`: Interactive CLI prompts with number key selection
 - `arboard`: Clipboard support for command injection (Windows fallback)
 - `mouse-keyboard-input`: Command injection via `/dev/uinput` (Linux)
 - `enigo`: Command injection via Accessibility/keystrokes (macOS/Windows)

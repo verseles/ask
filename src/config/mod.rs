@@ -10,7 +10,7 @@ pub use thinking::{format_thinking_config, select_thinking_config};
 use crate::cli::Args;
 use anyhow::Result;
 use colored::Colorize;
-use dialoguer::{Confirm, Input, Select};
+use requestty::Question;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -515,22 +515,19 @@ fn mask_api_key(key: &str) -> String {
     format!("****{}", suffix)
 }
 
-/// Helper for numbered selection menus
-/// Formats items as "[1] item", "[2] item", etc. and returns the selected index
+/// Helper for numbered selection menus using requestty's raw_select
+/// Items are displayed with number prefixes (1), 2), etc.) and can be selected by pressing the number key
 fn numbered_select<T: ToString>(prompt: &str, items: &[T], default: usize) -> Result<usize> {
-    let numbered_items: Vec<String> = items
-        .iter()
-        .enumerate()
-        .map(|(i, item)| format!("[{}] {}", i + 1, item.to_string()))
-        .collect();
+    let choices: Vec<String> = items.iter().map(|i| i.to_string()).collect();
 
-    let idx = Select::new()
-        .with_prompt(prompt)
-        .items(&numbered_items)
+    let question = Question::raw_select("menu")
+        .message(prompt)
+        .choices(choices)
         .default(default)
-        .interact()?;
+        .build();
 
-    Ok(idx)
+    let answer = requestty::prompt_one(question)?;
+    Ok(answer.as_list_item().unwrap().index)
 }
 
 /// Helper struct for config management
@@ -641,10 +638,16 @@ fn configure_defaults(mgr: &ConfigManager) -> Result<(String, String, String, bo
         default_model_for_provider.to_string()
     };
 
-    let model: String = Input::new()
-        .with_prompt("Model")
-        .default(model_default)
-        .interact_text()?;
+    let model: String = {
+        let question = Question::input("model")
+            .message("Model")
+            .default(model_default.as_str())
+            .build();
+        requestty::prompt_one(question)?
+            .as_string()
+            .unwrap_or_default()
+            .to_string()
+    };
 
     let existing_api_key = mgr
         .get_str(&["providers", provider, "api_key"])
@@ -652,10 +655,13 @@ fn configure_defaults(mgr: &ConfigManager) -> Result<(String, String, String, bo
 
     let api_key: String = if !existing_api_key.is_empty() {
         let masked = mask_api_key(&existing_api_key);
-        let new_key: String = Input::new()
-            .with_prompt(format!("{} API key [{}] (Enter to keep)", provider, masked))
-            .allow_empty(true)
-            .interact_text()?;
+        let question = Question::input("api_key")
+            .message(format!("{} API key [{}] (Enter to keep)", provider, masked))
+            .build();
+        let new_key = requestty::prompt_one(question)?
+            .as_string()
+            .unwrap_or_default()
+            .to_string();
 
         if new_key.is_empty() {
             existing_api_key
@@ -663,15 +669,24 @@ fn configure_defaults(mgr: &ConfigManager) -> Result<(String, String, String, bo
             new_key
         }
     } else {
-        Input::new()
-            .with_prompt(format!("Enter {} API key", provider))
-            .interact_text()?
+        let question = Question::input("api_key")
+            .message(format!("Enter {} API key", provider))
+            .build();
+        requestty::prompt_one(question)?
+            .as_string()
+            .unwrap_or_default()
+            .to_string()
     };
 
-    let stream = Confirm::new()
-        .with_prompt("Enable streaming responses?")
-        .default(existing_stream)
-        .interact()?;
+    let stream = {
+        let question = Question::confirm("stream")
+            .message("Enable streaming responses?")
+            .default(existing_stream)
+            .build();
+        requestty::prompt_one(question)?
+            .as_bool()
+            .unwrap_or(existing_stream)
+    };
 
     let thinking_config = if let Some((key, value)) = select_thinking_config(provider, &model)? {
         format_thinking_config(&key, &value)
@@ -679,10 +694,15 @@ fn configure_defaults(mgr: &ConfigManager) -> Result<(String, String, String, bo
         String::new()
     };
 
-    let web_search = Confirm::new()
-        .with_prompt("Enable web search by default?")
-        .default(existing_web_search)
-        .interact()?;
+    let web_search = {
+        let question = Question::confirm("web_search")
+            .message("Enable web search by default?")
+            .default(existing_web_search)
+            .build();
+        requestty::prompt_one(question)?
+            .as_bool()
+            .unwrap_or(existing_web_search)
+    };
 
     Ok((
         provider.to_string(),
@@ -699,9 +719,13 @@ fn configure_profile(mgr: &ConfigManager, profile_name: Option<&str>) -> Result<
     let name: String = if let Some(n) = profile_name {
         n.to_string()
     } else {
-        Input::new()
-            .with_prompt("Profile name (e.g., work, personal, local)")
-            .interact_text()?
+        let question = Question::input("profile_name")
+            .message("Profile name (e.g., work, personal, local)")
+            .build();
+        requestty::prompt_one(question)?
+            .as_string()
+            .unwrap_or_default()
+            .to_string()
     };
 
     if name.is_empty() {
@@ -734,10 +758,16 @@ fn configure_profile(mgr: &ConfigManager, profile_name: Option<&str>) -> Result<
         .get_str(&["profiles", &name, "model"])
         .unwrap_or_else(|| default_model.to_string());
 
-    let model: String = Input::new()
-        .with_prompt("Model")
-        .default(existing_model)
-        .interact_text()?;
+    let model: String = {
+        let question = Question::input("profile_model")
+            .message("Model")
+            .default(existing_model.as_str())
+            .build();
+        requestty::prompt_one(question)?
+            .as_string()
+            .unwrap_or_default()
+            .to_string()
+    };
 
     let existing_api_key = mgr
         .get_str(&["profiles", &name, "api_key"])
@@ -746,10 +776,13 @@ fn configure_profile(mgr: &ConfigManager, profile_name: Option<&str>) -> Result<
 
     let api_key: String = if !existing_api_key.is_empty() {
         let masked = mask_api_key(&existing_api_key);
-        let new_key: String = Input::new()
-            .with_prompt(format!("API key [{}] (Enter to keep/inherit)", masked))
-            .allow_empty(true)
-            .interact_text()?;
+        let question = Question::input("profile_api_key")
+            .message(format!("API key [{}] (Enter to keep/inherit)", masked))
+            .build();
+        let new_key = requestty::prompt_one(question)?
+            .as_string()
+            .unwrap_or_default()
+            .to_string();
 
         if new_key.is_empty() {
             String::new()
@@ -757,25 +790,37 @@ fn configure_profile(mgr: &ConfigManager, profile_name: Option<&str>) -> Result<
             new_key
         }
     } else {
-        let key: String = Input::new()
-            .with_prompt("API key (Enter to inherit from provider)")
-            .allow_empty(true)
-            .interact_text()?;
-        key
+        let question = Question::input("profile_api_key")
+            .message("API key (Enter to inherit from provider)")
+            .build();
+        requestty::prompt_one(question)?
+            .as_string()
+            .unwrap_or_default()
+            .to_string()
     };
 
     let existing_base_url = mgr.get_str(&["profiles", &name, "base_url"]);
-    let base_url: String = Input::new()
-        .with_prompt("Base URL (Enter for default, or custom like http://localhost:11434/v1)")
-        .default(existing_base_url.unwrap_or_default())
-        .allow_empty(true)
-        .interact_text()?;
+    let base_url: String = {
+        let question = Question::input("profile_base_url")
+            .message("Base URL (Enter for default, or custom like http://localhost:11434/v1)")
+            .default(existing_base_url.as_deref().unwrap_or(""))
+            .build();
+        requestty::prompt_one(question)?
+            .as_string()
+            .unwrap_or_default()
+            .to_string()
+    };
 
     let existing_web_search = mgr.get_bool(&["profiles", &name, "web_search"], false);
-    let web_search = Confirm::new()
-        .with_prompt("Enable web search for this profile?")
-        .default(existing_web_search)
-        .interact()?;
+    let web_search = {
+        let question = Question::confirm("profile_web_search")
+            .message("Enable web search for this profile?")
+            .default(existing_web_search)
+            .build();
+        requestty::prompt_one(question)?
+            .as_bool()
+            .unwrap_or(existing_web_search)
+    };
 
     let thinking_config = if let Some((key, value)) = select_thinking_config(provider, &model)? {
         format_thinking_config(&key, &value)
@@ -806,11 +851,14 @@ fn configure_profile(mgr: &ConfigManager, profile_name: Option<&str>) -> Result<
         1 => "any".to_string(),
         2 => "none".to_string(),
         3 => {
-            let fb: String = Input::new()
-                .with_prompt("Fallback profile name")
-                .default(existing_fallback.unwrap_or_default())
-                .interact_text()?;
-            fb
+            let question = Question::input("fallback_profile")
+                .message("Fallback profile name")
+                .default(existing_fallback.as_deref().unwrap_or(""))
+                .build();
+            requestty::prompt_one(question)?
+                .as_string()
+                .unwrap_or_default()
+                .to_string()
         }
         _ => String::new(),
     };
@@ -1076,10 +1124,11 @@ fn manage_profiles(mgr: &mut ConfigManager) -> Result<()> {
 
                 if idx < profiles.len() {
                     let profile_name = &profiles[idx];
-                    let confirm = Confirm::new()
-                        .with_prompt(format!("Delete profile '{}'?", profile_name))
+                    let question = Question::confirm("delete_confirm")
+                        .message(format!("Delete profile '{}'?", profile_name))
                         .default(false)
-                        .interact()?;
+                        .build();
+                    let confirm = requestty::prompt_one(question)?.as_bool().unwrap_or(false);
 
                     if confirm {
                         let content = std::fs::read_to_string(&mgr.config_path).unwrap_or_default();
@@ -1339,14 +1388,21 @@ channel = "stable"
 
                         let new_key: String = if !existing_key.is_empty() {
                             let masked = mask_api_key(&existing_key);
-                            Input::new()
-                                .with_prompt(format!("API key [{}] (Enter to keep)", masked))
-                                .allow_empty(true)
-                                .interact_text()?
+                            let question = Question::input("provider_api_key")
+                                .message(format!("API key [{}] (Enter to keep)", masked))
+                                .build();
+                            requestty::prompt_one(question)?
+                                .as_string()
+                                .unwrap_or_default()
+                                .to_string()
                         } else {
-                            Input::new()
-                                .with_prompt(format!("{} API key", provider))
-                                .interact_text()?
+                            let question = Question::input("provider_api_key")
+                                .message(format!("{} API key", provider))
+                                .build();
+                            requestty::prompt_one(question)?
+                                .as_string()
+                                .unwrap_or_default()
+                                .to_string()
                         };
 
                         let final_key = if new_key.is_empty() {

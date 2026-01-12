@@ -115,10 +115,15 @@ impl CommandExecutor {
                     "Command may require elevated permissions.".yellow()
                 );
 
-                let retry = dialoguer::Confirm::new()
-                    .with_prompt("Retry with sudo?")
-                    .default(false)
-                    .interact()?;
+                let retry = {
+                    let question = requestty::Question::confirm("sudo_retry")
+                        .message("Retry with sudo?")
+                        .default(false)
+                        .build();
+                    requestty::prompt_one(question)
+                        .map(|a| a.as_bool().unwrap_or(false))
+                        .unwrap_or(false)
+                };
 
                 if retry {
                     let sudo_cmd = format!("sudo {}", command);
@@ -199,10 +204,15 @@ impl CommandExecutor {
             println!("{}", command.bright_white());
 
             // Ask for confirmation
-            let confirm = dialoguer::Confirm::new()
-                .with_prompt("Execute anyway?")
-                .default(false)
-                .interact()?;
+            let confirm = {
+                let question = requestty::Question::confirm("execute_destructive")
+                    .message("Execute anyway?")
+                    .default(false)
+                    .build();
+                requestty::prompt_one(question)
+                    .map(|a| a.as_bool().unwrap_or(false))
+                    .unwrap_or(false)
+            };
 
             if !confirm {
                 println!("{}", "Cancelled.".yellow());

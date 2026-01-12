@@ -169,17 +169,22 @@ fn try_enigo_type(command: &str) -> Result<()> {
 }
 
 fn interactive_prompt(command: &str) -> Result<Option<String>> {
-    use dialoguer::{theme::ColorfulTheme, Input};
+    use requestty::Question;
 
-    let result: Result<String, _> = Input::with_theme(&ColorfulTheme::default())
-        .with_prompt("Command")
-        .with_initial_text(command)
-        .allow_empty(true)
-        .interact_text();
+    let question = Question::input("command")
+        .message("Command")
+        .default(command)
+        .build();
 
-    match result {
-        Ok(cmd) if cmd.is_empty() => Ok(None),
-        Ok(cmd) => Ok(Some(cmd)),
+    match requestty::prompt_one(question) {
+        Ok(answer) => {
+            let cmd = answer.as_string().unwrap_or_default();
+            if cmd.is_empty() {
+                Ok(None)
+            } else {
+                Ok(Some(cmd.to_string()))
+            }
+        }
         Err(_) => Ok(None),
     }
 }

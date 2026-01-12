@@ -7,7 +7,7 @@
 //! - Anthropic: thinking_budget (0, 1024-128000)
 
 use anyhow::Result;
-use dialoguer::Input;
+use requestty::Question;
 
 use super::numbered_select;
 
@@ -209,11 +209,14 @@ pub fn select_thinking_config(provider: &str, model: &str) -> Result<Option<(Str
     let selected = &options[idx];
 
     let value = if selected.config_value == "custom" {
-        let custom: String = Input::new()
-            .with_prompt("Enter token count (1024-128000)")
-            .default("8000".to_string())
-            .interact_text()?;
-        custom
+        let question = Question::input("token_count")
+            .message("Enter token count (1024-128000)")
+            .default("8000")
+            .build();
+        requestty::prompt_one(question)?
+            .as_string()
+            .unwrap_or("8000")
+            .to_string()
     } else {
         selected.config_value.clone()
     };

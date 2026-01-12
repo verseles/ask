@@ -255,7 +255,7 @@ io::stdout().flush()?;
 - Linux: Use `mouse-keyboard-input` crate via `/dev/uinput` kernel module
 - macOS: Use `enigo` crate with Accessibility API
 - Windows: Use clipboard + Ctrl+V (enigo)
-- Fallback: Interactive dialoguer prompt with editable text
+- Fallback: Interactive requestty prompt with editable text
 
 **Rationale**:
 - Does not overwrite user's clipboard content
