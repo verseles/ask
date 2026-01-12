@@ -262,3 +262,72 @@ fn verbose_flag_shows_flags() {
     assert!(stderr.contains("command_mode="));
     assert!(stderr.contains("json="));
 }
+
+#[test]
+fn combined_flags_vt0_applies_both() {
+    let output = Command::new("cargo")
+        .env("ASK_GEMINI_API_KEY", "dummy")
+        .env("ASK_PROVIDER", "gemini")
+        .args(["run", "--", "-vt0", "test query"])
+        .output()
+        .expect("Failed to execute command");
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("think=Some(false)"),
+        "Expected think=Some(false), got: {}",
+        stderr
+    );
+}
+
+#[test]
+fn combined_flags_t0v_posix_ignores_trailing() {
+    // POSIX: -t0 consumes "0v", so v is part of the value (ignored)
+    let output = Command::new("cargo")
+        .env("ASK_GEMINI_API_KEY", "dummy")
+        .env("ASK_PROVIDER", "gemini")
+        .args(["run", "--", "-t0v", "-v", "test query"])
+        .output()
+        .expect("Failed to execute command");
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("think=Some(false)"),
+        "Expected think=Some(false), got: {}",
+        stderr
+    );
+}
+
+#[test]
+fn combined_flags_xy_applies_both() {
+    let output = Command::new("cargo")
+        .env("ASK_GEMINI_API_KEY", "dummy")
+        .env("ASK_PROVIDER", "gemini")
+        .args(["run", "--", "-xy", "-v", "test query"])
+        .output()
+        .expect("Failed to execute command");
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("command_mode=true"),
+        "Expected command_mode=true"
+    );
+    assert!(stderr.contains("yes=true"), "Expected yes=true");
+}
+
+#[test]
+fn context_with_value_c60() {
+    let output = Command::new("cargo")
+        .env("ASK_GEMINI_API_KEY", "dummy")
+        .env("ASK_PROVIDER", "gemini")
+        .args(["run", "--", "-c60", "-v", "test query"])
+        .output()
+        .expect("Failed to execute command");
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("context=Some(60)"),
+        "Expected context=Some(60), got: {}",
+        stderr
+    );
+}

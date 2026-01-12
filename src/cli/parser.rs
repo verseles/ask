@@ -258,45 +258,75 @@ impl Args {
 
                 arg if arg.starts_with('-') && !arg.starts_with("--") && arg.len() > 2 => {
                     let chars: Vec<char> = arg.chars().skip(1).collect();
-                    let first = chars.first().copied();
-                    let rest: String = chars
-                        .get(1..)
-                        .map(|s| s.iter().collect())
-                        .unwrap_or_default();
+                    let mut j = 0;
+                    while j < chars.len() {
+                        let c = chars[j];
+                        let remaining: String = chars[j + 1..].iter().collect();
 
-                    let parsed_bool = match rest.as_str() {
-                        "0" | "false" => Some(false),
-                        "1" | "true" => Some(true),
-                        _ => None,
-                    };
-
-                    match (first, parsed_bool) {
-                        (Some('c'), _) if rest.parse::<u64>().is_ok() => {
-                            result.context = Some(rest.parse().unwrap());
-                        }
-                        (Some('t'), Some(v)) => result.think = Some(v),
-                        (Some('s'), Some(v)) => result.search = v,
-                        (Some('x'), Some(v)) => result.command_mode = v,
-                        (Some('y'), Some(v)) => result.yes = v,
-                        (Some('v'), Some(v)) => result.verbose = v,
-                        _ => {
-                            for c in chars {
-                                match c {
-                                    'c' => result.context = Some(30),
-                                    'x' => result.command_mode = true,
-                                    'y' => result.yes = true,
-                                    't' => result.think = Some(true),
-                                    's' => result.search = true,
-                                    'v' => result.verbose = true,
-                                    'V' => result.version = true,
-                                    'h' => {
-                                        print_help();
-                                        std::process::exit(0);
-                                    }
-                                    _ => {}
+                        match c {
+                            'c' => {
+                                if remaining.is_empty() {
+                                    result.context = Some(30);
+                                    break;
+                                } else if let Ok(minutes) = remaining.parse::<u64>() {
+                                    result.context = Some(minutes);
+                                    break; // POSIX: value consumes rest
+                                } else {
+                                    result.context = Some(30);
+                                    break;
                                 }
                             }
+                            't' => {
+                                match remaining.as_str() {
+                                    s if s == "0" || s == "false" => {
+                                        result.think = Some(false);
+                                        break; // POSIX: value consumes rest
+                                    }
+                                    s if s == "1" || s == "true" => {
+                                        result.think = Some(true);
+                                        break;
+                                    }
+                                    s if s.starts_with('0') => {
+                                        result.think = Some(false);
+                                        break;
+                                    }
+                                    s if s.starts_with('1') => {
+                                        result.think = Some(true);
+                                        break;
+                                    }
+                                    _ => result.think = Some(true),
+                                }
+                            }
+                            's' => match remaining.as_str() {
+                                "0" | "false" => {
+                                    result.search = false;
+                                    break;
+                                }
+                                "1" | "true" => {
+                                    result.search = true;
+                                    break;
+                                }
+                                s if s.starts_with('0') => {
+                                    result.search = false;
+                                    break;
+                                }
+                                s if s.starts_with('1') => {
+                                    result.search = true;
+                                    break;
+                                }
+                                _ => result.search = true,
+                            },
+                            'x' => result.command_mode = true,
+                            'y' => result.yes = true,
+                            'v' => result.verbose = true,
+                            'V' => result.version = true,
+                            'h' => {
+                                print_help();
+                                std::process::exit(0);
+                            }
+                            _ => {}
                         }
+                        j += 1;
                     }
                 }
 
