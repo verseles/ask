@@ -159,17 +159,73 @@ impl AnthropicProvider {
             return None;
         }
 
-        let budget = options
+        let value = options
             .thinking_value
             .as_ref()
-            .and_then(|v| v.parse::<u64>().ok())
-            .unwrap_or(5000)
-            .max(1024);
+            .map(|v| v.to_lowercase())
+            .unwrap_or_else(|| "medium".to_string());
+
+        let budget = match value.as_str() {
+            "min" | "minimal" => 2048,
+            "low" => 4096,
+            "medium" | "med" => 8192,
+            "high" => 16384,
+            "xhigh" | "max" => 32768,
+            s => s.parse::<u64>().unwrap_or(8192),
+        };
+
+        // Ensure budget is at least 1024 (API requirement)
+        let budget = budget.max(1024);
 
         Some(ThinkingConfig {
             thinking_type: "enabled".to_string(),
             budget_tokens: budget,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_build_thinking_levels() {
+        let provider = AnthropicProvider::new("key".into(), "url".into(), "claude-3-7-sonnet".into());
+        
+        let cases = vec![
+            ("minimal", 2048),
+            ("low", 4096),
+            ("medium", 8192),
+            ("high", 16384),
+            ("12345", 12345),
+            ("invalid", 8192), // default
+        ];
+
+        for (input, expected) in cases {
+            let options = ProviderOptions {
+                thinking_enabled: true,
+                thinking_value: Some(input.to_string()),
+                web_search: false,
+                allowed_domains: None,
+                blocked_domains: None,
+            };
+            
+            let config = provider.build_thinking(&options).unwrap();
+            assert_eq!(config.budget_tokens, expected, "Failed for input: {}", input);
+        }
+    }
+    
+    #[test]
+    fn test_build_thinking_disabled() {
+        let provider = AnthropicProvider::new("key".into(), "url".into(), "claude-3-5-sonnet".into());
+        let options = ProviderOptions {
+            thinking_enabled: false,
+            thinking_value: Some("high".to_string()),
+            web_search: false,
+            allowed_domains: None,
+            blocked_domains: None,
+        };
+        assert!(provider.build_thinking(&options).is_none());
     }
 }
 
