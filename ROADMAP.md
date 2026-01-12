@@ -72,6 +72,17 @@ Description: Remove [default] and [providers], centralize everything in [profile
 - [x] 13.35 Add ADR-021: Profile-Only Architecture
 - [x] 13.36 Update `--help-env` with new ENV list
 
+## Feature 14: Unified Thinking Levels
+
+Description: Unified abstract thinking levels (low, medium, high) across providers
+
+- [x] 14.01 Map abstract levels to token budgets in Anthropic provider
+- [x] 14.02 Unify thinking levels in interactive config menu
+- [x] 14.03 Update CLI parser to handle string values for --think flag
+- [x] 14.04 Implement normalization logic in each provider
+- [x] 14.05 Add integration tests for --think flag variants
+- [x] 14.06 Add ADR-022: Unified Thinking Levels
+
 ## Legend
 
 - [x] Complete
