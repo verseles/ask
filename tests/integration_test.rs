@@ -41,43 +41,82 @@ fn no_arguments_does_not_panic() {
 }
 
 #[test]
-fn json_flag_is_recognized() {
+fn json_flag_is_applied() {
     let output = Command::new("cargo")
-        .args(["run", "--", "--json", "--help"])
+        .env("ASK_GEMINI_API_KEY", "dummy")
+        .env("ASK_PROVIDER", "gemini")
+        .args(["run", "--", "-v", "--json", "test query"])
         .output()
         .expect("Failed to execute command");
 
-    assert!(output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("json=true"));
 }
 
 #[test]
-fn raw_flag_is_recognized() {
+fn raw_flag_is_applied() {
     let output = Command::new("cargo")
-        .args(["run", "--", "--raw", "--help"])
+        .env("ASK_GEMINI_API_KEY", "dummy")
+        .env("ASK_PROVIDER", "gemini")
+        .args(["run", "--", "-v", "--raw", "test query"])
         .output()
         .expect("Failed to execute command");
 
-    assert!(output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("raw=true"));
 }
 
 #[test]
-fn think_flag_is_recognized() {
+fn think_flag_is_applied() {
     let output = Command::new("cargo")
-        .args(["run", "--", "-t", "--help"])
+        .env("ASK_GEMINI_API_KEY", "dummy")
+        .env("ASK_PROVIDER", "gemini")
+        .args(["run", "--", "-v", "-t", "test query"])
         .output()
         .expect("Failed to execute command");
 
-    assert!(output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("think=Some(true)"));
 }
 
 #[test]
-fn no_think_flag_is_recognized() {
+fn no_think_flag_is_applied() {
     let output = Command::new("cargo")
-        .args(["run", "--", "--no-think", "--help"])
+        .env("ASK_GEMINI_API_KEY", "dummy")
+        .env("ASK_PROVIDER", "gemini")
+        .args(["run", "--", "-v", "--think=false", "test query"])
         .output()
         .expect("Failed to execute command");
 
-    assert!(output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("think=Some(false)"));
+}
+
+#[test]
+fn search_flag_is_applied() {
+    let output = Command::new("cargo")
+        .env("ASK_GEMINI_API_KEY", "dummy")
+        .env("ASK_PROVIDER", "gemini")
+        .args(["run", "--", "-v", "-s", "test query"])
+        .output()
+        .expect("Failed to execute command");
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("search=true"));
+}
+
+#[test]
+fn context_flag_is_applied() {
+    let output = Command::new("cargo")
+        .env("ASK_GEMINI_API_KEY", "dummy")
+        .env("ASK_PROVIDER", "gemini")
+        .args(["run", "--", "-v", "-c60", "test query"])
+        .output()
+        .expect("Failed to execute command");
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    // context is Option<u64>, so debug output is Some(60)
+    assert!(stderr.contains("context=Some(60)"));
 }
 
 #[test]
@@ -169,16 +208,6 @@ fn provider_flag_is_recognized() {
 }
 
 #[test]
-fn search_flag_is_recognized() {
-    let output = Command::new("cargo")
-        .args(["run", "--", "-s", "--help"])
-        .output()
-        .expect("Failed to execute command");
-
-    assert!(output.status.success());
-}
-
-#[test]
 fn make_config_includes_aggressive_option() {
     let output = Command::new("cargo")
         .args(["run", "--", "--make-config"])
@@ -212,4 +241,24 @@ fn update_aggressive_env_is_recognized() {
         .expect("Failed to execute command");
 
     assert!(output.status.success());
+}
+
+#[test]
+fn verbose_flag_shows_flags() {
+    // We use a dummy key to ensure provider creation succeeds so we reach handle_query
+    // The command will likely fail due to invalid key, but we only care about stderr output
+    // We force Gemini to avoid relying on user config
+    let output = Command::new("cargo")
+        .env("ASK_GEMINI_API_KEY", "dummy")
+        .env("ASK_PROVIDER", "gemini")
+        .args(["run", "--", "-v", "test query"])
+        .output()
+        .expect("Failed to execute command");
+
+    // We don't assert success because it might fail on API call
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("[verbose] flags:"));
+    assert!(stderr.contains("context="));
+    assert!(stderr.contains("command_mode="));
+    assert!(stderr.contains("json="));
 }

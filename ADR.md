@@ -641,9 +641,8 @@ ask init -n -k YOUR_KEY
 **Decision**: Add `-v`/`--verbose` flag and `ask profiles` subcommand.
 
 **Verbose Output**:
-```
-[verbose] provider=gemini, model=gemini-3-flash, profile=work, thinking=high
-```
+- Displays active provider, model, profile, and thinking settings.
+- **Update (v0.18.0)**: Includes a full dump of all internal CLI flag statuses (context, json, raw, search, etc.) for improved observability and to facilitate deep integration testing.
 
 **Profiles Subcommand**:
 ```
@@ -654,45 +653,15 @@ Profiles
   work openai gpt-4o [search]
 
 Default profile: personal
-
----
-
-## ADR-021: Unified Thinking Mode
-
-**Status**: Accepted (v0.14.0)
-
-**Context**: Modern LLMs (Gemini 2.0+, Claude 3.7+, OpenAI o1+) support "thinking" or "reasoning" modes with different API parameters.
-
-**Decision**: Implement a unified `--think` flag and profile-level configuration that abstracts provider-specific parameters.
-
-**Implementation**:
-
-| Provider | Config Key | Values | API Implementation |
-|----------|------------|--------|--------------------|
-| **Gemini** | `thinking_level` | `minimal, low, medium, high` | `thinking_config: { include_thoughts: true }` + `max_output_tokens` scaling |
-| **OpenAI** | `reasoning_effort` | `none, minimal, low, medium, high, xhigh` | `reasoning_effort` field |
-| **Anthropic** | `thinking_budget` | `0` or `1024-128000` | `thinking: { type: "enabled", budget_tokens: N }` |
-
-**CLI Flags**:
-- `-t` or `--think` - Enable thinking with profile's default level/budget
-- `--think=false` - Force disable thinking for current query
-
-**Rationale**:
-- Users shouldn't need to remember different parameter names per provider
-- "Thinking" is the common conceptual model for these features
-- Automatic `max_output_tokens` adjustment prevents truncation when thinking is enabled
-
-**Consequences**:
-- Profile configuration is slightly more verbose to accommodate all three types
-- Code handles the mapping from levels (low/medium/high) to specific provider budgets
-- Prevents "budget overflow" errors by validating against model limits
 ```
 
 **Rationale**:
 - Debugging which config is active
 - Discovery of available profiles
 - Consistent with other CLI tools (`docker ps`, `kubectl get`)
+- Flag dump allows integration tests to verify actual application of arguments beyond just parsing success
 
 **Consequences**:
 - Verbose output goes to stderr (doesn't pollute stdout)
 - Profiles shows all settings at a glance
+- Slightly more verbose output when using `-v`, but significantly better for debugging and testing

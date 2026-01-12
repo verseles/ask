@@ -367,6 +367,31 @@ async fn handle_query(
             }
             .cyan()
         );
+
+        eprintln!(
+            "{} flags: context={:?}, command_mode={}, yes={}, think={:?}, json={}, markdown={}, raw={}, no_color={}, no_follow={}, no_fallback={}, search={}, citations={}, update={}, init={}, clear_context={}, show_history={}, make_prompt={}, make_config={}, list_profiles={}, non_interactive={}",
+            "[verbose]".bright_black(),
+            args.context,
+            args.command_mode,
+            args.yes,
+            args.think,
+            args.json,
+            args.markdown,
+            args.raw,
+            args.no_color,
+            args.no_follow,
+            args.no_fallback,
+            args.search,
+            args.citations,
+            args.update,
+            args.init,
+            args.clear_context,
+            args.show_history,
+            args.make_prompt,
+            args.make_config,
+            args.list_profiles,
+            args.non_interactive
+        );
     }
 
     let mut messages = Vec::new();

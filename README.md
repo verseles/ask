@@ -111,7 +111,7 @@ OPTIONS:
         --make-config     Export example config.toml template
         --update          Check and install updates
         --help-env        Show all environment variables
-    -v, --verbose         Show verbose output (profile, provider, model info)
+    -v, --verbose         Show verbose output (profile, provider, model info, debug flags)
     -V, --version         Show version
     -h, --help            Show help
 
