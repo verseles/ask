@@ -256,23 +256,37 @@ impl Args {
                     result.markdown = value == "true" || value == "1";
                 }
 
-                // Handle combined short flags like -cy or -c60
                 arg if arg.starts_with('-') && !arg.starts_with("--") && arg.len() > 2 => {
                     let chars: Vec<char> = arg.chars().skip(1).collect();
+                    let first = chars.first().copied();
+                    let rest: String = chars
+                        .get(1..)
+                        .map(|s| s.iter().collect())
+                        .unwrap_or_default();
 
-                    // Check if it's -c followed by a number (like -c60)
-                    if chars.first() == Some(&'c') {
-                        let rest: String = chars[1..].iter().collect();
-                        if let Ok(minutes) = rest.parse::<u64>() {
-                            result.context = Some(minutes);
-                        } else {
-                            // It's combined flags like -cy
+                    let parsed_bool = match rest.as_str() {
+                        "0" | "false" => Some(false),
+                        "1" | "true" => Some(true),
+                        _ => None,
+                    };
+
+                    match (first, parsed_bool) {
+                        (Some('c'), _) if rest.parse::<u64>().is_ok() => {
+                            result.context = Some(rest.parse().unwrap());
+                        }
+                        (Some('t'), Some(v)) => result.think = Some(v),
+                        (Some('s'), Some(v)) => result.search = v,
+                        (Some('x'), Some(v)) => result.command_mode = v,
+                        (Some('y'), Some(v)) => result.yes = v,
+                        (Some('v'), Some(v)) => result.verbose = v,
+                        _ => {
                             for c in chars {
                                 match c {
                                     'c' => result.context = Some(30),
                                     'x' => result.command_mode = true,
                                     'y' => result.yes = true,
                                     't' => result.think = Some(true),
+                                    's' => result.search = true,
                                     'v' => result.verbose = true,
                                     'V' => result.version = true,
                                     'h' => {
@@ -281,24 +295,6 @@ impl Args {
                                     }
                                     _ => {}
                                 }
-                            }
-                        }
-                    } else {
-                        // Regular combined flags like -xy
-                        for c in chars {
-                            match c {
-                                'c' => result.context = Some(30),
-                                'x' => result.command_mode = true,
-                                'y' => result.yes = true,
-                                't' => result.think = Some(true),
-                                's' => result.search = true,
-                                'v' => result.verbose = true,
-                                'V' => result.version = true,
-                                'h' => {
-                                    print_help();
-                                    std::process::exit(0);
-                                }
-                                _ => {}
                             }
                         }
                     }
