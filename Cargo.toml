@@ -1,6 +1,6 @@
 [package]
 name = "ask"
-version = "0.20.2"
+version = "0.21.0"
 edition = "2021"
 license = "AGPL-3.0"
 description = "Ask anything in plain text, get commands or answers instantly. No quotes needed."
