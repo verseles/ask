@@ -544,7 +544,7 @@ async fn maybe_execute_command(config: &Config, args: &Args, response: &str) -> 
         executor
             .execute_with_sudo_retry(response, !args.no_follow)
             .await?;
-    } else if args.command_mode && crate::executor::can_inject() {
+    } else if crate::executor::can_inject() {
         match crate::executor::inject_command(response)? {
             None => {}
             Some(edited_cmd) => {
