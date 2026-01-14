@@ -92,6 +92,16 @@ Description: Support finding ask.toml by traversing up the directory tree (like 
 - [x] 15.03 Add tests for configuration discovery in subdirectories
 - [x] 15.04 Update documentation regarding project-local configuration
 
+## Feature 16: Global History & Advanced Context Management
+
+Description: Global access to conversation history across all directories
+
+- [ ] 16.01 Add `ask history --global` to list all saved contexts
+- [ ] 16.02 Add ability to view a specific history by ID or path
+- [ ] 16.03 Implement search across all stored conversations
+- [ ] 16.04 Add automatic summary/title generation for contexts
+- [ ] 16.05 Add command to prune histories of deleted directories
+
 ## Legend
 
 - [x] Complete

@@ -313,8 +313,9 @@ mod tests {
 
     #[test]
     fn test_build_thinking_levels() {
-        let provider = AnthropicProvider::new("key".into(), "url".into(), "claude-3-7-sonnet".into());
-        
+        let provider =
+            AnthropicProvider::new("key".into(), "url".into(), "claude-3-7-sonnet".into());
+
         let cases = vec![
             ("minimal", 2048),
             ("low", 4096),
@@ -332,15 +333,20 @@ mod tests {
                 allowed_domains: None,
                 blocked_domains: None,
             };
-            
+
             let config = provider.build_thinking(&options).unwrap();
-            assert_eq!(config.budget_tokens, expected, "Failed for input: {}", input);
+            assert_eq!(
+                config.budget_tokens, expected,
+                "Failed for input: {}",
+                input
+            );
         }
     }
-    
+
     #[test]
     fn test_build_thinking_disabled() {
-        let provider = AnthropicProvider::new("key".into(), "url".into(), "claude-3-5-sonnet".into());
+        let provider =
+            AnthropicProvider::new("key".into(), "url".into(), "claude-3-5-sonnet".into());
         let options = ProviderOptions {
             thinking_enabled: false,
             thinking_value: Some("high".to_string()),
