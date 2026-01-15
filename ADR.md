@@ -524,7 +524,6 @@ blocked_domains = ["pinterest.com"]                  # Anthropic only
 Main Menu (existing config):
 ├── View current config
 ├── Edit default settings
-├── Manage API keys
 ├── Manage profiles
 │   ├── Create new profile
 │   ├── Edit existing profile

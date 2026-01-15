@@ -49,7 +49,7 @@ Description: Remove [default] and [providers], centralize everything in [profile
 ### Phase 6: Interactive Menu Updates
 
 - [x] 13.23 Update "Edit default settings" to edit default/first profile
-- [x] 13.24 Update "Manage API keys" to edit api_key within profiles
+- [x] 13.24 Remove "Manage API keys" option (API keys managed via profiles)
 - [x] 13.25 Update "View current config" to not show [default]/[providers]
 
 ### Phase 7: Template Updates

@@ -131,7 +131,6 @@ Run `ask init` or `ask config` to configure interactively:
 ? What would you like to do?
 › View current config
   Edit default settings
-  Manage API keys
   Manage profiles
   Configure fallback behavior
   Exit
@@ -143,8 +142,7 @@ Run `ask init` or `ask config` to configure interactively:
 **Main Menu:**
 - **View current config** - Display all settings in formatted output
 - **Edit default settings** - Provider, model, API key, streaming, thinking mode, web search
-- **Manage API keys** - Add/update API keys for any provider
-- **Manage profiles** - Create, edit, delete, set default profiles
+- **Manage profiles** - Create, edit, delete, set default profiles (API keys per profile)
 - **Configure fallback** - Set default fallback behavior (any/none)
 
 **Profile Management:**
