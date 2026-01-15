@@ -102,6 +102,14 @@ Description: Global access to conversation history across all directories
 - [ ] 16.04 Add automatic summary/title generation for contexts
 - [ ] 16.05 Add command to prune histories of deleted directories
 
+## Feature 17: Update Check Refinement
+
+Description: Limit aggressive update checks and respect configured intervals
+
+- [x] 17.01 Limit aggressive update checks to once per hour
+- [x] 17.02 Ensure normal update checks respect `check_interval_hours` config
+- [x] 17.03 Add unit tests for update check timing logic
+
 ## Legend
 
 - [x] Complete

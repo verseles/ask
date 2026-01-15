@@ -30,7 +30,7 @@ async fn main() -> Result<()> {
     let config = config::Config::load().unwrap_or_default();
 
     // Spawn background update check
-    update::check_updates_background(config.update.aggressive);
+    update::check_updates_background(config.update.aggressive, config.update.check_interval_hours);
 
     run(update_notification).await
 }

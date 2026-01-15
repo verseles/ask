@@ -38,15 +38,19 @@ pub struct UpdateNotification {
 }
 
 #[allow(dead_code)]
-pub fn should_check_update(aggressive: bool, last_check: Option<i64>) -> bool {
-    if aggressive {
-        return true;
-    }
+pub fn should_check_update(aggressive: bool, interval_hours: u64, last_check: Option<i64>) -> bool {
     match last_check {
         None => true,
         Some(timestamp) => {
             let now = chrono::Utc::now().timestamp();
-            now - timestamp > 86400
+            let elapsed = now - timestamp;
+            if aggressive {
+                // Limit aggressive checks to once per hour (3600s)
+                elapsed >= 3600
+            } else {
+                // Normal checks respect interval (default 24h)
+                elapsed >= (interval_hours * 3600) as i64
+            }
         }
     }
 }
@@ -197,7 +201,7 @@ fn is_newer_version(current: &str, remote: &str) -> bool {
 }
 
 /// Check for updates in background (non-blocking)
-pub fn check_updates_background(aggressive: bool) {
+pub fn check_updates_background(aggressive: bool, interval_hours: u64) {
     if std::env::var("ASK_NO_UPDATE").is_ok() {
         return;
     }
@@ -207,18 +211,17 @@ pub fn check_updates_background(aggressive: bool) {
         None => return,
     };
 
-    if !aggressive {
-        let last_check_file = data_dir.join("last_update_check");
-        if last_check_file.exists() {
-            if let Ok(content) = fs::read_to_string(&last_check_file) {
-                if let Ok(timestamp) = content.trim().parse::<i64>() {
-                    let now = chrono::Utc::now().timestamp();
-                    if now - timestamp < 86400 {
-                        return;
-                    }
-                }
-            }
-        }
+    let last_check_file = data_dir.join("last_update_check");
+    let last_check = if last_check_file.exists() {
+        fs::read_to_string(&last_check_file)
+            .ok()
+            .and_then(|content| content.trim().parse::<i64>().ok())
+    } else {
+        None
+    };
+
+    if !should_check_update(aggressive, interval_hours, last_check) {
+        return;
     }
 
     // Spawn background process
@@ -522,21 +525,24 @@ mod tests {
 
     #[test]
     fn test_should_check_update_aggressive() {
-        assert!(should_check_update(true, None));
-        assert!(should_check_update(true, Some(0)));
-        assert!(should_check_update(
-            true,
-            Some(chrono::Utc::now().timestamp())
-        ));
+        let now = chrono::Utc::now().timestamp();
+        assert!(should_check_update(true, 24, None));
+        assert!(should_check_update(true, 24, Some(0)));
+        assert!(should_check_update(true, 24, Some(now - 3601)));
+        assert!(!should_check_update(true, 24, Some(now - 3599)));
     }
 
     #[test]
     fn test_should_check_update_normal() {
         let now = chrono::Utc::now().timestamp();
-        assert!(!should_check_update(false, Some(now)));
-        assert!(!should_check_update(false, Some(now - 3600)));
-        assert!(should_check_update(false, Some(now - 86401)));
-        assert!(should_check_update(false, None));
+        assert!(!should_check_update(false, 24, Some(now)));
+        assert!(!should_check_update(false, 24, Some(now - 3600)));
+        assert!(should_check_update(false, 24, Some(now - 86401)));
+        assert!(should_check_update(false, 24, None));
+
+        // Custom interval
+        assert!(should_check_update(false, 1, Some(now - 3601)));
+        assert!(!should_check_update(false, 1, Some(now - 3599)));
     }
 
     #[test]
