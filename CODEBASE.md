@@ -31,12 +31,13 @@ ask/
 │   │   ├── mod.rs           # Module exports
 │   │   ├── safety.rs        # Destructive command detection
 │   │   ├── runner.rs        # Command execution
-│   │   └── injector.rs      # Terminal command injection (uinput/enigo)
+│   │   └── injector.rs      # Terminal command injection (clipboard paste)
 │   ├── output/
 │   │   ├── mod.rs           # Module exports
 │   │   ├── formatter.rs     # Output formatting (JSON, raw, markdown)
 │   │   ├── markdown.rs      # Terminal markdown rendering
-│   │   └── colorize.rs      # Color scheme utilities
+│   │   ├── colorize.rs      # Color scheme utilities
+│   │   └── spinner.rs       # Loading indicator (● blinking/streaming)
 │   ├── update/
 │   │   └── mod.rs           # Auto-update from GitHub releases
 │   └── completions.rs       # Shell completions generation
@@ -197,6 +198,11 @@ Handles output based on flags:
 
 Automatically detects piping and disables colors/formatting.
 
+**Loading Indicator** (`spinner.rs`):
+- `Spinner`: Blinks ● (500ms on/off) while waiting for AI response
+- `StreamingIndicator`: Shows ● at end of text during streaming
+- Only active in terminal mode (not raw/json/piped)
+
 ### Auto-Update (`src/update/`)
 
 Implements automatic update checking and installation:
@@ -309,6 +315,6 @@ Key crates:
 - `indicatif`: Progress spinners
 - `termimad`: Markdown rendering
 - `requestty`: Interactive CLI prompts with number key selection
-- `arboard`: Clipboard support for command injection (Windows fallback)
-- `mouse-keyboard-input`: Command injection via `/dev/uinput` (Linux)
-- `enigo`: Command injection via Accessibility/keystrokes (macOS/Windows)
+- `arboard`: Clipboard support for command injection (all platforms)
+- `mouse-keyboard-input`: Key simulation for Ctrl+Shift+V paste (Linux)
+- `enigo`: Key simulation for Cmd+V/Ctrl+V paste (macOS/Windows)

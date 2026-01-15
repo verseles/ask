@@ -243,30 +243,32 @@ io::stdout().flush()?;
 
 ---
 
-## ADR-011: Keystroke Typing Instead of Clipboard Paste
+## ADR-011: Clipboard Paste for Command Injection
 
-**Status**: Accepted
+**Status**: Accepted (supersedes original keystroke approach)
 
-**Context**: Commands need to be injected into the terminal for user review/edit before execution.
+**Context**: Commands need to be injected into the terminal for user review/edit before execution. The original keystroke-by-keystroke approach had issues with international keyboard layouts (dead keys like ', `, ~ would combine with vowels, e.g., 'a becoming á on ABNT2).
 
-**Decision**: Type commands keystroke-by-keystroke instead of clipboard paste.
+**Decision**: Use clipboard paste instead of keystroke typing.
 
 **Implementation**:
-- Linux: Use `mouse-keyboard-input` crate via `/dev/uinput` kernel module
-- macOS: Use `enigo` crate with Accessibility API
-- Windows: Use clipboard + Ctrl+V (enigo)
+- All platforms: Copy command to clipboard, then simulate paste shortcut
+- Linux: Ctrl+Shift+V (standard terminal paste)
+- macOS: Cmd+V
+- Windows: Ctrl+V
+- Clipboard preservation: Save clipboard before, restore after 500ms delay
 - Fallback: Interactive requestty prompt with editable text
 
 **Rationale**:
-- Does not overwrite user's clipboard content
-- Consistent behavior across platforms (Linux/macOS type, Windows pastes)
-- Works on Wayland without screen recording permission popup
-- Background process spawning prevents "ghost text" during ask output
+- Fixes dead key issues with international keyboard layouts (ABNT2, AZERTY, etc.)
+- Much faster than keystroke-by-keystroke (single action vs N keystrokes)
+- Smaller window for focus-change issues
+- Consistent behavior across all platforms
 
 **Consequences**:
+- Temporarily overwrites clipboard (restored after 500ms)
 - Requires uinput permissions on Linux (input group or udev rule)
 - Requires Accessibility permission on macOS
-- Slightly slower than paste for long commands
 - Graceful fallback to interactive prompt if permissions unavailable
 
 ---
@@ -784,4 +786,29 @@ This inconsistency makes it difficult for users to switch providers without chan
 - Performance impact is negligible as the number of directory levels is typically small.
 - Users can still override project-wide settings with a local `ask.toml` in a specific subfolder.
 
+---
 
+## ADR-024: Loading Indicator with Blinking ● Symbol
+
+**Status**: Accepted
+
+**Context**: Users had no visual feedback while waiting for AI responses, making it unclear if the tool was working or frozen.
+
+**Decision**: Implement a loading indicator using the ● symbol that blinks while waiting and appears at the end of streaming text.
+
+**Implementation**:
+- `Spinner`: Blinks ● (500ms visible, 500ms hidden) while waiting for first chunk or full response
+- `StreamingIndicator`: Shows ● at the end of text during streaming, updates position with each chunk
+- Only active in terminal mode (not in raw, json, or piped output)
+- Uses ANSI backspace (`\x08`) for cursor manipulation
+
+**Rationale**:
+- Minimal visual footprint (single character)
+- Clear indication of "thinking" (blinking) vs "receiving" (at end of text)
+- Doesn't interfere with output content
+- Automatically disabled when output is piped or formatted
+
+**Consequences**:
+- Additional thread for spinner (minimal overhead)
+- Requires terminal that supports backspace control character
+- Gracefully does nothing in non-terminal environments
