@@ -81,6 +81,16 @@ impl OutputFormatter {
     }
 
     fn format_raw(&self, text: &str) {
-        println!("{}", text);
+        if !self.no_color {
+            println!("{}", unescape_ansi(text));
+        } else {
+            println!("{}", text);
+        }
     }
+}
+
+fn unescape_ansi(text: &str) -> String {
+    text.replace("\\033", "\x1b")
+        .replace("\\x1b", "\x1b")
+        .replace("\\e", "\x1b")
 }
