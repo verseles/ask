@@ -1169,7 +1169,6 @@ pub async fn init_config() -> Result<()> {
             vec![
                 "View current config",
                 "Edit default settings",
-                "Manage API keys",
                 "Manage profiles",
                 "Configure fallback behavior",
                 "Exit",
@@ -1335,85 +1334,9 @@ channel = "stable"
                     );
                 }
                 2 => {
-                    mgr.backup()?;
-
-                    let profiles = mgr.get_profiles();
-                    if profiles.is_empty() {
-                        println!(
-                            "{}",
-                            "No profiles configured. Create a profile first.".yellow()
-                        );
-                        continue;
-                    }
-
-                    let mut items: Vec<String> = profiles.clone();
-                    items.push("Cancel".to_string());
-
-                    let idx = numbered_select("Select profile to update API key", &items, 0)?;
-
-                    if idx < profiles.len() {
-                        let profile_name = &profiles[idx];
-                        let existing_key = mgr
-                            .get_str(&["profiles", profile_name, "api_key"])
-                            .unwrap_or_default();
-
-                        let new_key: String = if !existing_key.is_empty() {
-                            let masked = mask_api_key(&existing_key);
-                            let question = Question::input("profile_api_key")
-                                .message(format!("API key [{}] (Enter to keep)", masked))
-                                .build();
-                            requestty::prompt_one(question)?
-                                .as_string()
-                                .unwrap_or_default()
-                                .to_string()
-                        } else {
-                            let question = Question::input("profile_api_key")
-                                .message("API key")
-                                .build();
-                            requestty::prompt_one(question)?
-                                .as_string()
-                                .unwrap_or_default()
-                                .to_string()
-                        };
-
-                        let final_key = if new_key.is_empty() {
-                            existing_key
-                        } else {
-                            new_key
-                        };
-
-                        if !final_key.is_empty() {
-                            let content =
-                                std::fs::read_to_string(&mgr.config_path).unwrap_or_default();
-                            let mut doc: toml::Value = toml::from_str(&content)?;
-
-                            if let Some(profiles_section) = doc.get_mut("profiles") {
-                                if let Some(table) = profiles_section.as_table_mut() {
-                                    if let Some(profile_table) = table.get_mut(profile_name) {
-                                        if let Some(pt) = profile_table.as_table_mut() {
-                                            pt.insert(
-                                                "api_key".to_string(),
-                                                toml::Value::String(final_key),
-                                            );
-                                        }
-                                    }
-                                }
-                            }
-
-                            std::fs::write(&mgr.config_path, toml::to_string_pretty(&doc)?)?;
-                            mgr.reload()?;
-                            println!(
-                                "{} {}",
-                                "API key updated for profile".green(),
-                                profile_name.cyan()
-                            );
-                        }
-                    }
-                }
-                3 => {
                     manage_profiles(&mut mgr)?;
                 }
-                4 => {
+                3 => {
                     mgr.backup()?;
 
                     let fallback_options = vec![
@@ -1454,7 +1377,7 @@ channel = "stable"
                     mgr.reload()?;
                     println!("{} {}", "Fallback set to:".green(), fallback_value.cyan());
                 }
-                5 => {
+                4 => {
                     println!("{}", "Goodbye!".bright_black());
                     break;
                 }

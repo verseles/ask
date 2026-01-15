@@ -514,10 +514,7 @@ async fn handle_query(
         // Hint for streaming mode when command will be injected
         if crate::executor::can_inject() && is_likely_command(response_text.trim()) {
             use colored::Colorize;
-            println!(
-                "{}",
-                "(disable streaming to hide this line)".bright_black()
-            );
+            println!("{}", "(disable streaming to hide this line)".bright_black());
         }
 
         if args.has_context() {
@@ -545,8 +542,7 @@ async fn handle_query(
         drop(spinner);
 
         // Skip echo if command will be injected into terminal
-        let skip_echo =
-            crate::executor::can_inject() && is_likely_command(response.text.trim());
+        let skip_echo = crate::executor::can_inject() && is_likely_command(response.text.trim());
 
         if !skip_echo {
             formatter.format(&response.text);

@@ -67,9 +67,7 @@ fn try_clipboard_paste(command: &str) -> Result<()> {
     device
         .press(KEY_LEFTSHIFT)
         .map_err(|e| anyhow::anyhow!("{}", e))?;
-    device
-        .click(KEY_V)
-        .map_err(|e| anyhow::anyhow!("{}", e))?;
+    device.click(KEY_V).map_err(|e| anyhow::anyhow!("{}", e))?;
     device
         .release(KEY_LEFTSHIFT)
         .map_err(|e| anyhow::anyhow!("{}", e))?;
