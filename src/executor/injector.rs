@@ -1,9 +1,28 @@
 use anyhow::Result;
 
+/// Save current clipboard content
+fn save_clipboard() -> Option<String> {
+    arboard::Clipboard::new()
+        .ok()
+        .and_then(|mut cb| cb.get_text().ok())
+}
+
+/// Restore clipboard content after a delay (spawns a thread)
+fn restore_clipboard_delayed(previous: Option<String>, delay_ms: u64) {
+    if let Some(text) = previous {
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(delay_ms));
+            if let Ok(mut cb) = arboard::Clipboard::new() {
+                let _ = cb.set_text(&text);
+            }
+        });
+    }
+}
+
 #[cfg(target_os = "linux")]
-fn can_use_uinput() -> bool {
-    use mouse_keyboard_input::VirtualDevice;
-    VirtualDevice::default().is_ok()
+fn can_use_clipboard_paste() -> bool {
+    // Check if we have display access for key simulation
+    std::env::var("DISPLAY").is_ok() || std::env::var("WAYLAND_DISPLAY").is_ok()
 }
 
 #[cfg(target_os = "macos")]
@@ -17,153 +36,131 @@ fn can_use_accessibility() -> bool {
 }
 
 #[cfg(target_os = "linux")]
-fn try_uinput_inject(command: &str) -> Result<()> {
+fn try_clipboard_paste(command: &str) -> Result<()> {
     use mouse_keyboard_input::key_codes::*;
     use mouse_keyboard_input::VirtualDevice;
-    use std::collections::HashMap;
     use std::thread;
     use std::time::Duration;
 
+    // Save current clipboard
+    let previous_clipboard = save_clipboard();
+
+    // Set command to clipboard
+    let mut clipboard = arboard::Clipboard::new().map_err(|e| anyhow::anyhow!("{}", e))?;
+    clipboard
+        .set_text(command)
+        .map_err(|e| anyhow::anyhow!("{}", e))?;
+
+    // Small delay for clipboard to update
+    thread::sleep(Duration::from_millis(50));
+
+    // Create virtual device for key simulation
     let mut device = VirtualDevice::default().map_err(|e| anyhow::anyhow!("{}", e))?;
 
+    // Wait a bit before sending keys
     thread::sleep(Duration::from_millis(100));
 
-    let key_map: HashMap<char, (u16, bool)> = [
-        ('a', (KEY_A, false)),
-        ('b', (KEY_B, false)),
-        ('c', (KEY_C, false)),
-        ('d', (KEY_D, false)),
-        ('e', (KEY_E, false)),
-        ('f', (KEY_F, false)),
-        ('g', (KEY_G, false)),
-        ('h', (KEY_H, false)),
-        ('i', (KEY_I, false)),
-        ('j', (KEY_J, false)),
-        ('k', (KEY_K, false)),
-        ('l', (KEY_L, false)),
-        ('m', (KEY_M, false)),
-        ('n', (KEY_N, false)),
-        ('o', (KEY_O, false)),
-        ('p', (KEY_P, false)),
-        ('q', (KEY_Q, false)),
-        ('r', (KEY_R, false)),
-        ('s', (KEY_S, false)),
-        ('t', (KEY_T, false)),
-        ('u', (KEY_U, false)),
-        ('v', (KEY_V, false)),
-        ('w', (KEY_W, false)),
-        ('x', (KEY_X, false)),
-        ('y', (KEY_Y, false)),
-        ('z', (KEY_Z, false)),
-        ('A', (KEY_A, true)),
-        ('B', (KEY_B, true)),
-        ('C', (KEY_C, true)),
-        ('D', (KEY_D, true)),
-        ('E', (KEY_E, true)),
-        ('F', (KEY_F, true)),
-        ('G', (KEY_G, true)),
-        ('H', (KEY_H, true)),
-        ('I', (KEY_I, true)),
-        ('J', (KEY_J, true)),
-        ('K', (KEY_K, true)),
-        ('L', (KEY_L, true)),
-        ('M', (KEY_M, true)),
-        ('N', (KEY_N, true)),
-        ('O', (KEY_O, true)),
-        ('P', (KEY_P, true)),
-        ('Q', (KEY_Q, true)),
-        ('R', (KEY_R, true)),
-        ('S', (KEY_S, true)),
-        ('T', (KEY_T, true)),
-        ('U', (KEY_U, true)),
-        ('V', (KEY_V, true)),
-        ('W', (KEY_W, true)),
-        ('X', (KEY_X, true)),
-        ('Y', (KEY_Y, true)),
-        ('Z', (KEY_Z, true)),
-        ('0', (KEY_10, false)),
-        ('1', (KEY_1, false)),
-        ('2', (KEY_2, false)),
-        ('3', (KEY_3, false)),
-        ('4', (KEY_4, false)),
-        ('5', (KEY_5, false)),
-        ('6', (KEY_6, false)),
-        ('7', (KEY_7, false)),
-        ('8', (KEY_8, false)),
-        ('9', (KEY_9, false)),
-        (' ', (KEY_SPACE, false)),
-        ('-', (KEY_MINUS, false)),
-        ('_', (KEY_MINUS, true)),
-        ('=', (KEY_EQUAL, false)),
-        ('+', (KEY_EQUAL, true)),
-        ('[', (KEY_LEFTBRACE, false)),
-        ('{', (KEY_LEFTBRACE, true)),
-        (']', (KEY_RIGHTBRACE, false)),
-        ('}', (KEY_RIGHTBRACE, true)),
-        ('\\', (KEY_BACKSLASH, false)),
-        ('|', (KEY_BACKSLASH, true)),
-        (';', (KEY_SEMICOLON, false)),
-        (':', (KEY_SEMICOLON, true)),
-        ('\'', (KEY_APOSTROPHE, false)),
-        ('"', (KEY_APOSTROPHE, true)),
-        ('`', (KEY_GRAVE, false)),
-        ('~', (KEY_GRAVE, true)),
-        (',', (KEY_COMMA, false)),
-        ('<', (KEY_COMMA, true)),
-        ('.', (KEY_DOT, false)),
-        ('>', (KEY_DOT, true)),
-        ('/', (KEY_SLASH, false)),
-        ('?', (KEY_SLASH, true)),
-        ('!', (KEY_1, true)),
-        ('@', (KEY_2, true)),
-        ('#', (KEY_3, true)),
-        ('$', (KEY_4, true)),
-        ('%', (KEY_5, true)),
-        ('^', (KEY_6, true)),
-        ('&', (KEY_7, true)),
-        ('*', (KEY_8, true)),
-        ('(', (KEY_9, true)),
-        (')', (KEY_10, true)),
-    ]
-    .into_iter()
-    .collect();
+    // Simulate Ctrl+Shift+V (standard paste in Linux terminals)
+    device
+        .press(KEY_LEFTCTRL)
+        .map_err(|e| anyhow::anyhow!("{}", e))?;
+    device
+        .press(KEY_LEFTSHIFT)
+        .map_err(|e| anyhow::anyhow!("{}", e))?;
+    device
+        .click(KEY_V)
+        .map_err(|e| anyhow::anyhow!("{}", e))?;
+    device
+        .release(KEY_LEFTSHIFT)
+        .map_err(|e| anyhow::anyhow!("{}", e))?;
+    device
+        .release(KEY_LEFTCTRL)
+        .map_err(|e| anyhow::anyhow!("{}", e))?;
 
-    for ch in command.chars() {
-        if let Some(&(key, shift)) = key_map.get(&ch) {
-            if shift {
-                device
-                    .press(KEY_LEFTSHIFT)
-                    .map_err(|e| anyhow::anyhow!("{}", e))?;
-            }
-            device.click(key).map_err(|e| anyhow::anyhow!("{}", e))?;
-            if shift {
-                device
-                    .release(KEY_LEFTSHIFT)
-                    .map_err(|e| anyhow::anyhow!("{}", e))?;
-            }
-            thread::sleep(Duration::from_micros(500));
-        }
-    }
+    // Restore clipboard after delay
+    restore_clipboard_delayed(previous_clipboard, 500);
 
     Ok(())
 }
 
 #[cfg(target_os = "macos")]
-fn try_enigo_type(command: &str) -> Result<()> {
-    use enigo::{Enigo, Keyboard, Settings};
+fn try_clipboard_paste(command: &str) -> Result<()> {
+    use enigo::{Direction, Enigo, Key, Keyboard, Settings};
     use std::thread;
     use std::time::Duration;
 
+    // Save current clipboard
+    let previous_clipboard = save_clipboard();
+
+    // Set command to clipboard
+    let mut clipboard = arboard::Clipboard::new().map_err(|e| anyhow::anyhow!("{}", e))?;
+    clipboard
+        .set_text(command)
+        .map_err(|e| anyhow::anyhow!("{}", e))?;
+
+    // Small delay for clipboard to update
+    thread::sleep(Duration::from_millis(50));
+
+    // Create enigo for key simulation
     let mut enigo = Enigo::new(&Settings::default()).map_err(|e| anyhow::anyhow!("{}", e))?;
 
+    // Wait a bit before sending keys
     thread::sleep(Duration::from_millis(100));
 
-    for ch in command.chars() {
-        enigo
-            .text(&ch.to_string())
-            .map_err(|e| anyhow::anyhow!("{}", e))?;
-        thread::sleep(Duration::from_micros(500));
-    }
+    // Simulate Cmd+V (paste on macOS)
+    enigo
+        .key(Key::Meta, Direction::Press)
+        .map_err(|e| anyhow::anyhow!("{}", e))?;
+    enigo
+        .key(Key::Unicode('v'), Direction::Click)
+        .map_err(|e| anyhow::anyhow!("{}", e))?;
+    enigo
+        .key(Key::Meta, Direction::Release)
+        .map_err(|e| anyhow::anyhow!("{}", e))?;
+
+    // Restore clipboard after delay
+    restore_clipboard_delayed(previous_clipboard, 500);
+
+    Ok(())
+}
+
+#[cfg(target_os = "windows")]
+fn try_clipboard_paste(command: &str) -> Result<()> {
+    use enigo::{Direction, Enigo, Key, Keyboard, Settings};
+    use std::thread;
+    use std::time::Duration;
+
+    // Save current clipboard
+    let previous_clipboard = save_clipboard();
+
+    // Set command to clipboard
+    let mut clipboard = arboard::Clipboard::new().map_err(|e| anyhow::anyhow!("{}", e))?;
+    clipboard
+        .set_text(command)
+        .map_err(|e| anyhow::anyhow!("{}", e))?;
+
+    // Small delay for clipboard to update
+    thread::sleep(Duration::from_millis(50));
+
+    // Create enigo for key simulation
+    let mut enigo = Enigo::new(&Settings::default()).map_err(|e| anyhow::anyhow!("{}", e))?;
+
+    // Wait a bit before sending keys
+    thread::sleep(Duration::from_millis(100));
+
+    // Simulate Ctrl+V (paste on Windows)
+    enigo
+        .key(Key::Control, Direction::Press)
+        .map_err(|e| anyhow::anyhow!("{}", e))?;
+    enigo
+        .key(Key::Unicode('v'), Direction::Click)
+        .map_err(|e| anyhow::anyhow!("{}", e))?;
+    enigo
+        .key(Key::Control, Direction::Release)
+        .map_err(|e| anyhow::anyhow!("{}", e))?;
+
+    // Restore clipboard after delay
+    restore_clipboard_delayed(previous_clipboard, 500);
 
     Ok(())
 }
@@ -194,28 +191,17 @@ pub fn inject_raw_only(command: &str) -> Result<()> {
 
     #[cfg(target_os = "linux")]
     {
-        try_uinput_inject(&clean_command)
+        try_clipboard_paste(&clean_command)
     }
 
     #[cfg(target_os = "macos")]
     {
-        return try_enigo_type(&clean_command);
+        try_clipboard_paste(&clean_command)
     }
 
     #[cfg(target_os = "windows")]
     {
-        if let Ok(mut clipboard) = arboard::Clipboard::new() {
-            if clipboard.set_text(&clean_command).is_ok() {
-                use enigo::{Direction, Enigo, Key, Keyboard, Settings};
-                if let Ok(mut enigo) = Enigo::new(&Settings::default()) {
-                    let _ = enigo.key(Key::Control, Direction::Press);
-                    let _ = enigo.key(Key::Unicode('v'), Direction::Click);
-                    let _ = enigo.key(Key::Control, Direction::Release);
-                    return Ok(());
-                }
-            }
-        }
-        anyhow::bail!("Failed to inject via clipboard")
+        try_clipboard_paste(&clean_command)
     }
 
     #[cfg(not(any(target_os = "linux", target_os = "windows", target_os = "macos")))]
@@ -229,7 +215,7 @@ pub fn inject_command(command: &str) -> Result<Option<String>> {
 
     #[cfg(target_os = "linux")]
     {
-        if can_use_uinput() {
+        if can_use_clipboard_paste() {
             if let Ok(exe) = std::env::current_exe() {
                 use std::process::{Command, Stdio};
                 let child = Command::new(exe)
@@ -266,23 +252,26 @@ pub fn inject_command(command: &str) -> Result<Option<String>> {
                 }
             }
         }
-        return interactive_prompt(&clean_command);
+        interactive_prompt(&clean_command)
     }
 
     #[cfg(target_os = "windows")]
     {
-        if let Ok(mut clipboard) = arboard::Clipboard::new() {
-            if clipboard.set_text(&clean_command).is_ok() {
-                use enigo::{Direction, Enigo, Key, Keyboard, Settings};
-                if let Ok(mut enigo) = Enigo::new(&Settings::default()) {
-                    let _ = enigo.key(Key::Control, Direction::Press);
-                    let _ = enigo.key(Key::Unicode('v'), Direction::Click);
-                    let _ = enigo.key(Key::Control, Direction::Release);
-                    return Ok(None);
-                }
+        if let Ok(exe) = std::env::current_exe() {
+            use std::process::{Command, Stdio};
+            let child = Command::new(exe)
+                .arg("--inject-raw")
+                .arg(&clean_command)
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .spawn();
+
+            if child.is_ok() {
+                return Ok(None);
             }
         }
-        return interactive_prompt(&clean_command);
+        interactive_prompt(&clean_command)
     }
 
     #[cfg(not(any(target_os = "linux", target_os = "windows", target_os = "macos")))]

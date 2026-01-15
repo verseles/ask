@@ -494,6 +494,15 @@ async fn handle_query(
 
         let response_text = full_response.lock().unwrap().clone();
 
+        // Hint for streaming mode when command will be injected
+        if crate::executor::can_inject() && is_likely_command(response_text.trim()) {
+            use colored::Colorize;
+            println!(
+                "{}",
+                "(disable streaming to hide this line)".bright_black()
+            );
+        }
+
         if args.has_context() {
             let manager = ContextManager::with_ttl(config, args.context_ttl())?;
             manager.add_message("user", query)?;
@@ -504,7 +513,13 @@ async fn handle_query(
     } else {
         let response = provider.complete_with_options(&messages, &options).await?;
 
-        formatter.format(&response.text);
+        // Skip echo if command will be injected into terminal
+        let skip_echo =
+            crate::executor::can_inject() && is_likely_command(response.text.trim());
+
+        if !skip_echo {
+            formatter.format(&response.text);
+        }
 
         if args.citations && !response.citations.is_empty() {
             println!();
