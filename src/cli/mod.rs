@@ -476,13 +476,28 @@ async fn handle_query(
 
     // Disable streaming when web_search is enabled - Responses API doesn't support streaming
     if config.active.stream && !args.json && !args.raw && !options.web_search {
+        use crate::output::{Spinner, StreamingIndicator};
         use std::sync::{Arc, Mutex};
+
         let full_response = Arc::new(Mutex::new(String::new()));
         let response_clone = full_response.clone();
 
+        // Start spinner while waiting for first chunk
+        let spinner = Arc::new(Mutex::new(Some(Spinner::start())));
+        let spinner_clone = spinner.clone();
+
+        // Streaming indicator for showing ● at end of text
+        let indicator = Arc::new(Mutex::new(StreamingIndicator::new()));
+        let indicator_clone = indicator.clone();
+
         let callback: crate::providers::StreamCallback = Box::new(move |chunk: &str| {
-            print!("{}", chunk);
-            std::io::Write::flush(&mut std::io::stdout()).ok();
+            // Stop spinner on first chunk
+            if let Some(mut s) = spinner_clone.lock().unwrap().take() {
+                s.stop();
+            }
+
+            // Print chunk with indicator
+            indicator_clone.lock().unwrap().print_chunk(chunk);
             response_clone.lock().unwrap().push_str(chunk);
         });
 
@@ -490,6 +505,8 @@ async fn handle_query(
             .stream_with_options(&messages, callback, &options)
             .await?;
 
+        // Finish indicator and add newline
+        indicator.lock().unwrap().finish();
         println!();
 
         let response_text = full_response.lock().unwrap().clone();
@@ -511,7 +528,21 @@ async fn handle_query(
 
         maybe_execute_command(config, args, &response_text).await?;
     } else {
+        use std::io::IsTerminal;
+
+        // Show spinner while waiting for response (only in terminal, not raw/json)
+        let use_spinner = !args.raw && !args.json && std::io::stdout().is_terminal();
+
+        let spinner = if use_spinner {
+            Some(crate::output::Spinner::start())
+        } else {
+            None
+        };
+
         let response = provider.complete_with_options(&messages, &options).await?;
+
+        // Stop spinner before output
+        drop(spinner);
 
         // Skip echo if command will be injected into terminal
         let skip_echo =
