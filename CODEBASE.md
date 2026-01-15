@@ -207,8 +207,11 @@ Automatically detects piping and disables colors/formatting.
 
 Implements automatic update checking and installation:
 
-- **Background check**: Spawns detached process to check GitHub releases
-- **Notification**: Saves update info for next run notification
+- **Background check**: Spawns detached process to check GitHub releases.
+- **Throttling**: 
+    - **Aggressive mode**: Checks at most once per hour.
+    - **Normal mode**: Respects `check_interval_hours` (default 24h).
+- **Notification**: Saves update info for next run notification.
 - **Download**: Fetches platform-specific binary from release assets
 - **Atomic replace**: Safe binary replacement with backup
 

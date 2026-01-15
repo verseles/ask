@@ -252,9 +252,9 @@ ASK_CONTEXT_MAX_MESSAGES=20      # Max messages in context
 ASK_CONTEXT_PATH=~/.local/share/ask/contexts  # Custom storage path
 
 # Update settings
-ASK_UPDATE_AUTO_CHECK=true       # Enable background update checks
-ASK_UPDATE_INTERVAL=24           # Hours between update checks
-ASK_UPDATE_CHANNEL=stable        # Update channel
+| ASK_UPDATE_AUTO_CHECK | true | Enable background update checks |
+| ASK_UPDATE_INTERVAL | 24 | Hours between checks (min 1h in aggressive mode) |
+| ASK_UPDATE_CHANNEL | stable | Update channel |
 ASK_NO_UPDATE=1                  # Disable all update checks
 
 # Other

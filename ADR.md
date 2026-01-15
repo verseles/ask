@@ -811,3 +811,27 @@ This inconsistency makes it difficult for users to switch providers without chan
 - Additional thread for spinner (minimal overhead)
 - Requires terminal that supports backspace control character
 - Gracefully does nothing in non-terminal environments
+
+---
+
+## ADR-025: Throttled Update Checks
+
+**Status**: Accepted
+
+**Context**: The "aggressive" update mode was checking for updates on every single execution. For users who use the CLI frequently, this resulted in excessive GitHub API calls, potential rate limiting, and unnecessary process spawning overhead.
+
+**Decision**: Implement a minimum cooldown period for update checks even in aggressive mode.
+
+**Implementation**:
+- **Aggressive Mode**: Minimum 1-hour interval between background checks.
+- **Normal Mode**: Respects the user-configured `check_interval_hours` (default 24h).
+- The check happens by verifying the timestamp in `~/.local/share/ask/last_update_check`.
+
+**Rationale**:
+- Prevents GitHub API rate limiting.
+- Reduces system overhead for frequent CLI users.
+- 1 hour is more than sufficient for "aggressive" discovery of new releases.
+
+**Consequences**:
+- Users won't see an update immediately if they just checked less than an hour ago.
+- Significant reduction in background process spawning.
