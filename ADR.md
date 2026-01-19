@@ -835,3 +835,47 @@ This inconsistency makes it difficult for users to switch providers without chan
 **Consequences**:
 - Users won't see an update immediately if they just checked less than an hour ago.
 - Significant reduction in background process spawning.
+
+---
+
+## ADR-026: Safe Command Flattening
+
+**Status**: Accepted
+
+**Context**: LLMs sometimes return multi-line command responses when a single line was expected. The initial implementation (`flatten_command`) blindly joined all lines with `&&`, which caused problems:
+1. **Broke line continuations**: `docker run \` followed by options became invalid syntax
+2. **Broke heredocs**: Commands with `<<EOF` were corrupted
+3. **Changed semantics**: Joining with `&&` changes execution flow (second command only runs if first succeeds)
+4. **Shell compatibility**: The comment claimed `&&` was compatible with fish, but fish < 3.0 doesn't support it
+
+**Decision**: Replace unconditional flattening with safe flattening that returns `None` when it's unsafe to flatten.
+
+**Implementation**:
+```rust
+pub fn flatten_command_if_safe(text: &str) -> Option<String> {
+    // Returns Some(flattened) only when ALL conditions are met:
+    // - No line continuations (lines ending with \)
+    // - No heredocs (lines containing <<)
+    // - All lines are < 120 chars (long lines = likely wrapped single command)
+    // - All lines start with a known command
+}
+```
+
+**Safety Checks**:
+| Pattern | Action | Reason |
+|---------|--------|--------|
+| Line ends with `\` | Return None | Line continuation |
+| Line contains `<<` | Return None | Heredoc |
+| Line > 120 chars | Return None | Likely wrapped single command |
+| Line doesn't start with known command | Return None | Not a command sequence |
+
+**Rationale**:
+- Preserves original text when unsafe to modify
+- Prevents silent corruption of complex commands
+- Users see the original multi-line response and can decide themselves
+- Flattening still works for simple sequential commands
+
+**Consequences**:
+- Multi-line responses that can't be safely flattened are shown as-is
+- Users may need to manually combine some commands
+- No risk of corrupting heredocs, continuations, or non-command text

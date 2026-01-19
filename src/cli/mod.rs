@@ -12,7 +12,7 @@ use crate::context::ContextManager;
 use crate::executor::CommandExecutor;
 use crate::output::OutputFormatter;
 use crate::providers::{
-    build_unified_prompt, create_provider, expand_prompt_variables, flatten_command,
+    build_unified_prompt, create_provider, expand_prompt_variables, flatten_command_if_safe,
     load_custom_prompt, PromptContext, ProviderOptions,
 };
 
@@ -511,7 +511,7 @@ async fn handle_query(
 
         let response_text = full_response.lock().unwrap().clone();
         let response_text = if is_likely_command(&response_text) {
-            flatten_command(&response_text)
+            flatten_command_if_safe(&response_text).unwrap_or(response_text)
         } else {
             response_text
         };
@@ -543,7 +543,7 @@ async fn handle_query(
 
         let response = provider.complete_with_options(&messages, &options).await?;
         let response_text = if is_likely_command(&response.text) {
-            flatten_command(&response.text)
+            flatten_command_if_safe(&response.text).unwrap_or_else(|| response.text.clone())
         } else {
             response.text.clone()
         };
