@@ -35,7 +35,8 @@ pub fn flatten_command(text: &str) -> String {
         return trimmed.replace('\n', " ").trim().to_string();
     }
 
-    // Join with && to ensure sequential execution of multi-line outputs
+    // Join with && to ensure sequential execution of multi-line outputs.
+    // This is compatible with sh, bash, zsh, fish, and cmd.exe.
     lines.join(" && ")
 }
 
