@@ -115,6 +115,10 @@ impl PromptContext {
     }
 }
 
+/// Generates the system prompt based on context
+///
+/// This is the central location for prompt engineering. It instructs the model
+/// to prefer single-line commands and handle intent detection.
 pub fn build_unified_prompt(ctx: &PromptContext) -> String {
     let command_emphasis = if ctx.command_mode {
         "IMPORTANT: User explicitly requested command mode. Return ONLY the shell command, nothing else.\n\n"
