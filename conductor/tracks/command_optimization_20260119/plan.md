@@ -2,7 +2,7 @@
 
 ## Phase 1: Analysis & Prompt Engineering
 
-- [ ] Task: Analisar os prompts atuais em `src/providers/*.rs` e `src/config/defaults.rs` para identificar onde as instruções de geração de comando são definidas.
+- [x] Task: Analisar os prompts atuais em `src/providers/*.rs` e `src/config/defaults.rs` para identificar onde as instruções de geração de comando são definidas. fa9ea2c
 - [ ] Task: Criar um conjunto de "perguntas de teste" que historicamente geram comandos quebrados ou multi-linha para usar como baseline.
 - [ ] Task: Refinar o System Prompt padrão para instruir explicitamente o uso de one-liners (`&&`, `;`) e escape correto de aspas.
     - [ ] Sub-task: Atualizar `DEFAULT_SYSTEM_PROMPT` ou equivalente.
