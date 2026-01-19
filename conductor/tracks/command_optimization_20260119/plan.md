@@ -11,9 +11,9 @@
 
 ## Phase 2: Implementation & Refinement
 
-- [ ] Task: Implementar lógica de pós-processamento (se necessário) em `src/providers/mod.rs` ou `src/output/mod.rs` para sanitizar quebras de linha acidentais.
-    - [ ] Sub-task: Write Tests: Criar testes unitários para a função de sanitização.
-    - [ ] Sub-task: Implement Feature: Implementar a sanitização.
+- [x] Task: Implementar lógica de pós-processamento (se necessário) em `src/providers/mod.rs` ou `src/output/mod.rs` para sanitizar quebras de linha acidentais. c22a94a
+    - [x] Sub-task: Write Tests: Criar testes unitários para a função de sanitização.
+    - [x] Sub-task: Implement Feature: Implementar a sanitização.
 - [ ] Task: Verificar comportamento com diferentes shells (bash, zsh, fish) se aplicável.
 - [ ] Task: Atualizar a documentação (se houver mudanças no comportamento visível ou configuração).
 - [ ] Task: Conductor - User Manual Verification 'Phase 2: Implementation & Refinement' (Protocol in workflow.md)
