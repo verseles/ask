@@ -10,7 +10,7 @@ A CLI tool that lets you interact with AI models using natural language, without
 
 - **Natural input**: Just type `ask how to list docker containers` - no quotes needed
 - **Flexible flags**: Put options before or after your question - both work!
-- **Smart command injection**: Commands are pasted directly to your terminal for editing
+- **Smart command injection**: Commands are sanitized into robust one-liners and pasted directly to your terminal
 - **Smart intent detection**: Automatically detects if you want a command or an answer
 - **Multiple providers**: Supports Gemini (default), OpenAI, and Anthropic Claude
 - **Streaming responses**: Real-time token-by-token output

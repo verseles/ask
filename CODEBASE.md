@@ -156,6 +156,7 @@ The unified prompt system handles intent detection inline (command vs question v
 - `build_unified_prompt()` - Builds the system prompt with context
 - `load_custom_prompt()` - Loads custom prompts from ask.md files
 - `expand_prompt_variables()` - Replaces {os}, {shell}, {cwd}, {locale}, {now} variables
+- `flatten_command()` - Sanitizes multiline commands into one-liners using `&&`
 
 ### Context Manager (`src/context/`)
 
@@ -251,8 +252,9 @@ model = "claude-3-opus" # Optional override
 5. **Provider**: Create appropriate provider based on config
 6. **Intent**: Classify intent (COMMAND/QUESTION/CODE)
 7. **Generation**: Send to AI with appropriate system prompt
-8. **Output**: Stream or display response
-9. **Execution**: For commands, optionally execute with safety checks
+8. **Post-processing**: Flatten multi-line commands into one-liners for terminal robustness
+9. **Output**: Stream or display response
+10. **Execution**: For commands, optionally execute with safety checks
 
 ## Testing
 
