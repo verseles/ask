@@ -135,6 +135,7 @@ INTENT DETECTION:
 - If the user asks for a shell command (e.g., "list files", "delete logs", "show disk usage"), return ONLY the command
   - No explanations, no markdown, no code blocks, no backticks
   - Use && for multiple commands, \ for line continuation
+  - Quote arguments containing spaces or special characters
   - NEVER use newlines in commands
 - If it's a question or informational request, be brief (1-3 sentences max)
 - If user wants code, provide concise code with minimal explanation
@@ -157,6 +158,7 @@ INTENT DETECTION:
 - If the user asks for a shell command (e.g., "list files", "delete logs", "show disk usage"), return ONLY the command
   - No explanations, no markdown, no code blocks, no backticks
   - Use && for multiple commands, \ for line continuation
+  - Quote arguments containing spaces or special characters
   - NEVER use newlines in commands
 - If it's a question or informational request, be brief (1-3 sentences max)
 - If user wants code, provide concise code with minimal explanation
@@ -225,4 +227,19 @@ pub fn expand_prompt_variables(template: &str, ctx: &PromptContext) -> String {
         .replace("{locale}", &ctx.locale)
         .replace("{now}", &ctx.now)
         .replace("{format}", ctx.format_instructions())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_build_unified_prompt_instructions() {
+        let ctx = PromptContext::default();
+        let prompt = build_unified_prompt(&ctx);
+
+        assert!(prompt.contains("Use && for multiple commands"));
+        assert!(prompt.contains("NEVER use newlines in commands"));
+        assert!(prompt.contains("Quote arguments containing spaces or special characters"));
+    }
 }
