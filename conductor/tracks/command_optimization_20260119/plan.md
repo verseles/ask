@@ -7,7 +7,7 @@
 - [x] Task: Refinar o System Prompt padrão para instruir explicitamente o uso de one-liners (`&&`, `;`) e escape correto de aspas. 39e1443
     - [x] Sub-task: Atualizar `DEFAULT_SYSTEM_PROMPT` ou equivalente.
     - [x] Sub-task: Testar o novo prompt com o conjunto de baseline.
-- [ ] Task: Conductor - User Manual Verification 'Phase 1: Analysis & Prompt Engineering' (Protocol in workflow.md)
+- [~] Task: Conductor - User Manual Verification 'Phase 1: Analysis & Prompt Engineering' (Protocol in workflow.md)
 
 ## Phase 2: Implementation & Refinement
 
