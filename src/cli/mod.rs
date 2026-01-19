@@ -12,8 +12,8 @@ use crate::context::ContextManager;
 use crate::executor::CommandExecutor;
 use crate::output::OutputFormatter;
 use crate::providers::{
-    build_unified_prompt, create_provider, expand_prompt_variables, load_custom_prompt,
-    PromptContext, ProviderOptions,
+    build_unified_prompt, create_provider, expand_prompt_variables, flatten_command,
+    load_custom_prompt, PromptContext, ProviderOptions,
 };
 
 /// Check if an error is retryable with a fallback profile
@@ -510,6 +510,11 @@ async fn handle_query(
         println!();
 
         let response_text = full_response.lock().unwrap().clone();
+        let response_text = if is_likely_command(&response_text) {
+            flatten_command(&response_text)
+        } else {
+            response_text
+        };
 
         // Hint for streaming mode when command will be injected
         if crate::executor::can_inject() && is_likely_command(response_text.trim()) {
@@ -537,15 +542,20 @@ async fn handle_query(
         };
 
         let response = provider.complete_with_options(&messages, &options).await?;
+        let response_text = if is_likely_command(&response.text) {
+            flatten_command(&response.text)
+        } else {
+            response.text.clone()
+        };
 
         // Stop spinner before output
         drop(spinner);
 
         // Skip echo if command will be injected into terminal
-        let skip_echo = crate::executor::can_inject() && is_likely_command(response.text.trim());
+        let skip_echo = crate::executor::can_inject() && is_likely_command(response_text.trim());
 
         if !skip_echo {
-            formatter.format(&response.text);
+            formatter.format(&response_text);
         }
 
         if args.citations && !response.citations.is_empty() {
@@ -559,10 +569,10 @@ async fn handle_query(
         if args.has_context() {
             let manager = ContextManager::with_ttl(config, args.context_ttl())?;
             manager.add_message("user", query)?;
-            manager.add_message("assistant", &response.text)?;
+            manager.add_message("assistant", &response_text)?;
         }
 
-        maybe_execute_command(config, args, &response.text).await?;
+        maybe_execute_command(config, args, &response_text).await?;
     }
 
     Ok(())
@@ -609,7 +619,7 @@ async fn maybe_execute_command(config: &Config, args: &Args, response: &str) -> 
 fn is_likely_command(text: &str) -> bool {
     let text = text.trim();
 
-    if text.is_empty() || text.contains('\n') {
+    if text.is_empty() {
         return false;
     }
 
