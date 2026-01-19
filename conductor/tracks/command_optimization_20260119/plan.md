@@ -4,9 +4,9 @@
 
 - [x] Task: Analisar os prompts atuais em `src/providers/*.rs` e `src/config/defaults.rs` para identificar onde as instruções de geração de comando são definidas. fa9ea2c
 - [x] Task: Criar um conjunto de "perguntas de teste" que historicamente geram comandos quebrados ou multi-linha para usar como baseline. 560e90c
-- [ ] Task: Refinar o System Prompt padrão para instruir explicitamente o uso de one-liners (`&&`, `;`) e escape correto de aspas.
-    - [ ] Sub-task: Atualizar `DEFAULT_SYSTEM_PROMPT` ou equivalente.
-    - [ ] Sub-task: Testar o novo prompt com o conjunto de baseline.
+- [x] Task: Refinar o System Prompt padrão para instruir explicitamente o uso de one-liners (`&&`, `;`) e escape correto de aspas. 39e1443
+    - [x] Sub-task: Atualizar `DEFAULT_SYSTEM_PROMPT` ou equivalente.
+    - [x] Sub-task: Testar o novo prompt com o conjunto de baseline.
 - [ ] Task: Conductor - User Manual Verification 'Phase 1: Analysis & Prompt Engineering' (Protocol in workflow.md)
 
 ## Phase 2: Implementation & Refinement
