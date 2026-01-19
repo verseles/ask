@@ -438,8 +438,16 @@ pub async fn check_and_update() -> Result<()> {
 
     println!("{} {}", "Downloading:".cyan(), asset.name.bright_white());
 
-    // Download
-    let response = client.get(&asset.browser_download_url).send().await?;
+    // Download with longer timeout for large binary
+    let download_client = create_client_builder()
+        .timeout(std::time::Duration::from_secs(300))
+        .user_agent(format!("ask/{}", current_version))
+        .build()?;
+
+    let response = download_client
+        .get(&asset.browser_download_url)
+        .send()
+        .await?;
     let total_size = response.content_length().unwrap_or(0);
 
     let pb = indicatif::ProgressBar::new(total_size);
