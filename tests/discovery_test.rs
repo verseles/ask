@@ -56,8 +56,8 @@ recursive_alias = "--raw --no-color"
         "Should have raw=true from recursive_alias expansion"
     );
     assert!(
-        stderr.contains("no_color=true"),
-        "Should have no_color=true from recursive_alias expansion"
+        stderr.contains("color=Some(false)") || stderr.contains("color=false"),
+        "Should have color=Some(false) from recursive_alias expansion"
     );
 }
 

@@ -502,8 +502,20 @@ struct ConfigManager {
 
 impl ConfigManager {
     fn new() -> Result<Self> {
+        // For reading: check ~/ask.toml first (legacy), then ~/.config/ask/ask.toml
+        // For writing: always use ~/.config/ask/ask.toml (modern standard)
         let home = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("."));
-        let config_path = home.join("ask.toml");
+        let legacy_path = home.join("ask.toml");
+        let xdg_path = dirs::config_dir()
+            .map(|p| p.join("ask").join("ask.toml"))
+            .unwrap_or_else(|| home.join(".config").join("ask").join("ask.toml"));
+
+        // Use legacy path if it exists, otherwise use XDG path
+        let config_path = if legacy_path.exists() {
+            legacy_path
+        } else {
+            xdg_path
+        };
 
         let existing: Option<toml::Value> = if config_path.exists() {
             std::fs::read_to_string(&config_path)
@@ -552,8 +564,8 @@ impl ConfigManager {
 
     fn backup(&self) -> Result<()> {
         if self.config_path.exists() {
-            let home = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("."));
-            let backup_path = home.join("ask.toml.bak");
+            // Put backup next to the config file
+            let backup_path = self.config_path.with_extension("toml.bak");
             std::fs::copy(&self.config_path, &backup_path)?;
         }
         Ok(())
@@ -569,126 +581,14 @@ impl ConfigManager {
         };
         Ok(())
     }
-}
 
-/// Configure default provider and model (edits the default/first profile)
-fn configure_defaults(mgr: &ConfigManager) -> Result<(String, String, String, bool, String, bool)> {
-    let profiles = mgr.get_profiles();
-    let default_profile = mgr
-        .get_str(&["default_profile"])
-        .or_else(|| profiles.first().cloned());
-
-    let profile_name = default_profile.unwrap_or_else(|| "main".to_string());
-
-    let existing_provider = mgr.get_str(&["profiles", &profile_name, "provider"]);
-    let existing_model = mgr.get_str(&["profiles", &profile_name, "model"]);
-    let existing_stream = mgr
-        .get_str(&["profiles", &profile_name, "stream"])
-        .map(|s| s == "true")
-        .unwrap_or(true);
-    let existing_web_search = mgr
-        .get_str(&["profiles", &profile_name, "web_search"])
-        .map(|s| s == "true")
-        .unwrap_or(false);
-
-    let providers = vec!["Gemini (recommended)", "OpenAI", "Anthropic Claude"];
-    let default_provider_idx = match existing_provider.as_deref() {
-        Some("gemini") => 0,
-        Some("openai") => 1,
-        Some("anthropic") => 2,
-        _ => 0,
-    };
-
-    let provider_idx =
-        numbered_select("Select default provider", &providers, default_provider_idx)?;
-
-    let (provider, default_model_for_provider) = match provider_idx {
-        0 => ("gemini", defaults::DEFAULT_MODEL),
-        1 => ("openai", defaults::DEFAULT_OPENAI_MODEL),
-        2 => ("anthropic", defaults::DEFAULT_ANTHROPIC_MODEL),
-        _ => ("gemini", defaults::DEFAULT_MODEL),
-    };
-
-    let model_default = if existing_provider.as_deref() == Some(provider) {
-        existing_model.unwrap_or_else(|| default_model_for_provider.to_string())
-    } else {
-        default_model_for_provider.to_string()
-    };
-
-    let model: String = {
-        let question = Question::input("model")
-            .message("Model")
-            .default(model_default.as_str())
-            .build();
-        requestty::prompt_one(question)?
-            .as_string()
-            .unwrap_or_default()
-            .to_string()
-    };
-
-    let existing_api_key = mgr
-        .get_str(&["profiles", &profile_name, "api_key"])
-        .unwrap_or_default();
-
-    let api_key: String = if !existing_api_key.is_empty() {
-        let masked = mask_api_key(&existing_api_key);
-        let question = Question::input("api_key")
-            .message(format!("{} API key [{}] (Enter to keep)", provider, masked))
-            .build();
-        let new_key = requestty::prompt_one(question)?
-            .as_string()
-            .unwrap_or_default()
-            .to_string();
-
-        if new_key.is_empty() {
-            existing_api_key
-        } else {
-            new_key
+    /// Ensure the config directory exists before writing
+    fn ensure_dir(&self) -> Result<()> {
+        if let Some(parent) = self.config_path.parent() {
+            std::fs::create_dir_all(parent)?;
         }
-    } else {
-        let question = Question::input("api_key")
-            .message(format!("Enter {} API key", provider))
-            .build();
-        requestty::prompt_one(question)?
-            .as_string()
-            .unwrap_or_default()
-            .to_string()
-    };
-
-    let stream = {
-        let question = Question::confirm("stream")
-            .message("Enable streaming responses?")
-            .default(existing_stream)
-            .build();
-        requestty::prompt_one(question)?
-            .as_bool()
-            .unwrap_or(existing_stream)
-    };
-
-    let thinking_config = if let Some((key, value)) = select_thinking_config(provider, &model)? {
-        format_thinking_config(&key, &value)
-    } else {
-        String::new()
-    };
-
-    let web_search = {
-        let question = Question::confirm("web_search")
-            .message("Enable web search by default?")
-            .default(existing_web_search)
-            .build();
-        requestty::prompt_one(question)?
-            .as_bool()
-            .unwrap_or(existing_web_search)
-    };
-
-    Ok((
-        provider.to_string(),
-        model,
-        api_key,
-        stream,
-        thinking_config,
-        web_search,
-    ))
+        Ok(())
+    }
 }
 
 /// Configure a single profile
@@ -748,13 +648,12 @@ fn configure_profile(mgr: &ConfigManager, profile_name: Option<&str>) -> Result<
 
     let existing_api_key = mgr
         .get_str(&["profiles", &name, "api_key"])
-        .or_else(|| mgr.get_str(&["providers", provider, "api_key"]))
         .unwrap_or_default();
 
     let api_key: String = if !existing_api_key.is_empty() {
         let masked = mask_api_key(&existing_api_key);
         let question = Question::input("profile_api_key")
-            .message(format!("API key [{}] (Enter to keep/inherit)", masked))
+            .message(format!("API key [{}] (Enter to keep)", masked))
             .build();
         let new_key = requestty::prompt_one(question)?
             .as_string()
@@ -768,7 +667,7 @@ fn configure_profile(mgr: &ConfigManager, profile_name: Option<&str>) -> Result<
         }
     } else {
         let question = Question::input("profile_api_key")
-            .message("API key (Enter to inherit from provider)")
+            .message("API key (or set via ASK_*_API_KEY env)")
             .build();
         requestty::prompt_one(question)?
             .as_string()
@@ -797,6 +696,18 @@ fn configure_profile(mgr: &ConfigManager, profile_name: Option<&str>) -> Result<
         requestty::prompt_one(question)?
             .as_bool()
             .unwrap_or(existing_web_search)
+    };
+
+    // Streaming: default off for new profiles, preserve existing value when editing
+    let existing_stream = mgr.get_bool(&["profiles", &name, "stream"], false);
+    let stream = {
+        let question = Question::confirm("profile_stream")
+            .message("Enable streaming responses? (shows tokens as they arrive)")
+            .default(existing_stream)
+            .build();
+        requestty::prompt_one(question)?
+            .as_bool()
+            .unwrap_or(existing_stream)
     };
 
     let thinking_config = if let Some((key, value)) = select_thinking_config(provider, &model)? {
@@ -859,6 +770,9 @@ model = "{}""#,
     if web_search {
         profile_toml.push_str("\nweb_search = true");
     }
+
+    // Always write stream setting explicitly (default is off)
+    profile_toml.push_str(&format!("\nstream = {}", stream));
 
     if !thinking_config.is_empty() {
         profile_toml.push_str(&thinking_config);
@@ -1013,6 +927,7 @@ fn manage_profiles(mgr: &mut ConfigManager) -> Result<()> {
         match options[choice].as_str() {
             "Create new profile" => {
                 if let Some(profile_toml) = configure_profile(mgr, None)? {
+                    mgr.ensure_dir()?;
                     let content = std::fs::read_to_string(&mgr.config_path).unwrap_or_default();
                     let new_content = format!("{}\n{}", content, profile_toml);
                     std::fs::write(&mgr.config_path, new_content)?;
@@ -1166,13 +1081,7 @@ pub async fn init_config() -> Result<()> {
     loop {
         println!();
         let menu_options = if mgr.existing.is_some() {
-            vec![
-                "View current config",
-                "Edit default settings",
-                "Manage profiles",
-                "Configure fallback behavior",
-                "Exit",
-            ]
+            vec!["View current config", "Manage profiles", "Exit"]
         } else {
             vec!["Quick setup (recommended)", "Exit"]
         };
@@ -1184,27 +1093,16 @@ pub async fn init_config() -> Result<()> {
                 0 => {
                     mgr.backup()?;
 
-                    let (provider, model, api_key, stream, thinking_config, web_search) =
-                        configure_defaults(&mgr)?;
-
-                    let web_search_config = if web_search {
-                        "\nweb_search = true"
-                    } else {
-                        ""
-                    };
-
-                    let config_content = format!(
-                        r#"# ask configuration
+                    // Use configure_profile to create "main" profile
+                    if let Some(profile_toml) = configure_profile(&mgr, Some("main"))? {
+                        let config_content = format!(
+                            r#"# ask configuration
 # Generated by 'ask init'
 
 # All configuration lives in profiles
 # First profile is used by default (set default_profile to change)
 # Switch profiles with: ask -p <profile_name>
-[profiles.main]
-provider = "{provider}"
-model = "{model}"
-api_key = "{api_key}"
-stream = {stream}{thinking_config}{web_search_config}
+{}
 
 [behavior]
 auto_execute = false
@@ -1226,21 +1124,24 @@ channel = "stable"
 # system = "Generate concise git commit message based on diff"
 # type = "command"
 # auto_execute = false
-"#
-                    );
+"#,
+                            profile_toml.trim()
+                        );
 
-                    std::fs::write(&mgr.config_path, config_content)?;
-                    mgr.reload()?;
+                        mgr.ensure_dir()?;
+                        std::fs::write(&mgr.config_path, config_content)?;
+                        mgr.reload()?;
 
-                    println!();
-                    println!(
-                        "{} {}",
-                        "Created".green(),
-                        mgr.config_path.display().to_string().bright_white()
-                    );
-                    println!();
-                    println!("Profile '{}' created!", "main".cyan());
-                    println!("Try: {}", "ask how to list files".cyan());
+                        println!();
+                        println!(
+                            "{} {}",
+                            "Created".green(),
+                            mgr.config_path.display().to_string().bright_white()
+                        );
+                        println!();
+                        println!("Profile '{}' created!", "main".cyan());
+                        println!("Try: {}", "ask how to list files".cyan());
+                    }
                 }
                 1 => {
                     println!("{}", "Goodbye!".bright_black());
@@ -1254,130 +1155,9 @@ channel = "stable"
                     show_current_config(&mgr);
                 }
                 1 => {
-                    mgr.backup()?;
-
-                    let (provider, model, api_key, stream, thinking_config, web_search) =
-                        configure_defaults(&mgr)?;
-
-                    let profiles = mgr.get_profiles();
-                    let default_profile_name = mgr
-                        .get_str(&["default_profile"])
-                        .or_else(|| profiles.first().cloned())
-                        .unwrap_or_else(|| "main".to_string());
-
-                    let content = std::fs::read_to_string(&mgr.config_path).unwrap_or_default();
-                    let mut doc: toml::Value = toml::from_str(&content)?;
-
-                    let profiles_section = doc
-                        .as_table_mut()
-                        .unwrap()
-                        .entry("profiles".to_string())
-                        .or_insert(toml::Value::Table(toml::map::Map::new()));
-
-                    if let Some(profiles_table) = profiles_section.as_table_mut() {
-                        let profile_table = profiles_table
-                            .entry(default_profile_name.clone())
-                            .or_insert(toml::Value::Table(toml::map::Map::new()));
-
-                        if let Some(pt) = profile_table.as_table_mut() {
-                            pt.insert("provider".to_string(), toml::Value::String(provider));
-                            pt.insert("model".to_string(), toml::Value::String(model));
-                            pt.insert("api_key".to_string(), toml::Value::String(api_key));
-                            pt.insert("stream".to_string(), toml::Value::Boolean(stream));
-                            pt.insert("web_search".to_string(), toml::Value::Boolean(web_search));
-
-                            if !thinking_config.is_empty() {
-                                if thinking_config.contains("thinking_budget") {
-                                    if let Some(val) = thinking_config
-                                        .split('=')
-                                        .nth(1)
-                                        .and_then(|s| s.trim().parse::<i64>().ok())
-                                    {
-                                        pt.insert(
-                                            "thinking_budget".to_string(),
-                                            toml::Value::Integer(val),
-                                        );
-                                    }
-                                } else if thinking_config.contains("thinking_level") {
-                                    if let Some(val) = thinking_config
-                                        .split('=')
-                                        .nth(1)
-                                        .map(|s| s.trim().trim_matches('"').to_string())
-                                    {
-                                        pt.insert(
-                                            "thinking_level".to_string(),
-                                            toml::Value::String(val),
-                                        );
-                                    }
-                                } else if thinking_config.contains("reasoning_effort") {
-                                    if let Some(val) = thinking_config
-                                        .split('=')
-                                        .nth(1)
-                                        .map(|s| s.trim().trim_matches('"').to_string())
-                                    {
-                                        pt.insert(
-                                            "reasoning_effort".to_string(),
-                                            toml::Value::String(val),
-                                        );
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    std::fs::write(&mgr.config_path, toml::to_string_pretty(&doc)?)?;
-                    mgr.reload()?;
-                    println!(
-                        "{} {}",
-                        "Profile".green(),
-                        format!("'{}' updated!", default_profile_name).green()
-                    );
-                }
-                2 => {
                     manage_profiles(&mut mgr)?;
                 }
-                3 => {
-                    mgr.backup()?;
-
-                    let fallback_options = vec![
-                        "Use any available profile (recommended)",
-                        "No fallback (fail immediately)",
-                    ];
-
-                    let existing_fallback = mgr.get_str(&["default", "default_fallback"]);
-                    let default_idx = match existing_fallback.as_deref() {
-                        Some("none") => 1,
-                        _ => 0,
-                    };
-
-                    let idx = numbered_select(
-                        "Default fallback behavior when provider fails?",
-                        &fallback_options,
-                        default_idx,
-                    )?;
-
-                    let fallback_value = match idx {
-                        0 => "any",
-                        _ => "none",
-                    };
-
-                    let content = std::fs::read_to_string(&mgr.config_path).unwrap_or_default();
-                    let mut doc: toml::Value = toml::from_str(&content)?;
-
-                    if let Some(default_section) = doc.get_mut("default") {
-                        if let Some(table) = default_section.as_table_mut() {
-                            table.insert(
-                                "default_fallback".to_string(),
-                                toml::Value::String(fallback_value.to_string()),
-                            );
-                        }
-                    }
-
-                    std::fs::write(&mgr.config_path, toml::to_string_pretty(&doc)?)?;
-                    mgr.reload()?;
-                    println!("{} {}", "Fallback set to:".green(), fallback_value.cyan());
-                }
-                4 => {
+                2 => {
                     println!("{}", "Goodbye!".bright_black());
                     break;
                 }
@@ -1427,7 +1207,7 @@ pub fn init_config_non_interactive(
         .unwrap_or_else(|| std::path::PathBuf::from("."));
 
     std::fs::create_dir_all(&config_dir)?;
-    let config_path = config_dir.join("config.toml");
+    let config_path = config_dir.join("ask.toml");
 
     let config_content = format!(
         r#"# ask configuration (generated by --non-interactive)

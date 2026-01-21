@@ -10,7 +10,7 @@ pub const DEFAULT_ANTHROPIC_MODEL: &str = "claude-haiku-4-5";
 pub const DEFAULT_TIMEOUT: u64 = 30;
 
 pub const DEFAULT_CONFIG_TEMPLATE: &str = r##"# ask - Configuration File
-# Place this file at: ~/.config/ask/config.toml or ~/ask.toml
+# Place this file at: ~/.config/ask/ask.toml or ~/ask.toml
 
 # All configuration lives in profiles
 # First profile is used by default unless default_profile is set

@@ -109,7 +109,7 @@ OPTIONS:
         --color=bool      Enable/disable colorized output
         --no-follow       Disable result echo after execution
         --make-prompt     Export default prompt template
-        --make-config     Export example config.toml template
+        --make-config     Export example ask.toml template
         --update          Check and install updates
         --help-env        Show all environment variables
     -v, --verbose         Show verbose output (profile, provider, model info, debug flags)
@@ -130,9 +130,7 @@ Run `ask init` or `ask config` to configure interactively:
 ```
 ? What would you like to do?
 › View current config
-  Edit default settings
   Manage profiles
-  Configure fallback behavior
   Exit
 ```
 
@@ -141,16 +139,13 @@ Run `ask init` or `ask config` to configure interactively:
 
 **Main Menu:**
 - **View current config** - Display all settings in formatted output
-- **Edit default settings** - Provider, model, API key, streaming, thinking mode, web search
-- **Manage profiles** - Create, edit, delete, set default profiles (API keys per profile)
-- **Configure fallback** - Set default fallback behavior (any/none)
+- **Manage profiles** - Create, edit, delete, set default profiles
 
 **Profile Management:**
 - Create new profiles with custom provider, model, API key, base URL
-- Edit existing profiles
+- Edit existing profiles (provider, model, API key, thinking, web search, fallback)
 - Delete profiles
 - Set default profile
-- Per-profile web search and fallback settings
 
 </details>
 
@@ -159,11 +154,11 @@ Configuration is loaded from multiple sources (in order of precedence):
 1. CLI arguments
 2. Environment variables (`ASK_*`)
 3. `./ask.toml` or `./.ask.toml` (project local)
-4. `~/ask.toml` (home directory)
-5. `~/.config/ask/config.toml` (XDG config)
+4. `~/ask.toml` (home directory - legacy, still supported)
+5. `~/.config/ask/ask.toml` (XDG config - recommended)
 6. Default values
 
-### Example config.toml
+### Example ask.toml
 
 ```toml
 # All configuration lives in profiles
@@ -375,8 +370,9 @@ Anthropic's Claude models. Get your API key from [Anthropic Console](https://con
 Any OpenAI-compatible API (e.g., Ollama, LM Studio):
 
 ```toml
-[providers.openai_compatible]
-api_key = "..."
+[profiles.local]
+provider = "openai"
+api_key = "ollama"
 base_url = "http://localhost:11434/v1"
 model = "llama3"
 ```

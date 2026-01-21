@@ -25,9 +25,11 @@ impl OutputFormatter {
 
         Self {
             json: args.json,
-            markdown: args.markdown || (!args.raw && !args.json && !is_piped),
+            markdown: args
+                .markdown
+                .unwrap_or(!args.raw && !args.json && !is_piped),
             raw: args.raw || is_piped,
-            no_color: args.no_color || is_piped,
+            no_color: args.color == Some(false) || is_piped,
             update_notification: None,
         }
     }

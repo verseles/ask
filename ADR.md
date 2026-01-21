@@ -206,8 +206,8 @@ io::stdout().flush()?;
 2. Profile settings (selected via `-p`, `default_profile`, or first available)
 3. Environment variables - e.g., `ASK_PROVIDER`, `ASK_GEMINI_API_KEY`
 4. Local config (`./ask.toml`)
-5. Home config (`~/ask.toml`)
-6. XDG config (`~/.config/ask/config.toml`)
+5. Home config (`~/ask.toml` - legacy, still supported)
+6. XDG config (`~/.config/ask/ask.toml` - recommended for new installs)
 7. Defaults (lowest)
 
 **Rationale**:
@@ -513,7 +513,7 @@ blocked_domains = ["pinterest.com"]                  # Anthropic only
 
 ## ADR-017: Interactive Configuration Menu
 
-**Status**: Accepted
+**Status**: Accepted (Updated v0.25.0)
 
 **Context**: The original `ask init` command was a simple linear wizard that only configured basic settings. Users couldn't easily manage multiple profiles, view current config, or edit specific settings without re-running the entire wizard.
 
@@ -523,34 +523,32 @@ blocked_domains = ["pinterest.com"]                  # Anthropic only
 ```
 Main Menu (existing config):
 ├── View current config
-├── Edit default settings
 ├── Manage profiles
 │   ├── Create new profile
 │   ├── Edit existing profile
 │   ├── Delete profile
 │   └── Set default profile
-├── Configure fallback behavior
 └── Exit
 
 Quick Setup (new config):
-└── Guided wizard for first-time setup
+└── Guided wizard for first-time setup (creates "main" profile)
 ```
 
 **Key Features**:
 - `ConfigManager` struct for state management
 - Proper TOML editing that preserves existing settings
 - Backup before any changes (`ask.toml.bak`)
-- Per-profile settings: provider, model, API key, base URL, web search, fallback
-- Fallback configuration always available (not just with 2+ profiles)
+- Per-profile settings: provider, model, API key, base URL, web search, thinking, fallback
+- All configuration lives in profiles (Profile-Only Architecture per ADR-021)
 
 **Rationale**:
 - Users need to manage multiple profiles for different use cases
 - Editing specific settings shouldn't require full reconfiguration
 - Viewing current config helps with debugging
-- Profile management completes the vision from Feature 9
+- Profile management is the central configuration concept
 
 **Consequences**:
-- More complex code in `src/config/mod.rs` (~700 lines added)
+- Simplified menu with profile-centric approach
 - Better user experience for configuration management
 - `ask config` now works as alias for `ask init`
 

@@ -25,7 +25,7 @@ impl Config {
     /// 2. Environment variables (handled separately)
     /// 3. ./ask.toml or ./.ask.toml (project local)
     /// 4. ~/ask.toml (home directory)
-    /// 5. ~/.config/ask/config.toml (XDG config)
+    /// 5. ~/.config/ask/ask.toml (XDG config)
     /// 6. Defaults (hardcoded)
     pub fn load() -> Result<Self> {
         let mut config = Config::default();
@@ -60,13 +60,13 @@ impl Config {
     }
 
     /// Find XDG config file
-    /// On Linux: ~/.config/ask/config.toml
-    /// On macOS: ~/Library/Application Support/ask/config.toml OR ~/.config/ask/config.toml
-    /// On Windows: C:\Users\<user>\AppData\Roaming\ask\config.toml
+    /// On Linux: ~/.config/ask/ask.toml
+    /// On macOS: ~/Library/Application Support/ask/ask.toml OR ~/.config/ask/ask.toml
+    /// On Windows: C:\Users\<user>\AppData\Roaming\ask\ask.toml
     fn find_xdg_config() -> Option<PathBuf> {
         // First try the platform-specific config dir
         if let Some(config_dir) = dirs::config_dir() {
-            let path = config_dir.join("ask").join("config.toml");
+            let path = config_dir.join("ask").join("ask.toml");
             if path.exists() {
                 return Some(path);
             }
@@ -76,7 +76,7 @@ impl Config {
         #[cfg(target_os = "macos")]
         {
             if let Some(home) = dirs::home_dir() {
-                let path = home.join(".config").join("ask").join("config.toml");
+                let path = home.join(".config").join("ask").join("ask.toml");
                 if path.exists() {
                     return Some(path);
                 }

@@ -9,10 +9,12 @@ pub struct Args {
     pub context: Option<u64>,
 
     /// Force command mode (bypass auto-detection)
-    pub command_mode: bool,
+    /// None = auto-detect, Some(true) = -x/--command, Some(false) = --question
+    pub command_mode: Option<bool>,
 
     /// Auto-execute commands without confirmation
-    pub yes: bool,
+    /// None = prompt, Some(true) = -y/--yes, Some(false) = --confirm
+    pub yes: Option<bool>,
 
     /// Override configured model
     pub model: Option<String>,
@@ -35,25 +37,35 @@ pub struct Args {
     pub json: bool,
 
     /// Output rendered in Markdown
-    pub markdown: bool,
+    /// None = default, Some(true) = --markdown, Some(false) = --no-markdown
+    pub markdown: Option<bool>,
 
     /// Output raw text without formatting
     pub raw: bool,
 
-    /// Disable colorized output
-    pub no_color: bool,
+    /// Enable/disable colorized output
+    /// None = default (enabled), Some(true) = --color, Some(false) = --no-color
+    pub color: Option<bool>,
 
-    /// Disable result echo after execution
-    pub no_follow: bool,
+    /// Enable/disable result echo after execution
+    /// None = default (enabled), Some(true) = --follow, Some(false) = --no-follow
+    pub follow: Option<bool>,
 
-    /// Disable fallback to other profiles on error
-    pub no_fallback: bool,
+    /// Enable/disable fallback to other profiles on error
+    /// None = default (enabled), Some(true) = --fallback, Some(false) = --no-fallback
+    pub fallback: Option<bool>,
+
+    /// Enable/disable streaming responses
+    /// None = use config, Some(true) = --stream, Some(false) = --no-stream
+    pub stream: Option<bool>,
 
     /// Enable web search for this query
-    pub search: bool,
+    /// None = use config, Some(true) = --search, Some(false) = --no-search
+    pub search: Option<bool>,
 
     /// Show citations from web search results
-    pub citations: bool,
+    /// None = use config, Some(true) = --citations, Some(false) = --no-citations
+    pub citations: Option<bool>,
 
     /// Check and install updates
     pub update: bool,
@@ -142,7 +154,7 @@ impl Args {
 
         // Check environment variables
         if env::var("NO_COLOR").is_ok() {
-            result.no_color = true;
+            result.color = Some(false);
         }
 
         while i < args.len() {
@@ -154,8 +166,8 @@ impl Args {
                 "--context" => result.context = Some(30),
 
                 // Boolean flags (short)
-                "-x" => result.command_mode = true,
-                "-y" => result.yes = true,
+                "-x" => result.command_mode = Some(true),
+                "-y" => result.yes = Some(true),
                 "-t" => {
                     if i + 1 < args.len() && is_think_level(&args[i + 1]) {
                         i += 1;
@@ -165,20 +177,29 @@ impl Args {
                         result.think = Some(true);
                     }
                 }
-                "-s" => result.search = true,
+                "-s" => result.search = Some(true),
 
                 // Boolean flags (long)
-                "--command" => result.command_mode = true,
-                "--yes" => result.yes = true,
+                "--command" => result.command_mode = Some(true),
+                "--question" => result.command_mode = Some(false),
+                "--yes" => result.yes = Some(true),
+                "--confirm" => result.yes = Some(false),
                 "--json" => result.json = true,
-                "--markdown" => result.markdown = true,
+                "--markdown" => result.markdown = Some(true),
+                "--no-markdown" => result.markdown = Some(false),
                 "--raw" => result.raw = true,
-                "--no-color" | "--color=false" => result.no_color = true,
-                "--color" | "--color=true" => result.no_color = false,
-                "--no-follow" => result.no_follow = true,
-                "--no-fallback" => result.no_fallback = true,
-                "--search" => result.search = true,
-                "--citations" => result.citations = true,
+                "--no-color" | "--color=false" => result.color = Some(false),
+                "--color" | "--color=true" => result.color = Some(true),
+                "--no-follow" => result.follow = Some(false),
+                "--follow" => result.follow = Some(true),
+                "--no-fallback" => result.fallback = Some(false),
+                "--fallback" => result.fallback = Some(true),
+                "--stream" | "--stream=true" => result.stream = Some(true),
+                "--stream=false" | "--no-stream" => result.stream = Some(false),
+                "--search" | "--search=true" => result.search = Some(true),
+                "--search=false" | "--no-search" => result.search = Some(false),
+                "--citations" | "--citations=true" => result.citations = Some(true),
+                "--citations=false" | "--no-citations" => result.citations = Some(false),
                 "--think" => {
                     if i + 1 < args.len() && is_think_level(&args[i + 1]) {
                         i += 1;
@@ -189,7 +210,7 @@ impl Args {
                     }
                 }
                 "--think=true" => result.think = Some(true),
-                "--think=false" => result.think = Some(false),
+                "--think=false" | "--no-think" => result.think = Some(false),
                 s if s.starts_with("--think=") => {
                     let value = s.strip_prefix("--think=").unwrap();
                     if value == "0" {
@@ -285,7 +306,7 @@ impl Args {
                 // Handle --markdown=true|false format
                 s if s.starts_with("--markdown=") => {
                     let value = s.strip_prefix("--markdown=").unwrap();
-                    result.markdown = value == "true" || value == "1";
+                    result.markdown = Some(value == "true" || value == "1");
                 }
 
                 arg if arg.starts_with('-') && !arg.starts_with("--") && arg.len() > 2 => {
@@ -336,25 +357,25 @@ impl Args {
                             }
                             's' => match remaining.as_str() {
                                 "0" | "false" => {
-                                    result.search = false;
+                                    result.search = Some(false);
                                     break;
                                 }
                                 "1" | "true" => {
-                                    result.search = true;
+                                    result.search = Some(true);
                                     break;
                                 }
                                 s if s.starts_with('0') => {
-                                    result.search = false;
+                                    result.search = Some(false);
                                     break;
                                 }
                                 s if s.starts_with('1') => {
-                                    result.search = true;
+                                    result.search = Some(true);
                                     break;
                                 }
-                                _ => result.search = true,
+                                _ => result.search = Some(true),
                             },
-                            'x' => result.command_mode = true,
-                            'y' => result.yes = true,
+                            'x' => result.command_mode = Some(true),
+                            'y' => result.yes = Some(true),
                             'v' => result.verbose = true,
                             'V' => result.version = true,
                             'h' => {
@@ -460,24 +481,34 @@ OPTIONS:
     -c, --context[=MIN]   Use context for current directory (default: 30 min, 0 = permanent)
                           Examples: -c (30 min), -c60 (60 min), --context=120 (2 hours)
     -x, --command         Force command mode (bypass auto-detection)
+        --question        Force question mode (bypass auto-detection)
     -y, --yes             Auto-execute commands without confirmation
-    -t, --think[=bool]    Enable/disable thinking mode (--think or --think=false)
+        --confirm         Always prompt for confirmation (override -y/config)
+    -t, --think[=LEVEL]   Enable thinking mode (levels: low, medium, high)
+        --no-think        Disable thinking mode
     -m, --model <MODEL>   Override configured model
     -p, --profile <NAME>  Use named profile from config
     -P, --provider <NAME> Override configured provider
     -k, --api-key <KEY>   API key (for use with init -n)
     -n, --non-interactive Non-interactive init (use with -P, -m, -k)
-        --no-fallback     Disable fallback to other profiles on error
+        --stream          Enable streaming responses
+        --no-stream       Disable streaming responses
     -s, --search          Enable web search for this query
+        --no-search       Disable web search (override profile)
         --citations       Show citations from web search results
-        --json            Output in JSON format
-        --markdown[=bool] Output rendered in Markdown (--markdown or --markdown=true)
-        --raw             Output raw text without formatting
-        --no-color        Disable colorized output
-        --color=bool      Enable/disable colorized output
+        --no-citations    Hide citations (override profile)
+        --fallback        Enable fallback to other profiles (default)
+        --no-fallback     Disable fallback to other profiles
+        --follow          Enable result echo after execution (default)
         --no-follow       Disable result echo after execution
+        --json            Output in JSON format
+        --markdown        Enable markdown rendering
+        --no-markdown     Disable markdown rendering
+        --raw             Output raw text without formatting
+        --color           Enable colorized output (default)
+        --no-color        Disable colorized output
         --make-prompt     Export default prompt template to stdout
-        --make-config     Export example config.toml to stdout
+        --make-config     Export example ask.toml to stdout
         --help-env        Show all environment variables
         --update          Check and install updates
         --completions <SHELL>  Generate shell completions (bash, zsh, fish, powershell, elvish)
@@ -494,12 +525,14 @@ SUBCOMMANDS:
 EXAMPLES:
     ask how to list docker containers
     ask -x delete old log files
-    ask -c explain kubernetes         # 30 min context (default)
-    ask -c60 what about pods?         # 60 min context
-    ask -c0 long conversation         # permanent context
-    ask --context=120 complex topic   # 2 hour context
-    ask -P work important query       # use work profile
-    ask -s what happened today        # web search
+    ask --question what is kubernetes     # force question mode
+    ask -c explain kubernetes             # 30 min context (default)
+    ask -c60 what about pods?             # 60 min context
+    ask -c0 long conversation             # permanent context
+    ask --context=120 complex topic       # 2 hour context
+    ask -p work important query           # use work profile
+    ask -s what happened today            # web search
+    ask --no-stream explain quantum       # disable streaming
     git diff | ask cm
     cat main.rs | ask explain
 
@@ -508,7 +541,7 @@ CONFIGURATION:
     Configuration files are loaded from:
       1. ./ask.toml or ./.ask.toml (project local)
       2. ~/ask.toml (home directory)
-      3. ~/.config/ask/config.toml (XDG config)
+      3. ~/.config/ask/ask.toml (XDG config)
 
 CUSTOM PROMPTS:
     Create ask.md in the config search path to customize the system prompt.
@@ -538,7 +571,7 @@ mod tests {
         let args = Args::default();
         assert!(args.context.is_none());
         assert!(!args.has_context());
-        assert!(!args.command_mode);
+        assert!(args.command_mode.is_none());
         assert!(args.query.is_empty());
     }
 

@@ -102,7 +102,7 @@ fn search_flag_is_applied() {
         .expect("Failed to execute command");
 
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains("search=true"));
+    assert!(stderr.contains("search=Some(true)"));
 }
 
 #[test]
@@ -309,10 +309,10 @@ fn combined_flags_xy_applies_both() {
 
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        stderr.contains("command_mode=true"),
-        "Expected command_mode=true"
+        stderr.contains("command_mode=Some(true)"),
+        "Expected command_mode=Some(true)"
     );
-    assert!(stderr.contains("yes=true"), "Expected yes=true");
+    assert!(stderr.contains("yes=Some(true)"), "Expected yes=Some(true)");
 }
 
 #[test]

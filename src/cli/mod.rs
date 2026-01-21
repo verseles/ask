@@ -200,10 +200,10 @@ async fn execute_with_fallback(config: &Config, args: &Args) -> Result<()> {
             // Keep existing flags
         }
         if let Some(auto_exec) = cmd.auto_execute {
-            modified_args.yes = auto_exec;
+            modified_args.yes = Some(auto_exec);
         }
         if cmd.r#type.as_deref() == Some("command") {
-            modified_args.command_mode = true;
+            modified_args.command_mode = Some(true);
         }
 
         (query_text, modified_args)
@@ -241,7 +241,7 @@ async fn execute_with_fallback(config: &Config, args: &Args) -> Result<()> {
 
     match result {
         Ok(()) => Ok(()),
-        Err(err) if !args.no_fallback && is_retryable_error(&err) => {
+        Err(err) if args.fallback != Some(false) && is_retryable_error(&err) => {
             if let Some(ref profile_name) = active_profile {
                 try_with_fallback(
                     &config,
@@ -348,7 +348,9 @@ fn read_stdin_if_available() -> Option<String> {
 }
 
 fn build_provider_options(args: &Args, config: &Config) -> ProviderOptions {
-    let web_search = args.search || config.get_profile_web_search();
+    let web_search = args
+        .search
+        .unwrap_or_else(|| config.get_profile_web_search());
     let (allowed_domains, blocked_domains) = config.get_profile_domain_filters();
 
     let (config_thinking_enabled, config_thinking_value) = config.get_thinking_config();
@@ -404,7 +406,7 @@ async fn handle_query(
         );
 
         eprintln!(
-            "{} flags: context={:?}, command_mode={}, yes={}, think={:?}, think_level={:?}, json={}, markdown={}, raw={}, no_color={}, no_follow={}, no_fallback={}, search={}, citations={}, update={}, init={}, clear_context={}, show_history={}, make_prompt={}, make_config={}, list_profiles={}, non_interactive={}",
+            "{} flags: context={:?}, command_mode={:?}, yes={:?}, think={:?}, think_level={:?}, json={}, markdown={:?}, raw={}, color={:?}, follow={:?}, fallback={:?}, stream={:?}, search={:?}, citations={:?}, update={}, init={}, clear_context={}, show_history={}, make_prompt={}, make_config={}, list_profiles={}, non_interactive={}",
             "[verbose]".bright_black(),
             args.context,
             args.command_mode,
@@ -414,9 +416,10 @@ async fn handle_query(
             args.json,
             args.markdown,
             args.raw,
-            args.no_color,
-            args.no_follow,
-            args.no_fallback,
+            args.color,
+            args.follow,
+            args.fallback,
+            args.stream,
             args.search,
             args.citations,
             args.update,
@@ -438,7 +441,11 @@ async fn handle_query(
         manager.print_echo_if_needed()?;
     }
 
-    let ctx = PromptContext::from_env(args.command_mode, args.markdown, !args.no_color);
+    let ctx = PromptContext::from_env(
+        args.command_mode.unwrap_or(false),
+        args.markdown.unwrap_or(false),
+        args.color.unwrap_or(true),
+    );
 
     let system_prompt = if let Some(cmd) = custom_cmd {
         if let Some(custom_prompt) = load_custom_prompt(Some(&cmd.system)) {
@@ -451,7 +458,7 @@ async fn handle_query(
         }
     } else if let Some(custom_prompt) = load_custom_prompt(None) {
         let mut prompt = expand_prompt_variables(&custom_prompt, &ctx);
-        if args.command_mode {
+        if args.command_mode == Some(true) {
             prompt = format!("IMPORTANT: User explicitly requested command mode. Return ONLY the shell command, nothing else.\n\n{}", prompt);
         }
         prompt
@@ -474,8 +481,13 @@ async fn handle_query(
 
     let options = build_provider_options(args, config);
 
-    // Disable streaming when web_search is enabled - Responses API doesn't support streaming
-    if config.active.stream && !args.json && !args.raw && !options.web_search {
+    // Determine if streaming should be enabled
+    let should_stream = args.stream.unwrap_or(config.active.stream)
+        && !args.json
+        && !args.raw
+        && !options.web_search;
+
+    if should_stream {
         use crate::output::{Spinner, StreamingIndicator};
         use std::sync::{Arc, Mutex};
 
@@ -558,7 +570,7 @@ async fn handle_query(
             formatter.format(&response_text);
         }
 
-        if args.citations && !response.citations.is_empty() {
+        if args.citations == Some(true) && !response.citations.is_empty() {
             println!();
             println!("{}", "Sources:".cyan());
             for (i, cite) in response.citations.iter().enumerate() {
@@ -589,12 +601,12 @@ async fn maybe_execute_command(config: &Config, args: &Args, response: &str) -> 
 
     let executor = CommandExecutor::new(config);
 
-    if args.yes || (config.behavior.auto_execute && executor.is_safe(response)) {
+    if args.yes == Some(true) || (config.behavior.auto_execute && executor.is_safe(response)) {
         println!();
         println!("{} {}", "Running:".green(), response.bright_white().bold());
         println!();
         executor
-            .execute_with_sudo_retry(response, !args.no_follow)
+            .execute_with_sudo_retry(response, args.follow != Some(false))
             .await?;
     } else if crate::executor::can_inject() {
         match crate::executor::inject_command(response)? {
@@ -607,7 +619,7 @@ async fn maybe_execute_command(config: &Config, args: &Args, response: &str) -> 
                 );
                 println!();
                 executor
-                    .execute_with_sudo_retry(&edited_cmd, !args.no_follow)
+                    .execute_with_sudo_retry(&edited_cmd, args.follow != Some(false))
                     .await?;
             }
         }

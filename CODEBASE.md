@@ -100,8 +100,8 @@ Configuration is loaded with precedence (Profile-Only Architecture):
 1. CLI arguments (highest): `-p`, `-P`, `-m`, `-k`
 2. Environment variables: `ASK_PROFILE`, `ASK_PROVIDER`, `ASK_MODEL`, `ASK_*_API_KEY`
 3. Project local config (recursive search upwards for `ask.toml` or `.ask.toml`)
-4. Home config (`~/ask.toml`)
-5. XDG config (`~/.config/ask/config.toml`)
+4. Home config (`~/ask.toml` - legacy, still supported)
+5. XDG config (`~/.config/ask/ask.toml` - recommended for new installs)
 6. Hardcoded defaults (lowest)
 
 Key structures:
@@ -118,7 +118,6 @@ Key functions:
 - `init_config()` - Interactive configuration menu
 - `init_config_non_interactive()` - Non-interactive setup (for scripts)
 - `load_aliases_only()` - Fast alias loading for early argument expansion
-- `configure_defaults()` - Configure default/first profile
 - `configure_profile()` - Configure a single profile
 - `manage_profiles()` - Profile management submenu
 - `show_current_config()` - Display current config formatted

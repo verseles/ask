@@ -139,7 +139,7 @@ fn build_cli() -> Command {
         .arg(
             Arg::new("make-config")
                 .long("make-config")
-                .help("Export example config.toml to stdout")
+                .help("Export example ask.toml to stdout")
                 .action(clap::ArgAction::SetTrue),
         )
         .arg(
