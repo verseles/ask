@@ -877,3 +877,33 @@ pub fn flatten_command_if_safe(text: &str) -> Option<String> {
 - Multi-line responses that can't be safely flattened are shown as-is
 - Users may need to manually combine some commands
 - No risk of corrupting heredocs, continuations, or non-command text
+
+---
+
+## ADR-027: Command Injection Method Priority
+
+**Status**: Accepted
+
+**Context**: The command injection system (`src/executor/injector.rs`) supports multiple methods: GUI paste (clipboard + key simulation), tmux send-keys, GNU screen stuff, and an enhanced fallback. The question arose: what should be the detection order when multiple methods are available (e.g., running tmux inside a Wayland session)?
+
+**Decision**: Prioritize GUI paste when a display server is available, even inside terminal multiplexers.
+
+**Detection Order**:
+1. If `$DISPLAY` or `$WAYLAND_DISPLAY` is set → **GuiPaste**
+2. If macOS with Accessibility permission → **GuiPaste**
+3. If Windows → **GuiPaste**
+4. If `$TMUX` is set (no GUI) → **TmuxSendKeys**
+5. If `$STY` is set (no GUI) → **ScreenStuff**
+6. Otherwise → **Enhanced Fallback** (visual print + editable prompt)
+
+**Rationale**:
+- GUI paste works reliably in all terminals, including tmux/screen running inside a graphical session
+- tmux/screen send-keys is primarily useful in headless environments (SSH without X11 forwarding)
+- Users with GUI rarely need the multiplexer-specific injection
+- GUI paste is the battle-tested method with better UX (no command echoing issues)
+
+**Consequences**:
+- Users in tmux with GUI get the same behavior as outside tmux
+- tmux/screen injection only activates in truly headless environments
+- The enhanced fallback provides a usable experience even without any injection method
+- Headless SSH users benefit from automatic command injection via their multiplexer

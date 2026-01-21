@@ -31,7 +31,7 @@ ask/
 │   │   ├── mod.rs           # Module exports
 │   │   ├── safety.rs        # Destructive command detection
 │   │   ├── runner.rs        # Command execution
-│   │   └── injector.rs      # Terminal command injection (clipboard paste)
+│   │   └── injector.rs      # Terminal command injection (tmux/screen/clipboard)
 │   ├── output/
 │   │   ├── mod.rs           # Module exports
 │   │   ├── formatter.rs     # Output formatting (JSON, raw, markdown)
@@ -188,6 +188,24 @@ Safe command execution with pattern-based safety detection:
 - `sudo *`
 - `dd`, `mkfs`
 - `curl | sh`
+
+**Command Injection** (`src/executor/injector.rs`):
+Automatically detects the best injection method for the current environment:
+
+```rust
+pub enum InjectionMethod {
+    GuiPaste,      // Wayland/X11/macOS/Windows with GUI
+    TmuxSendKeys,  // Inside tmux session
+    ScreenStuff,   // Inside GNU screen session
+    Fallback,      // Headless terminal - enhanced prompt
+}
+```
+
+Detection order:
+1. `$TMUX` → `tmux send-keys -l` (literal mode)
+2. `$STY` → `screen -X stuff`
+3. `$DISPLAY`/`$WAYLAND_DISPLAY` → clipboard + paste simulation
+4. Otherwise → enhanced fallback (visual print + editable prompt)
 
 ### Output Formatting (`src/output/`)
 
