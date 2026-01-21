@@ -377,3 +377,9 @@ pub fn can_inject() -> bool {
         InjectionMethod::GuiPaste | InjectionMethod::TmuxSendKeys | InjectionMethod::ScreenStuff
     )
 }
+
+/// Returns true if injection happens asynchronously (background process)
+/// This is used to decide whether to print the command before injecting
+pub fn is_async_injection() -> bool {
+    matches!(detect_injection_method(), InjectionMethod::GuiPaste)
+}

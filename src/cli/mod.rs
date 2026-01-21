@@ -528,10 +528,24 @@ async fn handle_query(
             response_text
         };
 
-        // Hint for streaming mode when command will be injected
+        // For sync injection (tmux/screen), clear the streamed command before injecting
+        // For async injection (GUI paste), show a hint
         if crate::executor::can_inject() && is_likely_command(response_text.trim()) {
-            use colored::Colorize;
-            println!("{}", "(disable streaming to hide this line)".bright_black());
+            if crate::executor::is_async_injection() {
+                use colored::Colorize;
+                println!("{}", "(disable streaming to hide this line)".bright_black());
+            } else {
+                // Sync injection: clear the command lines we just printed
+                // Count lines in the response (including the newline we added)
+                let line_count = response_text.lines().count() + 1;
+                // Move cursor up and clear each line
+                for _ in 0..line_count {
+                    // Move up one line and clear it
+                    print!("\x1b[A\x1b[2K");
+                }
+                use std::io::Write;
+                std::io::stdout().flush().ok();
+            }
         }
 
         if args.has_context() {
