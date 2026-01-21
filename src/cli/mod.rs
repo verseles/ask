@@ -182,7 +182,10 @@ async fn execute_with_fallback(config: &Config, args: &Args) -> Result<()> {
 
     // Check for custom command (first word of query)
     let first_word = args.query.first().map(|s| s.as_str()).unwrap_or("");
-    let custom_cmd = config.commands.get(first_word).cloned();
+    let mut custom_cmd = config.commands.get(first_word).cloned();
+    if let Some(ref mut cmd) = custom_cmd {
+        cmd.name = Some(first_word.to_string());
+    }
 
     // Build the full query
     let (full_query, effective_args) = if let Some(ref cmd) = custom_cmd {
@@ -448,7 +451,7 @@ async fn handle_query(
     );
 
     let system_prompt = if let Some(cmd) = custom_cmd {
-        if let Some(custom_prompt) = load_custom_prompt(Some(&cmd.system)) {
+        if let Some(custom_prompt) = load_custom_prompt(cmd.name.as_deref()) {
             expand_prompt_variables(&custom_prompt, &ctx)
         } else {
             format!(

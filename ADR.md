@@ -91,38 +91,13 @@ ask -c -x list all files
 
 ---
 
-## ADR-005: Automatic Intent Detection
-
-**Status**: Deprecated (Superseded by ADR-016)
-
-**Context**: Users may not know if they want a command or an answer.
-
-**Decision**: Use a lightweight classification prompt to detect intent (COMMAND vs QUESTION vs CODE).
-
-**Implementation**:
-- Send a quick classification request to the AI
-- Use structured response for reliability
-- Override with `-x` flag for explicit command mode
-
-**Rationale**:
-- Better UX - users don't need to think about mode
-- Small token cost for classification
-- Can be bypassed when needed
-
-**Consequences**:
-- Extra API call for intent detection
-- Slight latency increase
-- **Note**: This was replaced in v0.12.0 with a unified prompt approach (see ADR-016) to reduce latency and costs.
-
----
-
-## ADR-006: Gemini as Default Provider
+## ADR-005: Gemini as Default Provider
 
 **Status**: Accepted
 
 **Context**: Need to choose a default AI provider for `ask init`.
 
-**Decision**: Use Google Gemini as the default provider with `gemini-2.0-flash` model.
+**Decision**: Use Google Gemini as the default provider. The default model is updated periodically to use the best free-tier option (currently `gemini-flash-lite-latest` for Quick Setup, `gemini-3-flash-preview` in templates).
 
 **Rationale**:
 - Free tier available for testing
@@ -137,7 +112,7 @@ ask -c -x list all files
 
 ---
 
-## ADR-007: Simple Streaming with stdout flush
+## ADR-006: Simple Streaming with stdout flush
 
 **Status**: Accepted
 
@@ -164,7 +139,7 @@ io::stdout().flush()?;
 
 ---
 
-## ADR-008: Safety Detection for Commands
+## ADR-007: Safety Detection for Commands
 
 **Status**: Accepted
 
@@ -195,35 +170,7 @@ io::stdout().flush()?;
 
 ---
 
-## ADR-009: Multi-layer Configuration Precedence
-
-**Status**: Accepted (Updated v0.16.0)
-
-**Context**: Different contexts need different configurations, with profiles becoming the primary unit of configuration.
-
-**Decision**: Implement a "profile-first" configuration hierarchy:
-1. CLI arguments (highest) - e.g., `-m`, `-P`, `-t`
-2. Profile settings (selected via `-p`, `default_profile`, or first available)
-3. Environment variables - e.g., `ASK_PROVIDER`, `ASK_GEMINI_API_KEY`
-4. Local config (`./ask.toml`)
-5. Home config (`~/ask.toml` - legacy, still supported)
-6. XDG config (`~/.config/ask/ask.toml` - recommended for new installs)
-7. Defaults (lowest)
-
-**Rationale**:
-- Profiles allow grouping related settings (provider, model, thinking, search)
-- CLI overrides allow one-off changes to any profile setting
-- Environment variables provide a way to inject secrets and CI settings
-- Follows Unix conventions for configuration discovery
-
-**Consequences**:
-- Profile selection happens before other settings are resolved
-- Clearer mental model: "I am using the 'work' profile, but overriding the model just for this call"
-- Easy to use in Docker/CI environments with env vars or non-interactive init
-
----
-
-## ADR-010: Boxed Callbacks for Streaming
+## ADR-008: Boxed Callbacks for Streaming
 
 **Status**: Accepted
 
@@ -243,7 +190,7 @@ io::stdout().flush()?;
 
 ---
 
-## ADR-011: Clipboard Paste for Command Injection
+## ADR-009: Clipboard Paste for Command Injection
 
 **Status**: Accepted (supersedes original keystroke approach)
 
@@ -273,7 +220,7 @@ io::stdout().flush()?;
 
 ---
 
-## ADR-012: Auto-Update via GitHub Releases
+## ADR-010: Auto-Update via GitHub Releases
 
 **Status**: Accepted
 
@@ -317,7 +264,7 @@ ask-windows-x86_64.exe
 
 ---
 
-## ADR-013: Custom Commands System
+## ADR-011: Custom Commands System
 
 **Status**: Accepted
 
@@ -367,62 +314,7 @@ ask review src/main.rs         # Uses [commands.review] config
 
 ---
 
-## ADR-014: Multi-Profile System (Profile-First)
-
-**Status**: Accepted (Updated v0.16.0)
-
-**Context**: Users need different configurations for different scenarios (work/personal, local/cloud, cost/quality tradeoffs) and resilience when a provider fails.
-
-**Decision**: Implement named profiles as the primary configuration unit. Every run uses a profile.
-
-**Configuration**:
-```toml
-default_profile = "work"
-
-[profiles.work]
-provider = "openai"
-model = "gpt-5"
-api_key = "sk-..."
-fallback = "personal"  # retry with this profile on error
-
-[profiles.personal]
-provider = "anthropic"
-model = "claude-haiku-4-5"
-fallback = "none"
-
-[profiles.local]
-provider = "openai"
-base_url = "http://localhost:11434/v1"
-model = "llama3"
-api_key = "ollama"
-```
-
-**CLI Flags**:
-- `-p work` or `--profile=work` - Select active profile
-- `-P gemini` or `--provider=gemini` - Override provider for current call
-- `-m model` or `--model=model` - Override model for current call
-- `--no-fallback` - Disable fallback for single query
-
-**Logic**:
-1. Select profile from CLI `-p`, then `default_profile`, then first available.
-2. Load all settings from selected profile.
-3. Apply CLI overrides (`-P`, `-m`, `-t`).
-4. On provider error, attempt fallback to next profile in chain.
-
-**Rationale**:
-- Familiar pattern from rclone users
-- Profile-first architecture simplifies configuration merging
-- Fallback provides resilience (429 errors, timeouts)
-- Consistent flags: lowercase `-p` for the common profile switch, uppercase `-P` for provider override
-
-**Consequences**:
-- Profile names must be unique
-- Circular fallback chains are prevented by tracking visited profiles
-- `-p` and `-P` swap ensures the most common flag (profile) is easier to type
-
----
-
-## ADR-015: Web Search Integration Across Providers
+## ADR-012: Web Search Integration Across Providers
 
 **Status**: Accepted
 
@@ -467,7 +359,7 @@ blocked_domains = ["pinterest.com"]                  # Anthropic only
 
 ---
 
-## ADR-016: Unified Prompt System
+## ADR-013: Unified Prompt System
 
 **Status**: Accepted
 
@@ -511,7 +403,7 @@ blocked_domains = ["pinterest.com"]                  # Anthropic only
 
 ---
 
-## ADR-017: Interactive Configuration Menu
+## ADR-014: Interactive Configuration Menu
 
 **Status**: Accepted (Updated v0.25.0)
 
@@ -539,7 +431,7 @@ Quick Setup (new config):
 - Proper TOML editing that preserves existing settings
 - Backup before any changes (`ask.toml.bak`)
 - Per-profile settings: provider, model, API key, base URL, web search, thinking, fallback
-- All configuration lives in profiles (Profile-Only Architecture per ADR-021)
+- All configuration lives in profiles (Profile-Only Architecture per ADR-018)
 
 **Rationale**:
 - Users need to manage multiple profiles for different use cases
@@ -554,7 +446,7 @@ Quick Setup (new config):
 
 ---
 
-## ADR-018: Command-Line Aliases
+## ADR-015: Command-Line Aliases
 
 **Status**: Accepted
 
@@ -593,7 +485,7 @@ ask deep explain quantum     # Expands to: ask -t --search explain quantum
 
 ---
 
-## ADR-019: Non-Interactive Init
+## ADR-016: Non-Interactive Init
 
 **Status**: Accepted
 
@@ -631,7 +523,7 @@ ask init -n -k YOUR_KEY
 
 ---
 
-## ADR-020: Verbose Mode and Profiles Subcommand
+## ADR-017: Verbose Mode and Profiles Subcommand
 
 **Status**: Accepted
 
@@ -667,7 +559,7 @@ Default profile: personal
 
 ---
 
-## ADR-021: Profile-Only Architecture
+## ADR-018: Unified Configuration Architecture (Profile-Only)
 
 **Status**: Accepted
 
@@ -675,7 +567,7 @@ Default profile: personal
 
 **Decision**: Simplify to a profile-only architecture where all configuration lives in `[profiles.*]`. Remove `[default]` and `[providers]` sections entirely.
 
-**New Structure**:
+**Configuration Structure**:
 ```toml
 # First profile is default unless default_profile is set
 # default_profile = "work"
@@ -690,25 +582,50 @@ stream = true
 provider = "openai"
 model = "gpt-5"
 api_key = "sk-..."
+fallback = "personal"  # retry with this profile on error
+
+[profiles.local]
+provider = "openai"
+base_url = "http://localhost:11434/v1"
+model = "llama3"
+api_key = "ollama"
 ```
 
-**Ad-hoc Mode**: Use `-P provider -k key` for one-off queries without any config file.
+**Precedence Hierarchy** (highest to lowest):
+1. CLI flags (`-p`, `-P`, `-m`, `-k`, `-t`)
+2. Environment variables (`ASK_PROFILE`, `ASK_PROVIDER`, `ASK_MODEL`, `ASK_*_API_KEY`)
+3. Profile config (selected via `-p`, `default_profile`, or first available)
+4. Local config (`./ask.toml`) - discovered recursively upward
+5. Home config (`~/ask.toml` - legacy, still supported)
+6. XDG config (`~/.config/ask/ask.toml` - recommended)
+7. Hardcoded defaults
 
-**Precedence**:
-1. CLI flags (`-p`, `-P`, `-m`, `-k`)
-2. Environment variables (`ASK_PROFILE`, `ASK_PROVIDER`, `ASK_*_API_KEY`)
-3. Profile config
-4. Hardcoded defaults
+**CLI Flags**:
+- `-p work` or `--profile=work` - Select active profile
+- `-P gemini` or `--provider=gemini` - Ad-hoc provider override
+- `-m model` or `--model=model` - Override model
+- `-k key` or `--api-key=key` - Override API key
+- `--no-fallback` - Disable fallback for single query
+
+**Ad-hoc Mode**: Use `-P provider -k key` for one-off queries without any config file.
 
 **Mutual Exclusivity**:
 - `-p` (profile) and `-P` (provider) cannot be used together
 - `ASK_PROFILE` and `ASK_PROVIDER` cannot be set together
+
+**Fallback Logic**:
+1. Select profile from CLI `-p`, then `default_profile`, then first available.
+2. Load all settings from selected profile.
+3. Apply CLI overrides (`-P`, `-m`, `-t`).
+4. On provider error, attempt fallback to next profile in chain.
+5. Circular fallback chains are prevented by tracking visited profiles.
 
 **Rationale**:
 - Simpler mental model: everything is a profile
 - No confusion about inheritance between sections
 - Ad-hoc mode enables use without config file
 - Cleaner codebase with less merge logic
+- Fallback provides resilience (429 errors, timeouts)
 
 **Consequences**:
 - Breaking change for existing configs using `[default]`/`[providers]`
@@ -718,7 +635,7 @@ api_key = "sk-..."
 
 ---
 
-## ADR-022: Unified Thinking Levels
+## ADR-019: Unified Thinking Levels
 
 **Status**: Accepted
 
@@ -759,7 +676,7 @@ This inconsistency makes it difficult for users to switch providers without chan
 
 ---
 
-## ADR-023: Recursive Configuration Discovery
+## ADR-020: Recursive Configuration Discovery
 
 **Status**: Accepted
 
@@ -785,7 +702,7 @@ This inconsistency makes it difficult for users to switch providers without chan
 
 ---
 
-## ADR-024: Loading Indicator with Blinking ● Symbol
+## ADR-021: Loading Indicator with Blinking ● Symbol
 
 **Status**: Accepted
 
@@ -812,7 +729,7 @@ This inconsistency makes it difficult for users to switch providers without chan
 
 ---
 
-## ADR-025: Throttled Update Checks
+## ADR-022: Throttled Update Checks
 
 **Status**: Accepted
 
@@ -836,7 +753,7 @@ This inconsistency makes it difficult for users to switch providers without chan
 
 ---
 
-## ADR-026: Safe Command Flattening
+## ADR-023: Safe Command Flattening
 
 **Status**: Accepted
 
@@ -880,7 +797,7 @@ pub fn flatten_command_if_safe(text: &str) -> Option<String> {
 
 ---
 
-## ADR-027: Command Injection Method Priority
+## ADR-024: Command Injection Method Priority
 
 **Status**: Accepted
 

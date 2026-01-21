@@ -101,6 +101,9 @@ pub struct UpdateConfig {
 /// Custom command definition
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CustomCommand {
+    #[serde(skip)]
+    pub name: Option<String>,
+
     pub system: String,
 
     #[serde(default)]
