@@ -503,14 +503,20 @@ struct ConfigManager {
 impl ConfigManager {
     fn new() -> Result<Self> {
         // For reading: check ~/ask.toml first (legacy), then ~/.config/ask/ask.toml
-        // For writing: always use ~/.config/ask/ask.toml (modern standard)
+        // For writing: always use ~/.config/ask/ask.toml (Unix) or %APPDATA%\ask\ask.toml (Windows)
         let home = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("."));
         let legacy_path = home.join("ask.toml");
+
+        // Platform-specific config path
+        #[cfg(windows)]
         let xdg_path = dirs::config_dir()
             .map(|p| p.join("ask").join("ask.toml"))
             .unwrap_or_else(|| home.join(".config").join("ask").join("ask.toml"));
 
-        // Use legacy path if it exists, otherwise use XDG path
+        #[cfg(not(windows))]
+        let xdg_path = home.join(".config").join("ask").join("ask.toml");
+
+        // Use legacy path if it exists, otherwise use XDG/platform path
         let config_path = if legacy_path.exists() {
             legacy_path
         } else {
@@ -717,28 +723,25 @@ fn configure_profile(mgr: &ConfigManager, profile_name: Option<&str>) -> Result<
     };
 
     let fallback_options = vec![
-        "Inherit from default",
-        "Use any available profile",
+        "Use any available profile (Recommended)",
         "No fallback (fail immediately)",
         "Specific profile...",
     ];
 
     let existing_fallback = mgr.get_str(&["profiles", &name, "fallback"]);
     let default_fallback_idx = match existing_fallback.as_deref() {
-        Some("any") => 1,
-        Some("none") => 2,
-        Some(_) => 3,
-        None => 0,
+        Some("none") => 1,
+        Some("any") | None => 0,
+        Some(_) => 2,
     };
 
     let fallback_idx =
         numbered_select("Fallback behavior", &fallback_options, default_fallback_idx)?;
 
     let fallback = match fallback_idx {
-        0 => String::new(),
-        1 => "any".to_string(),
-        2 => "none".to_string(),
-        3 => {
+        0 => "any".to_string(),
+        1 => "none".to_string(),
+        2 => {
             let question = Question::input("fallback_profile")
                 .message("Fallback profile name")
                 .default(existing_fallback.as_deref().unwrap_or(""))
@@ -748,7 +751,7 @@ fn configure_profile(mgr: &ConfigManager, profile_name: Option<&str>) -> Result<
                 .unwrap_or_default()
                 .to_string()
         }
-        _ => String::new(),
+        _ => "any".to_string(),
     };
 
     let mut profile_toml = format!(
@@ -1202,8 +1205,15 @@ pub fn init_config_non_interactive(
         }
     };
 
+    // Platform-specific config directory
+    #[cfg(windows)]
     let config_dir = dirs::config_dir()
         .map(|p| p.join("ask"))
+        .unwrap_or_else(|| std::path::PathBuf::from("."));
+
+    #[cfg(not(windows))]
+    let config_dir = dirs::home_dir()
+        .map(|p| p.join(".config").join("ask"))
         .unwrap_or_else(|| std::path::PathBuf::from("."));
 
     std::fs::create_dir_all(&config_dir)?;

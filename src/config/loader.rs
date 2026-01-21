@@ -60,21 +60,23 @@ impl Config {
     }
 
     /// Find XDG config file
-    /// On Linux: ~/.config/ask/ask.toml
-    /// On macOS: ~/Library/Application Support/ask/ask.toml OR ~/.config/ask/ask.toml
+    /// On Linux/macOS: ~/.config/ask/ask.toml
     /// On Windows: C:\Users\<user>\AppData\Roaming\ask\ask.toml
     fn find_xdg_config() -> Option<PathBuf> {
-        // First try the platform-specific config dir
-        if let Some(config_dir) = dirs::config_dir() {
-            let path = config_dir.join("ask").join("ask.toml");
-            if path.exists() {
-                return Some(path);
+        #[cfg(windows)]
+        {
+            // Windows: use AppData\Roaming
+            if let Some(config_dir) = dirs::config_dir() {
+                let path = config_dir.join("ask").join("ask.toml");
+                if path.exists() {
+                    return Some(path);
+                }
             }
         }
 
-        // On macOS, also check ~/.config/ for Unix compatibility
-        #[cfg(target_os = "macos")]
+        #[cfg(not(windows))]
         {
+            // Linux/macOS: use ~/.config for Unix consistency
             if let Some(home) = dirs::home_dir() {
                 let path = home.join(".config").join("ask").join("ask.toml");
                 if path.exists() {
