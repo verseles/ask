@@ -10,13 +10,16 @@
 ask/
 ├── src/
 │   ├── main.rs              # Entry point
+│   ├── http.rs              # Custom DNS and HTTP client setup
+│   ├── completions.rs       # Shell completions generation
 │   ├── cli/
 │   │   ├── mod.rs           # CLI execution logic
 │   │   └── parser.rs        # Flexible argument parsing
 │   ├── config/
 │   │   ├── mod.rs           # Config structs and init_config()
 │   │   ├── loader.rs        # TOML config loading hierarchy
-│   │   └── defaults.rs      # Default constants
+│   │   ├── defaults.rs      # Default constants
+│   │   └── thinking.rs      # Thinking mode configuration helpers
 │   ├── providers/
 │   │   ├── mod.rs           # Provider factory
 │   │   ├── traits.rs        # Provider trait + PromptContext
@@ -38,9 +41,8 @@ ask/
 │   │   ├── markdown.rs      # Terminal markdown rendering
 │   │   ├── colorize.rs      # Color scheme utilities
 │   │   └── spinner.rs       # Loading indicator (● blinking/streaming)
-│   ├── update/
-│   │   └── mod.rs           # Auto-update from GitHub releases
-│   └── completions.rs       # Shell completions generation
+│   └── update/
+│       └── mod.rs           # Auto-update from GitHub releases
 ├── tests/
 │   ├── integration_test.rs  # CLI integration tests
 │   └── fixtures/            # Test fixtures
@@ -70,19 +72,24 @@ Implements flexible argument parsing that allows flags before or after free text
 ```rust
 pub struct Args {
     pub context: Option<u64>, // -c, --context[=MIN]
-    pub command_mode: bool,   // -x, --command
-    pub yes: bool,            // -y, --yes
-    pub think: Option<bool>,  // -t, --think[=VAL]
-    pub think_level: Option<String>, // thinking level (minimal, low, etc.)
+    pub command_mode: Option<bool>, // -x, --command / --question
+    pub yes: Option<bool>,    // -y, --yes / --confirm
     pub model: Option<String>,
     pub provider: Option<String>, // -P, --provider
     pub profile: Option<String>,  // -p, --profile
-    pub api_key: Option<String>,  // -k, --api-key
-    pub non_interactive: bool,    // -n, --non-interactive
-    pub verbose: bool,            // -v, --verbose
-    pub list_profiles: bool,      // profiles subcommand
-    pub make_config: bool,        // --make-config
-    pub query: Vec<String>,       // Free text parts
+    pub think: Option<bool>,  // -t, --think / --no-think
+    pub think_level: Option<String>, // thinking level/budget/effort
+    pub json: bool,           // --json
+    pub markdown: Option<bool>, // --markdown / --no-markdown
+    pub raw: bool,            // --raw
+    pub color: Option<bool>,  // --color / --no-color
+    pub stream: Option<bool>, // --stream / --no-stream
+    pub search: Option<bool>, // -s, --search / --no-search
+    pub citations: Option<bool>, // --citations / --no-citations
+    pub verbose: bool,        // -v, --verbose
+    pub list_profiles: bool,  // profiles subcommand
+    pub make_config: bool,    // --make-config
+    pub query: Vec<String>,   // Free text parts
     // ...
 }
 ```
@@ -107,10 +114,10 @@ Configuration is loaded with precedence (Profile-Only Architecture):
 Key structures:
 - `Config` - Main config container with profiles, behavior, context, update, commands, aliases
 - `ActiveConfig` - Runtime-resolved config (provider, model, api_key, base_url, stream, profile_name)
-- `ProfileConfig` - Named profile settings (provider, model, api_key, base_url, stream, fallback, thinking settings)
+- `ProfileConfig` - Named profile settings (provider, model, api_key, base_url, stream, fallback, thinking settings, web search)
 - `BehaviorConfig` - Execution behavior settings
 - `ContextConfig` - Context/history settings
-- `ConfigManager` - Helper struct for interactive config management
+- `ConfigManager` - Internal helper for interactive config management
 - `aliases: HashMap<String, String>` - Command-line aliases
 
 Key functions:
@@ -120,12 +127,19 @@ Key functions:
 - `load_aliases_only()` - Fast alias loading for early argument expansion
 - `configure_profile()` - Configure a single profile
 - `manage_profiles()` - Profile management submenu
-- `show_current_config()` - Display current config formatted
-- `list_profiles()` - List all profiles with details
 - `get_thinking_config()` - Get unified thinking settings (enabled, value)
-- `get_thinking_level()` - Get Gemini thinking level from profile
-- `get_reasoning_effort()` - Get OpenAI reasoning effort from profile
-- `get_thinking_budget()` - Get Anthropic thinking budget from profile
+- `get_thinking_level()` - Get thinking level (Gemini/Anthropic) from active profile
+- `get_reasoning_effort()` - Get OpenAI reasoning effort from active profile
+- `get_thinking_budget()` - Get thinking budget (Gemini/Anthropic) from active profile
+- `get_profile_web_search()` - Check if web search is enabled for active profile
+
+### HTTP Client & DNS Resolver (`src/http.rs`)
+
+`ask` uses a custom HTTP client setup to ensure reliability across all platforms, including Termux/Android:
+
+- **Hickory DNS**: Uses `hickory-resolver` with Cloudflare DNS (1.1.1.1) to bypass system DNS issues.
+- **Cross-Platform**: Works without `/etc/resolv.conf`, making it robust for mobile environments.
+- **Reqwest**: Integrated with `reqwest` for all API calls (Gemini, OpenAI, Anthropic, GitHub).
 
 ### Providers (`src/providers/`)
 
@@ -142,14 +156,16 @@ pub trait Provider: Send + Sync {
 ```
 
 Supported providers:
-- **GeminiProvider**: Google Gemini API (thinking via `thinkingConfig`)
-- **OpenAIProvider**: OpenAI and compatible APIs (reasoning via `reasoning_effort`)
-- **AnthropicProvider**: Anthropic Claude API (thinking via `thinking.budget_tokens`)
+- **GeminiProvider**: Google Gemini API (Thinking via `thinkingConfig` or `thinkingBudget`)
+- **OpenAIProvider**: OpenAI and compatible APIs (Reasoning via `reasoning_effort`)
+- **AnthropicProvider**: Anthropic Claude API (Thinking via `thinking.budget_tokens`)
 
-**Thinking Mode Support**:
-Each provider implements thinking/reasoning differently:
-- `ProviderOptions.thinking_enabled` - Whether thinking is active
-- `ProviderOptions.thinking_value` - Provider-specific value (level/effort/budget)
+**Thinking Mode Support** (`src/config/thinking.rs`):
+The system dynamically detects and selects the appropriate parameter for each provider/model:
+- **Gemini 2.5/Pro**: `thinking_budget` (tokens)
+- **Gemini 3**: `thinking_level` (minimal, low, medium, high)
+- **OpenAI (o1/o3)**: `reasoning_effort` (none, low, medium, high)
+- **Anthropic**: `thinking_budget` (tokens or levels)
 
 The unified prompt system handles intent detection inline (command vs question vs code) without a separate API call. Key functions:
 - `build_unified_prompt()` - Builds the system prompt with context
@@ -328,15 +344,18 @@ See [ADR.md](ADR.md) for architectural decisions including:
 
 Key crates:
 - `clap`: CLI utility functions and shell completions
-- `clap_complete`: Shell completions generation
 - `tokio`: Async runtime
 - `reqwest`: HTTP client with streaming and rustls
-- `hickory-resolver`: Custom DNS resolution for Termux/Android compatibility
+- `hickory-resolver`: Custom DNS resolution for cross-platform compatibility
 - `serde` + `toml`: Configuration parsing
 - `colored`: Terminal colors
 - `indicatif`: Progress spinners
 - `termimad`: Markdown rendering
-- `requestty`: Interactive CLI prompts with number key selection
+- `requestty`: Interactive CLI prompts
 - `arboard`: Clipboard support for command injection (all platforms)
-- `mouse-keyboard-input`: Key simulation for Ctrl+Shift+V paste (Linux)
-- `enigo`: Key simulation for Cmd+V/Ctrl+V paste (macOS/Windows)
+- `enigo`: Key simulation for Cmd+V/Ctrl+V paste (macOS/Windows/Linux x86_64)
+- `mouse-keyboard-input`: Key simulation for Linux (uinput)
+- `clap_complete`: Shell completions generation
+- `anyhow` + `thiserror`: Error handling
+- `serde_json`: JSON serialization for context and output
+- `sha2`: SHA256 hashing for directory-based context IDs
