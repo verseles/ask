@@ -581,13 +581,12 @@ impl ConfigManager {
     }
 
     fn reload(&mut self) -> Result<()> {
-        self.existing = if self.config_path.exists() {
-            std::fs::read_to_string(&self.config_path)
-                .ok()
-                .and_then(|s| toml::from_str(&s).ok())
+        if self.config_path.exists() {
+            let content = std::fs::read_to_string(&self.config_path)?;
+            self.existing = Some(toml::from_str(&content)?);
         } else {
-            None
-        };
+            self.existing = None;
+        }
         Ok(())
     }
 
@@ -598,6 +597,37 @@ impl ConfigManager {
         }
         Ok(())
     }
+}
+
+/// Merge a profile TOML string into an existing document safely
+/// This parses the profile_toml, extracts the profile data, and inserts it
+/// into the doc's profiles table, avoiding format conflicts from concatenation.
+fn merge_profile_into_doc(doc: &mut toml::Value, profile_toml: &str) -> Result<()> {
+    // Parse the profile TOML string
+    let profile_doc: toml::Value = toml::from_str(profile_toml)
+        .map_err(|e| anyhow::anyhow!("Failed to parse profile TOML: {}", e))?;
+
+    // Extract the profiles table from the parsed string
+    if let Some(new_profiles) = profile_doc.get("profiles").and_then(|v| v.as_table()) {
+        // Ensure doc has a profiles table
+        if doc.get("profiles").is_none() {
+            if let Some(doc_table) = doc.as_table_mut() {
+                doc_table.insert(
+                    "profiles".to_string(),
+                    toml::Value::Table(toml::map::Map::new()),
+                );
+            }
+        }
+
+        // Insert each profile from the new TOML into the doc
+        if let Some(profiles_table) = doc.get_mut("profiles").and_then(|v| v.as_table_mut()) {
+            for (name, value) in new_profiles {
+                profiles_table.insert(name.clone(), value.clone());
+            }
+        }
+    }
+
+    Ok(())
 }
 
 /// Configure a single profile
@@ -670,7 +700,7 @@ fn configure_profile(mgr: &ConfigManager, profile_name: Option<&str>) -> Result<
             .to_string();
 
         if new_key.is_empty() {
-            String::new()
+            existing_api_key.clone()
         } else {
             new_key
         }
@@ -935,8 +965,13 @@ fn manage_profiles(mgr: &mut ConfigManager) -> Result<()> {
                 if let Some(profile_toml) = configure_profile(mgr, None)? {
                     mgr.ensure_dir()?;
                     let content = std::fs::read_to_string(&mgr.config_path).unwrap_or_default();
-                    let new_content = format!("{}\n{}", content, profile_toml);
-                    std::fs::write(&mgr.config_path, new_content)?;
+                    let mut doc: toml::Value = if content.is_empty() {
+                        toml::Value::Table(toml::map::Map::new())
+                    } else {
+                        toml::from_str(&content)?
+                    };
+                    merge_profile_into_doc(&mut doc, &profile_toml)?;
+                    std::fs::write(&mgr.config_path, toml::to_string_pretty(&doc)?)?;
                     mgr.reload()?;
                     println!("{}", "Profile created!".green());
                 }
@@ -959,15 +994,14 @@ fn manage_profiles(mgr: &mut ConfigManager) -> Result<()> {
                         let content = std::fs::read_to_string(&mgr.config_path).unwrap_or_default();
 
                         let mut doc: toml::Value = toml::from_str(&content)?;
+                        // Remove old profile data, then merge the new one
                         if let Some(profiles_table) = doc.get_mut("profiles") {
                             if let Some(table) = profiles_table.as_table_mut() {
                                 table.remove(profile_name);
                             }
                         }
-
-                        let new_content =
-                            format!("{}\n{}", toml::to_string_pretty(&doc)?, profile_toml);
-                        std::fs::write(&mgr.config_path, new_content)?;
+                        merge_profile_into_doc(&mut doc, &profile_toml)?;
+                        std::fs::write(&mgr.config_path, toml::to_string_pretty(&doc)?)?;
                         mgr.reload()?;
                         println!("{}", "Profile updated!".green());
                     }
