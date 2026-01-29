@@ -446,6 +446,9 @@ impl Config {
                 if let Some(level) = self.get_thinking_level() {
                     let enabled = level.to_lowercase() != "none" && level != "0";
                     (enabled, Some(level))
+                } else if let Some(budget) = self.get_thinking_budget() {
+                    let enabled = budget != 0;
+                    (enabled, Some(budget.to_string()))
                 } else {
                     (false, None)
                 }
@@ -546,6 +549,19 @@ impl ConfigManager {
             val = val.get(*k)?;
         }
         val.as_str().map(|s| s.to_string())
+    }
+
+    fn get_any_str(&self, keys: &[&str]) -> Option<String> {
+        let mut val = self.existing.as_ref()?;
+        for k in keys {
+            val = val.get(*k)?;
+        }
+        match val {
+            toml::Value::String(s) => Some(s.clone()),
+            toml::Value::Integer(i) => Some(i.to_string()),
+            toml::Value::Boolean(b) => Some(b.to_string()),
+            _ => None,
+        }
     }
 
     fn get_bool(&self, keys: &[&str], default: bool) -> bool {
@@ -651,17 +667,30 @@ fn configure_profile(mgr: &ConfigManager, profile_name: Option<&str>) -> Result<
     println!();
     println!("{}", format!("Configuring profile: {}", name).cyan());
 
-    let providers = vec!["Gemini", "OpenAI", "Anthropic Claude"];
+    let mut providers = vec!["Gemini", "OpenAI", "Anthropic Claude"];
+    providers.push("Back");
+
     let existing_provider = mgr.get_str(&["profiles", &name, "provider"]);
 
-    let default_idx = match existing_provider.as_deref() {
+    let existing_idx = match existing_provider.as_deref() {
         Some("gemini") => 0,
         Some("openai") => 1,
         Some("anthropic") => 2,
         _ => 0,
     };
 
-    let provider_idx = numbered_select("Provider for this profile", &providers, default_idx)?;
+    // Use current provider if editing, otherwise default to 'Back' for safety
+    let default_choice = if profile_name.is_some() {
+        existing_idx
+    } else {
+        providers.len() - 1
+    };
+
+    let provider_idx = numbered_select("Provider for this profile", &providers, default_choice)?;
+
+    if provider_idx == providers.len() - 1 {
+        return Ok(None);
+    }
 
     let (provider, default_model) = match provider_idx {
         0 => ("gemini", defaults::DEFAULT_MODEL),
@@ -749,11 +778,21 @@ fn configure_profile(mgr: &ConfigManager, profile_name: Option<&str>) -> Result<
             .unwrap_or(existing_stream)
     };
 
-    let thinking_config = if let Some((key, value)) = select_thinking_config(provider, &model)? {
-        format_thinking_config(&key, &value)
-    } else {
-        String::new()
-    };
+    // Thinking: pre-select existing value if editing
+    let existing_thinking_level = mgr.get_any_str(&["profiles", &name, "thinking_level"]);
+    let existing_thinking_budget = mgr.get_any_str(&["profiles", &name, "thinking_budget"]);
+    let existing_reasoning_effort = mgr.get_any_str(&["profiles", &name, "reasoning_effort"]);
+
+    let existing_thinking = existing_thinking_level
+        .or(existing_thinking_budget)
+        .or(existing_reasoning_effort);
+
+    let thinking_config =
+        if let Some((key, value)) = select_thinking_config(provider, &model, existing_thinking)? {
+            format_thinking_config(&key, &value)
+        } else {
+            String::new()
+        };
 
     let fallback_options = vec![
         "Use any available profile (Recommended)",
@@ -950,11 +989,10 @@ fn manage_profiles(mgr: &mut ConfigManager) -> Result<()> {
             options.push("Delete profile".to_string());
             options.push("Set default profile".to_string());
         }
-        options.push("Back to main menu".to_string());
-
-        let choice = numbered_select("Manage Profiles", &options, 0)?;
+        options.push("Back".to_string());
 
         let back_idx = options.len() - 1;
+        let choice = numbered_select("Manage Profiles", &options, back_idx)?;
 
         if choice == back_idx {
             break;
@@ -1120,13 +1158,13 @@ pub async fn init_config() -> Result<()> {
 
     loop {
         println!();
-        let menu_options = if mgr.existing.is_some() {
-            vec!["View current config", "Manage profiles", "Exit"]
+        let (menu_options, default_choice) = if mgr.existing.is_some() {
+            (vec!["View current config", "Manage profiles", "Exit"], 2)
         } else {
-            vec!["Quick setup (recommended)", "Exit"]
+            (vec!["Quick setup (recommended)", "Exit"], 1)
         };
 
-        let choice = numbered_select("What would you like to do?", &menu_options, 0)?;
+        let choice = numbered_select("What would you like to do?", &menu_options, default_choice)?;
 
         if mgr.existing.is_none() {
             match choice {
@@ -1193,6 +1231,9 @@ channel = "stable"
             match choice {
                 0 => {
                     show_current_config(&mgr);
+                    println!("{}", "Press Enter to return to menu...".bright_black());
+                    let mut input = String::new();
+                    let _ = std::io::stdin().read_line(&mut input);
                 }
                 1 => {
                     manage_profiles(&mut mgr)?;

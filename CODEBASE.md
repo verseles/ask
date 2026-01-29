@@ -118,6 +118,9 @@ Key structures:
 - `BehaviorConfig` - Execution behavior settings
 - `ContextConfig` - Context/history settings
 - `ConfigManager` - Internal helper for interactive config management
+    - `get_any_str()` - Retrieve any TOML value as a String (handles Integers/Booleans)
+    - **Safe-by-Default Navigation**: Menu defaults to "Back"/"Exit" after actions
+    - **Smart Persistence**: Pre-selects existing values when editing profiles
 - `aliases: HashMap<String, String>` - Command-line aliases
 
 Key functions:

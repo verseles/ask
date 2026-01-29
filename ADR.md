@@ -824,3 +824,29 @@ pub fn flatten_command_if_safe(text: &str) -> Option<String> {
 - tmux/screen injection only activates in truly headless environments
 - The enhanced fallback provides a usable experience even without any injection method
 - Headless SSH users benefit from automatic command injection via their multiplexer
+
+---
+
+## ADR-025: Safe-by-Default CLI Navigation
+
+**Status**: Accepted
+
+**Context**: Interactive configuration menus (`ask init`) often cause accidental repeated actions or misconfiguration if the first option is always selected by default after a step. Furthermore, when editing existing profiles, users often want to preserve current values rather than resetting them to a fixed default.
+
+**Decision**: Implement "Safe-by-Default" navigation and "Smart Persistence" in the interactive configuration wizard.
+
+**Implementation**:
+1. **Safe-by-Default**: After performing an action in the main menu or submenus, the cursor automatically pre-selects "Back" or "Exit". This requires intentional movement to repeat an action.
+2. **Smart Persistence**: When editing an existing profile, the wizard pre-loads and pre-selects current values (Provider, Model, Thinking Level, etc.) in the prompts.
+3. **Type-Agnostic Reading**: Implemented `get_any_str` in `ConfigManager` to handle TOML values of various types (String, Integer, Boolean) as strings for menu pre-selection (e.g., reading `thinking_budget = 16384` as `"16384"`).
+
+**Rationale**:
+- Reduces accidental changes to configuration.
+- Improves ergonomic flow for users wanting to "Exit" or "Go Back" after a quick change.
+- Consistent with modern CLI wizard patterns (e.g., `npm init`, `git init` style interactions).
+- Prevents data loss during profile editing by preserving existing settings.
+
+**Consequences**:
+- Users must press arrow keys more often to perform multiple consecutive actions.
+- Much higher confidence during profile editing as existing values are visible and pre-selected.
+- `thinking_budget` (Gemini 2.5/Anthropic) is now correctly persisted and pre-selected.

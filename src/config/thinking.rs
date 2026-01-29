@@ -188,7 +188,11 @@ pub fn get_thinking_options(thinking_type: ThinkingType) -> Vec<ThinkingOption> 
     }
 }
 
-pub fn select_thinking_config(provider: &str, model: &str) -> Result<Option<(String, String)>> {
+pub fn select_thinking_config(
+    provider: &str,
+    model: &str,
+    existing_value: Option<String>,
+) -> Result<Option<(String, String)>> {
     let thinking_type = detect_thinking_type(provider, model);
 
     if thinking_type == ThinkingType::NotSupported {
@@ -202,12 +206,25 @@ pub fn select_thinking_config(provider: &str, model: &str) -> Result<Option<(Str
 
     let labels: Vec<&str> = options.iter().map(|o| o.label.as_str()).collect();
 
-    let default_idx = match thinking_type {
-        ThinkingType::GeminiLevel => 1,
-        ThinkingType::GeminiBudget => 1,
-        ThinkingType::OpenAIEffort => 3,
-        ThinkingType::AnthropicBudget => 1,
-        ThinkingType::NotSupported => 0,
+    let default_idx = if let Some(existing) = existing_value {
+        options
+            .iter()
+            .position(|o| o.config_value == existing)
+            .unwrap_or(match thinking_type {
+                ThinkingType::GeminiLevel => 1,
+                ThinkingType::GeminiBudget => 1,
+                ThinkingType::OpenAIEffort => 3,
+                ThinkingType::AnthropicBudget => 1,
+                ThinkingType::NotSupported => 0,
+            })
+    } else {
+        match thinking_type {
+            ThinkingType::GeminiLevel => 1,
+            ThinkingType::GeminiBudget => 1,
+            ThinkingType::OpenAIEffort => 3,
+            ThinkingType::AnthropicBudget => 1,
+            ThinkingType::NotSupported => 0,
+        }
     };
 
     let idx = numbered_select("Select thinking mode", &labels, default_idx)?;
