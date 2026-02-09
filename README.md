@@ -146,6 +146,7 @@ Run `ask init` or `ask config` to configure interactively:
 
 **Profile Management:**
 - Create new profiles with custom provider, model, API key, base URL
+- Add free GPT profile powered by ch.at (one-click)
 - Edit existing profiles (provider, model, API key, thinking, web search, fallback)
 - Delete profiles
 - Set default profile

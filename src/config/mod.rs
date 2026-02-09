@@ -1003,18 +1003,49 @@ fn show_current_config(mgr: &ConfigManager) {
     println!();
 }
 
+const ADD_FREE_PROFILE_OPTION: &str = "Add free GPT powered by ch.at";
+
+fn free_profile_toml() -> String {
+    format!(
+        r#"
+[profiles.{}]
+provider = "{}"
+model = "{}"
+api_key = "{}"
+base_url = "{}"
+stream = true
+fallback = "none""#,
+        defaults::FREE_PROFILE_NAME,
+        defaults::FREE_PROFILE_PROVIDER,
+        defaults::FREE_PROFILE_MODEL,
+        defaults::FREE_PROFILE_API_KEY,
+        defaults::FREE_PROFILE_BASE_URL
+    )
+}
+
+fn build_manage_profile_options(profiles: &[String]) -> Vec<String> {
+    let mut options = vec!["Create new profile".to_string()];
+
+    if !profiles.iter().any(|p| p == defaults::FREE_PROFILE_NAME) {
+        options.push(ADD_FREE_PROFILE_OPTION.to_string());
+    }
+
+    if !profiles.is_empty() {
+        options.push("Edit existing profile".to_string());
+        options.push("Delete profile".to_string());
+        options.push("Set default profile".to_string());
+    }
+
+    options.push("Back".to_string());
+    options
+}
+
 fn manage_profiles(mgr: &mut ConfigManager) -> Result<()> {
     loop {
         println!();
         let profiles = mgr.get_profiles();
 
-        let mut options = vec!["Create new profile".to_string()];
-        if !profiles.is_empty() {
-            options.push("Edit existing profile".to_string());
-            options.push("Delete profile".to_string());
-            options.push("Set default profile".to_string());
-        }
-        options.push("Back".to_string());
+        let options = build_manage_profile_options(&profiles);
 
         let back_idx = options.len() - 1;
         let choice = numbered_select("Manage Profiles", &options, back_idx)?;
@@ -1038,6 +1069,30 @@ fn manage_profiles(mgr: &mut ConfigManager) -> Result<()> {
                     mgr.reload()?;
                     println!("{}", "Profile created!".green());
                 }
+            }
+            ADD_FREE_PROFILE_OPTION => {
+                if profiles.iter().any(|p| p == defaults::FREE_PROFILE_NAME) {
+                    println!("{}", "Free profile already exists.".yellow());
+                    continue;
+                }
+
+                mgr.ensure_dir()?;
+                let content = std::fs::read_to_string(&mgr.config_path).unwrap_or_default();
+                let mut doc: toml::Value = if content.is_empty() {
+                    toml::Value::Table(toml::map::Map::new())
+                } else {
+                    toml::from_str(&content)?
+                };
+
+                merge_profile_into_doc(&mut doc, &free_profile_toml())?;
+                std::fs::write(&mgr.config_path, toml::to_string_pretty(&doc)?)?;
+                mgr.reload()?;
+
+                println!(
+                    "{} {}",
+                    "Free profile added:".green(),
+                    defaults::FREE_PROFILE_NAME.cyan()
+                );
             }
             "Edit existing profile" => {
                 let profiles = mgr.get_profiles();
@@ -1579,5 +1634,54 @@ mod tests {
         );
         assert_eq!(config.active_provider(), defaults::FREE_PROFILE_PROVIDER);
         assert_eq!(config.active_model(), defaults::FREE_PROFILE_MODEL);
+    }
+
+    #[test]
+    fn test_free_profile_toml_matches_defaults() {
+        let parsed: toml::Value = toml::from_str(&free_profile_toml()).unwrap();
+        let profile = parsed
+            .get("profiles")
+            .and_then(|v| v.get(defaults::FREE_PROFILE_NAME))
+            .unwrap();
+
+        assert_eq!(
+            profile.get("provider").and_then(|v| v.as_str()),
+            Some(defaults::FREE_PROFILE_PROVIDER)
+        );
+        assert_eq!(
+            profile.get("model").and_then(|v| v.as_str()),
+            Some(defaults::FREE_PROFILE_MODEL)
+        );
+        assert_eq!(
+            profile.get("api_key").and_then(|v| v.as_str()),
+            Some(defaults::FREE_PROFILE_API_KEY)
+        );
+        assert_eq!(
+            profile.get("base_url").and_then(|v| v.as_str()),
+            Some(defaults::FREE_PROFILE_BASE_URL)
+        );
+        assert_eq!(profile.get("stream").and_then(|v| v.as_bool()), Some(true));
+        assert_eq!(
+            profile.get("fallback").and_then(|v| v.as_str()),
+            Some("none")
+        );
+    }
+
+    #[test]
+    fn test_manage_profile_options_show_add_free_when_missing() {
+        let profiles = vec!["main".to_string()];
+        let options = build_manage_profile_options(&profiles);
+
+        assert!(options.iter().any(|o| o == ADD_FREE_PROFILE_OPTION));
+        assert_eq!(options.last().map(|s| s.as_str()), Some("Back"));
+    }
+
+    #[test]
+    fn test_manage_profile_options_hide_add_free_when_present() {
+        let profiles = vec!["main".to_string(), defaults::FREE_PROFILE_NAME.to_string()];
+        let options = build_manage_profile_options(&profiles);
+
+        assert!(!options.iter().any(|o| o == ADD_FREE_PROFILE_OPTION));
+        assert_eq!(options.last().map(|s| s.as_str()), Some("Back"));
     }
 }
