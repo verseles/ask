@@ -49,7 +49,10 @@ The installer will prompt you to configure your API keys automatically.
 ## Quick Start
 
 ```bash
-# Initialize configuration (set up API keys)
+# Zero-config mode: built-in free profile ("ch-at")
+ask what is rust
+
+# Optional: initialize configuration with your own API keys
 ask init
 
 # Non-interactive init (for scripts/automation)
@@ -158,11 +161,13 @@ Configuration is loaded from multiple sources (in order of precedence):
 5. `~/.config/ask/ask.toml` (XDG config - recommended)
 6. Default values
 
+The built-in free profile `ch-at` (OpenAI-compatible endpoint `https://ch.at/v1`) is always available, even when you have your own profiles configured.
+
 ### Example ask.toml
 
 ```toml
 # All configuration lives in profiles
-# First profile is used by default (set default_profile to change)
+# default_profile takes precedence; otherwise first non-built-in profile is used
 # Switch profiles with: ask -p <profile_name>
 
 # Optional: explicitly set default profile
@@ -342,7 +347,7 @@ model = "llama3"
 api_key = "ollama"  # dummy key for local servers
 ```
 
-**Profile Resolution**: First profile is used by default. Set `default_profile` to explicitly choose a different default.
+**Profile Resolution**: `default_profile` is used when set. Otherwise, `ask` prefers the first non-built-in profile; `ch-at` is used automatically when no custom profile exists.
 
 **Fallback Options**:
 - `fallback = "profile-name"` - Use specific profile on provider errors
@@ -375,6 +380,18 @@ provider = "openai"
 api_key = "ollama"
 base_url = "http://localhost:11434/v1"
 model = "llama3"
+```
+
+### ch.at (Built-in Free Profile)
+
+This profile is always available and can be selected with `ask -p ch-at`:
+
+```toml
+[profiles.ch-at]
+provider = "openai"
+base_url = "https://ch.at/v1"
+model = "gpt-4o"
+api_key = "ch-at" # dummy key for compatibility
 ```
 
 ## Thinking Mode

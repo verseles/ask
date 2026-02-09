@@ -7,13 +7,19 @@ pub const DEFAULT_PROVIDER: &str = "gemini";
 pub const DEFAULT_MODEL: &str = "gemini-flash-lite-latest";
 pub const DEFAULT_OPENAI_MODEL: &str = "gpt-5-nano";
 pub const DEFAULT_ANTHROPIC_MODEL: &str = "claude-haiku-4-5";
+pub const FREE_PROFILE_NAME: &str = "ch-at";
+pub const FREE_PROFILE_PROVIDER: &str = "openai";
+pub const FREE_PROFILE_MODEL: &str = "gpt-4o";
+pub const FREE_PROFILE_API_KEY: &str = "ch-at";
+pub const FREE_PROFILE_BASE_URL: &str = "https://ch.at/v1";
 pub const DEFAULT_TIMEOUT: u64 = 30;
 
 pub const DEFAULT_CONFIG_TEMPLATE: &str = r##"# ask - Configuration File
 # Place this file at: ~/.config/ask/ask.toml or ~/ask.toml
 
 # All configuration lives in profiles
-# First profile is used by default unless default_profile is set
+# Built-in free profile "ch-at" is always available (OpenAI-compatible endpoint: https://ch.at/v1)
+# Default selection: default_profile, then first non-built-in profile
 # Switch profiles with: ask -p <profile_name>
 [profiles.main]
 provider = "gemini"           # gemini, openai, anthropic

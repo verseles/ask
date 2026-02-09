@@ -110,6 +110,7 @@ Configuration is loaded with precedence (Profile-Only Architecture):
 4. Home config (`~/ask.toml` - legacy, still supported)
 5. XDG config (`~/.config/ask/ask.toml` - recommended for new installs)
 6. Hardcoded defaults (lowest)
+7. Built-in free profile `ch-at` is injected if missing and remains available as `-p ch-at`
 
 Key structures:
 - `Config` - Main config container with profiles, behavior, context, update, commands, aliases

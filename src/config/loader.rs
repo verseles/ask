@@ -55,6 +55,8 @@ impl Config {
 
         // Apply environment variable overrides
         config = Self::apply_env_overrides(config);
+        // Ensure built-in free profile is always available.
+        config = config.ensure_default_profiles();
 
         Ok(config)
     }

@@ -728,7 +728,7 @@ fn is_likely_command(text: &str) -> bool {
 }
 
 fn list_profiles(config: &Config) -> Result<()> {
-    let default_name = config.default_profile.as_deref();
+    let effective_default = config.effective_default_profile();
 
     println!("{}", "Profiles".cyan().bold());
     println!();
@@ -749,7 +749,7 @@ fn list_profiles(config: &Config) -> Result<()> {
 
     for name in profile_names {
         let profile = &config.profiles[name];
-        let is_default = default_name == Some(name.as_str());
+        let is_default = effective_default.as_deref() == Some(name.as_str());
         let provider = profile.provider.as_ref().unwrap_or(&default_provider);
         let model = profile.model.as_ref().unwrap_or(&default_model);
         let fallback = profile
@@ -800,7 +800,7 @@ fn list_profiles(config: &Config) -> Result<()> {
         }
     }
 
-    if let Some(default) = default_name {
+    if let Some(default) = effective_default {
         println!();
         println!("Default profile: {}", default.green().bold());
     }
@@ -808,7 +808,7 @@ fn list_profiles(config: &Config) -> Result<()> {
     println!();
     println!(
         "{}",
-        "Use 'ask -P <profile>' to use a specific profile.".bright_black()
+        "Use 'ask -p <profile>' to use a specific profile.".bright_black()
     );
 
     Ok(())
