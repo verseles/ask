@@ -1330,6 +1330,12 @@ channel = "stable"
     Ok(())
 }
 
+pub fn print_config() -> Result<()> {
+    let mgr = ConfigManager::new()?;
+    show_current_config(&mgr);
+    Ok(())
+}
+
 pub fn init_config_non_interactive(
     provider: Option<&str>,
     model: Option<&str>,

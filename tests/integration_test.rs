@@ -419,3 +419,15 @@ fn think_short_combined_value() {
         stderr
     );
 }
+
+#[test]
+fn config_show_flag_works() {
+    let output = Command::new("cargo")
+        .args(["run", "--", "config", "--show"])
+        .output()
+        .expect("Failed to execute command");
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Current Configuration"));
+}

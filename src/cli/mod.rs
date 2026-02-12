@@ -114,6 +114,9 @@ pub async fn run(update_notification: Option<crate::update::UpdateNotification>)
 
     // Handle init command
     if args.init {
+        if args.show_config {
+            return crate::config::print_config();
+        }
         if args.non_interactive {
             return crate::config::init_config_non_interactive(
                 args.provider.as_deref(),

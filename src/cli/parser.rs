@@ -76,6 +76,9 @@ pub struct Args {
     /// Initialize configuration
     pub init: bool,
 
+    /// Show current configuration non-interactively
+    pub show_config: bool,
+
     /// Clear current context
     pub clear_context: bool,
 
@@ -240,6 +243,7 @@ impl Args {
                 // Subcommands
                 "init" | "config" if query_parts.is_empty() => result.init = true,
                 "profiles" if query_parts.is_empty() => result.list_profiles = true,
+                "--show" => result.show_config = true,
                 "--clear" => result.clear_context = true,
                 "--history" => result.show_history = true,
 
@@ -491,6 +495,7 @@ OPTIONS:
     -P, --provider <NAME> Override configured provider
     -k, --api-key <KEY>   API key (for use with init -n)
     -n, --non-interactive Non-interactive init (use with -P, -m, -k)
+        --show            Show current configuration non-interactively
         --stream          Enable streaming responses
         --no-stream       Disable streaming responses
     -s, --search          Enable web search for this query
@@ -517,7 +522,7 @@ OPTIONS:
     -h, --help            Show this help
 
 SUBCOMMANDS:
-    init, config          Initialize/manage configuration interactively
+    init, config          Initialize/manage configuration interactively (use --show to view)
     profiles              List all available profiles
     --clear              Clear current directory context (use with -c)
     --history            Show context history (use with -c)
