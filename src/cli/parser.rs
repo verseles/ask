@@ -97,6 +97,12 @@ pub struct Args {
     /// List available profiles
     pub list_profiles: bool,
 
+    /// List all global history
+    pub history_subcommand: bool,
+
+    /// Global flag (used with history subcommand)
+    pub global: bool,
+
     /// Export example config template
     pub make_config: bool,
 
@@ -240,8 +246,10 @@ impl Args {
                 // Subcommands
                 "init" | "config" if query_parts.is_empty() => result.init = true,
                 "profiles" if query_parts.is_empty() => result.list_profiles = true,
+                "history" if query_parts.is_empty() => result.history_subcommand = true,
                 "--clear" => result.clear_context = true,
                 "--history" => result.show_history = true,
+                "--global" => result.global = true,
 
                 // Flags with values
                 "-m" | "--model" => {
@@ -519,6 +527,7 @@ OPTIONS:
 SUBCOMMANDS:
     init, config          Initialize/manage configuration interactively
     profiles              List all available profiles
+    history               List all global context history
     --clear              Clear current directory context (use with -c)
     --history            Show context history (use with -c)
 
@@ -663,5 +672,37 @@ mod tests {
         assert!(is_think_level("-1"));
         assert!(!is_think_level("hello"));
         assert!(!is_think_level("test"));
+    }
+
+    #[test]
+    fn test_parse_history_subcommand() {
+        let args = Args::parse_args(vec!["history".into()]);
+        assert!(args.history_subcommand);
+        assert!(!args.global);
+        assert!(args.query.is_empty());
+    }
+
+    #[test]
+    fn test_parse_history_subcommand_global() {
+        let args = Args::parse_args(vec!["history".into(), "--global".into()]);
+        assert!(args.history_subcommand);
+        assert!(args.global);
+        assert!(args.query.is_empty());
+    }
+
+    #[test]
+    fn test_parse_global_history_subcommand() {
+        let args = Args::parse_args(vec!["--global".into(), "history".into()]);
+        assert!(args.history_subcommand);
+        assert!(args.global);
+        assert!(args.query.is_empty());
+    }
+
+    #[test]
+    fn test_parse_history_as_query() {
+        // "history" not first word -> treated as query
+        let args = Args::parse_args(vec!["explain".into(), "history".into()]);
+        assert!(!args.history_subcommand);
+        assert_eq!(args.query, vec!["explain", "history"]);
     }
 }
