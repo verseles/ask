@@ -116,6 +116,9 @@ Key structures:
 - `Config` - Main config container with profiles, behavior, context, update, commands, aliases
 - `ActiveConfig` - Runtime-resolved config (provider, model, api_key, base_url, stream, profile_name)
 - `ProfileConfig` - Named profile settings (provider, model, api_key, base_url, stream, fallback, thinking settings, web search)
+- `FreeProfileDef` - Static definition for built-in free profiles (name, provider, model, api_key, base_url)
+- `FREE_PROFILES` - Array of all 4 built-in free profile definitions (talker, coder, vision, faster)
+- `FREE_PROFILE_NAMES` - Array of free profile name strings for lookup/filtering
 - `BehaviorConfig` - Execution behavior settings
 - `ContextConfig` - Context/history settings
 - `ConfigManager` - Internal helper for interactive config management
@@ -126,6 +129,11 @@ Key structures:
 
 Key functions:
 - `with_cli_overrides()` - Resolves active config from CLI args, ENV, and profiles
+- `ensure_default_profiles()` - Injects all 4 built-in free profiles if missing (with `fallback = "any"`)
+- `first_non_free_profile()` - Finds the first user-defined profile (skips all free profiles)
+- `effective_default_profile()` - Resolves default profile: `default_profile` > first user profile > `faster`
+- `free_profiles_toml()` - Generates TOML string for all 4 free profiles (used by menu)
+- `any_free_profile_missing()` - Checks if any of the 4 free profiles is missing from config
 - `init_config()` - Interactive configuration menu
 - `init_config_non_interactive()` - Non-interactive setup (for scripts)
 - `load_aliases_only()` - Fast alias loading for early argument expansion

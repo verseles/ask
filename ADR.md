@@ -850,3 +850,51 @@ pub fn flatten_command_if_safe(text: &str) -> Option<String> {
 - Users must press arrow keys more often to perform multiple consecutive actions.
 - Much higher confidence during profile editing as existing values are visible and pre-selected.
 - `thinking_budget` (Gemini 2.5/Anthropic) is now correctly persisted and pre-selected.
+
+---
+
+## ADR-026: Multi-Provider Free Profiles
+
+**Status**: Accepted (v0.29.0)
+
+**Context**: The original implementation had a single built-in free profile (`ch-at`) pointing to `https://ch.at/v1` with `gpt-4o`. While functional, this had limitations: a single provider meant a single point of failure, no specialization for different tasks, and `fallback = "none"` meant errors were unrecoverable without user-configured profiles.
+
+**Decision**: Replace the single free profile with 4 specialized profiles from 2 providers, all with `fallback = "any"`.
+
+**Profiles**:
+
+| Name | Model | Provider URL | Purpose |
+|------|-------|-------------|---------|
+| `faster` | gpt-oss:20b | api.llm7.io | Fast + quality (default) |
+| `talker` | gpt-4o | ch.at | Conversation & knowledge |
+| `coder` | codestral-latest | api.llm7.io | Code generation |
+| `vision` | GLM-4.6V-Flash | api.llm7.io | Image/vision tasks |
+
+**Key Design Choices**:
+
+1. **`faster` as default**: When no user profiles exist, `faster` (gpt-oss:20b) is selected instead of `talker` (gpt-4o). The 20B model provides a better balance of speed and quality for general CLI usage.
+
+2. **`fallback = "any"` on all free profiles**: Unlike the original `ch-at` with `fallback = "none"`, all free profiles now fall back to any other available profile on error. This provides resilience — if one provider is down, another takes over automatically.
+
+3. **Bulk registration**: The menu option "Add free AI profiles" adds all 4 at once, shown when any free profile is missing. This replaces the old single-profile add action.
+
+4. **`FREE_PROFILES` array**: A static array of `FreeProfileDef` structs drives `ensure_default_profiles()`, `free_profiles_toml()`, and tests. Adding a new free profile requires only adding an entry to this array.
+
+5. **Profile naming**: Short, memorable names (`talker`, `coder`, `vision`, `faster`) instead of provider-based names (`ch-at`, `llm7`). Users type these with `-p`, so brevity matters.
+
+**Implementation**:
+- `ensure_default_profiles()` loops over `FREE_PROFILES` and inserts any missing ones
+- `first_non_free_profile()` uses `FREE_PROFILE_NAMES` to skip all 4 when finding user profiles
+- `effective_default_profile()` prefers `faster` when only free profiles exist
+- `any_free_profile_missing()` checks if the menu option should be shown
+
+**Rationale**:
+- Multiple providers reduce single-point-of-failure risk
+- Specialized models improve quality for specific tasks (code, vision)
+- `fallback = "any"` provides automatic resilience without user configuration
+- Zero-config experience remains: install and use immediately
+
+**Consequences**:
+- 4 profiles injected instead of 1 (visible in `ask profiles`)
+- Free providers may have rate limits or availability issues outside user control
+- Users can still override any free profile by creating one with the same name in their config
