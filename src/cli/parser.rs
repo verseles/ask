@@ -82,6 +82,9 @@ pub struct Args {
     /// Show context history
     pub show_history: bool,
 
+    /// Show global history (across all directories)
+    pub global: bool,
+
     /// INTERNAL: Inject command via uinput (hidden)
     pub inject_raw: Option<String>,
 
@@ -240,8 +243,10 @@ impl Args {
                 // Subcommands
                 "init" | "config" if query_parts.is_empty() => result.init = true,
                 "profiles" if query_parts.is_empty() => result.list_profiles = true,
+                "history" if query_parts.is_empty() => result.show_history = true,
                 "--clear" => result.clear_context = true,
                 "--history" => result.show_history = true,
+                "--global" => result.global = true,
 
                 // Flags with values
                 "-m" | "--model" => {

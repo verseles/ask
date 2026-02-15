@@ -128,6 +128,21 @@ pub async fn run(update_notification: Option<crate::update::UpdateNotification>)
         return list_profiles(&config);
     }
 
+    // Handle history commands (global or local)
+    if args.show_history {
+        // Use configured TTL or default to avoid immediate cleanup of valid contexts
+        // when just viewing history
+        let ttl = args.context.unwrap_or(config.context.max_age_minutes);
+        let manager = ContextManager::with_ttl(&config, ttl)?;
+
+        if args.global {
+            manager.show_global_history()?;
+        } else {
+            manager.show_history()?;
+        }
+        return Ok(());
+    }
+
     // Handle context commands
     if args.has_context() {
         let manager = ContextManager::with_ttl(&config, args.context_ttl())?;
@@ -135,11 +150,6 @@ pub async fn run(update_notification: Option<crate::update::UpdateNotification>)
         if args.clear_context {
             manager.clear_current()?;
             println!("{}", "Context cleared.".green());
-            return Ok(());
-        }
-
-        if args.show_history {
-            manager.show_history()?;
             return Ok(());
         }
     }
