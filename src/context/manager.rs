@@ -144,6 +144,36 @@ impl ContextManager {
         self.max_age_minutes
     }
 
+    /// Show global history (all stored contexts)
+    pub fn show_global_history(&self) -> Result<()> {
+        let mut contexts = self.storage.list()?;
+
+        if contexts.is_empty() {
+            println!("{}", "No conversation history found.".yellow());
+            return Ok(());
+        }
+
+        // Sort by last used (newest first)
+        contexts.sort_by(|a, b| b.last_used.cmp(&a.last_used));
+
+        println!("{}", "Global Conversation History".cyan().bold());
+        println!();
+
+        for ctx in contexts {
+            println!("{} {}", "Path:".cyan(), ctx.pwd.bright_white());
+            println!("{} {}", "ID:".cyan(), ctx.id.bright_black());
+            println!(
+                "{} {}",
+                "Last used:".cyan(),
+                ctx.last_used.format("%Y-%m-%d %H:%M:%S")
+            );
+            println!("{} {}", "Messages:".cyan(), ctx.messages.len());
+            println!();
+        }
+
+        Ok(())
+    }
+
     /// Show context history
     pub fn show_history(&self) -> Result<()> {
         let entry = self.storage.load(&self.context_id)?;
