@@ -240,19 +240,21 @@ impl Default for UpdateConfig {
 
 impl Config {
     pub(crate) fn ensure_default_profiles(mut self) -> Self {
-        if !self.profiles.contains_key(defaults::FREE_PROFILE_NAME) {
-            self.profiles.insert(
-                defaults::FREE_PROFILE_NAME.to_string(),
-                ProfileConfig {
-                    provider: Some(defaults::FREE_PROFILE_PROVIDER.to_string()),
-                    model: Some(defaults::FREE_PROFILE_MODEL.to_string()),
-                    api_key: Some(defaults::FREE_PROFILE_API_KEY.to_string()),
-                    base_url: Some(defaults::FREE_PROFILE_BASE_URL.to_string()),
-                    stream: Some(true),
-                    fallback: Some("none".to_string()),
-                    ..Default::default()
-                },
-            );
+        for fp in defaults::FREE_PROFILES {
+            if !self.profiles.contains_key(fp.name) {
+                self.profiles.insert(
+                    fp.name.to_string(),
+                    ProfileConfig {
+                        provider: Some(fp.provider.to_string()),
+                        model: Some(fp.model.to_string()),
+                        api_key: Some(fp.api_key.to_string()),
+                        base_url: Some(fp.base_url.to_string()),
+                        stream: Some(true),
+                        fallback: Some("any".to_string()),
+                        ..Default::default()
+                    },
+                );
+            }
         }
         self
     }
@@ -266,7 +268,7 @@ impl Config {
     fn first_non_free_profile(&self) -> Option<String> {
         self.sorted_profile_names()
             .into_iter()
-            .find(|name| name != defaults::FREE_PROFILE_NAME)
+            .find(|name| !defaults::FREE_PROFILE_NAMES.contains(&name.as_str()))
     }
 
     pub(crate) fn effective_default_profile(&self) -> Option<String> {
@@ -274,7 +276,14 @@ impl Config {
             .clone()
             .filter(|dp| self.profiles.contains_key(dp))
             .or_else(|| self.first_non_free_profile())
-            .or_else(|| self.sorted_profile_names().into_iter().next())
+            .or_else(|| {
+                // Prefer "faster" as the default free profile
+                if self.profiles.contains_key(defaults::DEFAULT_FREE_PROFILE) {
+                    Some(defaults::DEFAULT_FREE_PROFILE.to_string())
+                } else {
+                    self.sorted_profile_names().into_iter().next()
+                }
+            })
     }
 
     pub fn with_cli_overrides(mut self, args: &Args) -> Self {
@@ -1003,30 +1012,36 @@ fn show_current_config(mgr: &ConfigManager) {
     println!();
 }
 
-const ADD_FREE_PROFILE_OPTION: &str = "Add free GPT powered by ch.at";
+const ADD_FREE_PROFILE_OPTION: &str = "Add free AI profiles (llm7.io + ch.at)";
 
-fn free_profile_toml() -> String {
-    format!(
-        r#"
+fn free_profiles_toml() -> String {
+    let mut toml = String::new();
+    for fp in defaults::FREE_PROFILES {
+        toml.push_str(&format!(
+            r#"
 [profiles.{}]
 provider = "{}"
 model = "{}"
 api_key = "{}"
 base_url = "{}"
 stream = true
-fallback = "none""#,
-        defaults::FREE_PROFILE_NAME,
-        defaults::FREE_PROFILE_PROVIDER,
-        defaults::FREE_PROFILE_MODEL,
-        defaults::FREE_PROFILE_API_KEY,
-        defaults::FREE_PROFILE_BASE_URL
-    )
+fallback = "any""#,
+            fp.name, fp.provider, fp.model, fp.api_key, fp.base_url
+        ));
+    }
+    toml
+}
+
+fn any_free_profile_missing(profiles: &[String]) -> bool {
+    defaults::FREE_PROFILE_NAMES
+        .iter()
+        .any(|name| !profiles.iter().any(|p| p == name))
 }
 
 fn build_manage_profile_options(profiles: &[String]) -> Vec<String> {
     let mut options = vec!["Create new profile".to_string()];
 
-    if !profiles.iter().any(|p| p == defaults::FREE_PROFILE_NAME) {
+    if any_free_profile_missing(profiles) {
         options.push(ADD_FREE_PROFILE_OPTION.to_string());
     }
 
@@ -1071,8 +1086,8 @@ fn manage_profiles(mgr: &mut ConfigManager) -> Result<()> {
                 }
             }
             ADD_FREE_PROFILE_OPTION => {
-                if profiles.iter().any(|p| p == defaults::FREE_PROFILE_NAME) {
-                    println!("{}", "Free profile already exists.".yellow());
+                if !any_free_profile_missing(&profiles) {
+                    println!("{}", "All free profiles already exist.".yellow());
                     continue;
                 }
 
@@ -1084,14 +1099,14 @@ fn manage_profiles(mgr: &mut ConfigManager) -> Result<()> {
                     toml::from_str(&content)?
                 };
 
-                merge_profile_into_doc(&mut doc, &free_profile_toml())?;
+                merge_profile_into_doc(&mut doc, &free_profiles_toml())?;
                 std::fs::write(&mgr.config_path, toml::to_string_pretty(&doc)?)?;
                 mgr.reload()?;
 
                 println!(
                     "{} {}",
-                    "Free profile added:".green(),
-                    defaults::FREE_PROFILE_NAME.cyan()
+                    "Free profiles added:".green(),
+                    defaults::FREE_PROFILE_NAMES.join(", ").cyan()
                 );
             }
             "Edit existing profile" => {
@@ -1532,44 +1547,42 @@ mod tests {
     }
 
     #[test]
-    fn test_ensure_default_profiles_adds_ch_at_profile() {
+    fn test_ensure_default_profiles_adds_all_free_profiles() {
         let config = Config::default().ensure_default_profiles();
 
-        assert_eq!(config.profiles.len(), 1);
+        assert_eq!(config.profiles.len(), 4);
 
-        let profile = config.profiles.get(defaults::FREE_PROFILE_NAME).unwrap();
-        assert_eq!(
-            profile.provider.as_deref(),
-            Some(defaults::FREE_PROFILE_PROVIDER)
-        );
-        assert_eq!(profile.model.as_deref(), Some(defaults::FREE_PROFILE_MODEL));
-        assert_eq!(
-            profile.api_key.as_deref(),
-            Some(defaults::FREE_PROFILE_API_KEY)
-        );
-        assert_eq!(
-            profile.base_url.as_deref(),
-            Some(defaults::FREE_PROFILE_BASE_URL)
-        );
-        assert_eq!(profile.stream, Some(true));
+        for fp in defaults::FREE_PROFILES {
+            let profile = config.profiles.get(fp.name).unwrap();
+            assert_eq!(profile.provider.as_deref(), Some(fp.provider));
+            assert_eq!(profile.model.as_deref(), Some(fp.model));
+            assert_eq!(profile.api_key.as_deref(), Some(fp.api_key));
+            assert_eq!(profile.base_url.as_deref(), Some(fp.base_url));
+            assert_eq!(profile.stream, Some(true));
+            assert_eq!(profile.fallback.as_deref(), Some("any"));
+        }
     }
 
     #[test]
-    fn test_default_ch_at_profile_is_used_when_no_user_profiles() {
+    fn test_default_faster_profile_is_used_when_no_user_profiles() {
         let args = Args::default();
         let config = Config::default()
             .ensure_default_profiles()
             .with_cli_overrides(&args);
 
-        assert_eq!(config.active_provider(), defaults::FREE_PROFILE_PROVIDER);
-        assert_eq!(config.active_model(), defaults::FREE_PROFILE_MODEL);
+        assert_eq!(
+            config.active.profile_name.as_deref(),
+            Some(defaults::DEFAULT_FREE_PROFILE)
+        );
+        assert_eq!(config.active_provider(), defaults::FREE_FASTER_PROVIDER);
+        assert_eq!(config.active_model(), defaults::FREE_FASTER_MODEL);
         assert_eq!(
             config.api_key(),
-            Some(defaults::FREE_PROFILE_API_KEY.to_string())
+            Some(defaults::FREE_FASTER_API_KEY.to_string())
         );
         assert_eq!(
             config.base_url(),
-            Some(defaults::FREE_PROFILE_BASE_URL.to_string())
+            Some(defaults::FREE_FASTER_BASE_URL.to_string())
         );
     }
 
@@ -1586,13 +1599,15 @@ mod tests {
         );
 
         let config = config.ensure_default_profiles();
-        assert_eq!(config.profiles.len(), 2);
+        assert_eq!(config.profiles.len(), 5); // 1 user + 4 free
         assert!(config.profiles.contains_key("main"));
-        assert!(config.profiles.contains_key(defaults::FREE_PROFILE_NAME));
+        for name in defaults::FREE_PROFILE_NAMES {
+            assert!(config.profiles.contains_key(*name));
+        }
     }
 
     #[test]
-    fn test_default_profile_prefers_user_profile_over_ch_at() {
+    fn test_default_profile_prefers_user_profile_over_free() {
         let mut config = Config::default();
         config.profiles.insert(
             "main".to_string(),
@@ -1611,7 +1626,7 @@ mod tests {
     }
 
     #[test]
-    fn test_can_select_ch_at_profile_explicitly() {
+    fn test_can_select_free_profile_explicitly() {
         let mut config = Config::default();
         config.profiles.insert(
             "main".to_string(),
@@ -1622,49 +1637,66 @@ mod tests {
             },
         );
 
+        // Test selecting talker
         let args = Args {
-            profile: Some(defaults::FREE_PROFILE_NAME.to_string()),
+            profile: Some("talker".to_string()),
             ..Default::default()
         };
         let config = config.ensure_default_profiles().with_cli_overrides(&args);
 
-        assert_eq!(
-            config.active.profile_name.as_deref(),
-            Some(defaults::FREE_PROFILE_NAME)
-        );
-        assert_eq!(config.active_provider(), defaults::FREE_PROFILE_PROVIDER);
-        assert_eq!(config.active_model(), defaults::FREE_PROFILE_MODEL);
+        assert_eq!(config.active.profile_name.as_deref(), Some("talker"));
+        assert_eq!(config.active_provider(), defaults::FREE_TALKER_PROVIDER);
+        assert_eq!(config.active_model(), defaults::FREE_TALKER_MODEL);
     }
 
     #[test]
-    fn test_free_profile_toml_matches_defaults() {
-        let parsed: toml::Value = toml::from_str(&free_profile_toml()).unwrap();
-        let profile = parsed
-            .get("profiles")
-            .and_then(|v| v.get(defaults::FREE_PROFILE_NAME))
-            .unwrap();
+    fn test_can_select_coder_profile_explicitly() {
+        let args = Args {
+            profile: Some("coder".to_string()),
+            ..Default::default()
+        };
+        let config = Config::default()
+            .ensure_default_profiles()
+            .with_cli_overrides(&args);
 
-        assert_eq!(
-            profile.get("provider").and_then(|v| v.as_str()),
-            Some(defaults::FREE_PROFILE_PROVIDER)
-        );
-        assert_eq!(
-            profile.get("model").and_then(|v| v.as_str()),
-            Some(defaults::FREE_PROFILE_MODEL)
-        );
-        assert_eq!(
-            profile.get("api_key").and_then(|v| v.as_str()),
-            Some(defaults::FREE_PROFILE_API_KEY)
-        );
-        assert_eq!(
-            profile.get("base_url").and_then(|v| v.as_str()),
-            Some(defaults::FREE_PROFILE_BASE_URL)
-        );
-        assert_eq!(profile.get("stream").and_then(|v| v.as_bool()), Some(true));
-        assert_eq!(
-            profile.get("fallback").and_then(|v| v.as_str()),
-            Some("none")
-        );
+        assert_eq!(config.active.profile_name.as_deref(), Some("coder"));
+        assert_eq!(config.active_provider(), defaults::FREE_CODER_PROVIDER);
+        assert_eq!(config.active_model(), defaults::FREE_CODER_MODEL);
+    }
+
+    #[test]
+    fn test_free_profiles_toml_matches_defaults() {
+        let toml_str = free_profiles_toml();
+        let parsed: toml::Value = toml::from_str(&toml_str).unwrap();
+
+        for fp in defaults::FREE_PROFILES {
+            let profile = parsed
+                .get("profiles")
+                .and_then(|v| v.get(fp.name))
+                .unwrap_or_else(|| panic!("Missing profile: {}", fp.name));
+
+            assert_eq!(
+                profile.get("provider").and_then(|v| v.as_str()),
+                Some(fp.provider)
+            );
+            assert_eq!(
+                profile.get("model").and_then(|v| v.as_str()),
+                Some(fp.model)
+            );
+            assert_eq!(
+                profile.get("api_key").and_then(|v| v.as_str()),
+                Some(fp.api_key)
+            );
+            assert_eq!(
+                profile.get("base_url").and_then(|v| v.as_str()),
+                Some(fp.base_url)
+            );
+            assert_eq!(profile.get("stream").and_then(|v| v.as_bool()), Some(true));
+            assert_eq!(
+                profile.get("fallback").and_then(|v| v.as_str()),
+                Some("any")
+            );
+        }
     }
 
     #[test]
@@ -1677,11 +1709,26 @@ mod tests {
     }
 
     #[test]
-    fn test_manage_profile_options_hide_add_free_when_present() {
-        let profiles = vec!["main".to_string(), defaults::FREE_PROFILE_NAME.to_string()];
+    fn test_manage_profile_options_hide_add_free_when_all_present() {
+        let profiles: Vec<String> = std::iter::once("main".to_string())
+            .chain(defaults::FREE_PROFILE_NAMES.iter().map(|s| s.to_string()))
+            .collect();
         let options = build_manage_profile_options(&profiles);
 
         assert!(!options.iter().any(|o| o == ADD_FREE_PROFILE_OPTION));
         assert_eq!(options.last().map(|s| s.as_str()), Some("Back"));
+    }
+
+    #[test]
+    fn test_manage_profile_options_show_add_free_when_partially_present() {
+        // Only talker and coder present, vision and faster missing
+        let profiles = vec![
+            "main".to_string(),
+            "talker".to_string(),
+            "coder".to_string(),
+        ];
+        let options = build_manage_profile_options(&profiles);
+
+        assert!(options.iter().any(|o| o == ADD_FREE_PROFILE_OPTION));
     }
 }

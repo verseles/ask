@@ -6,8 +6,20 @@
 
 A CLI tool that lets you interact with AI models using natural language, without the need for quotes around your questions.
 
+**Free, no signup, just install and use.** Comes with 4 built-in free AI profiles — no API key needed:
+
+| Profile | Model | Best for |
+|---------|-------|----------|
+| `faster` | gpt-oss:20b | Fast answers with good quality **(default)** |
+| `talker` | gpt-4o | Conversation & general knowledge |
+| `coder` | codestral-latest | Code generation & analysis |
+| `vision` | GLM-4.6V-Flash | Image/vision tasks |
+
+Want more? Add your own profiles with OpenAI, Gemini, Claude, or any OpenAI-compatible API.
+
 ## Features
 
+- **Free out of the box**: 4 built-in profiles, no signup or API key required
 - **Natural input**: Just type `ask how to list docker containers` - no quotes needed
 - **Flexible flags**: Put options before or after your question - both work!
 - **Smart command injection**: Commands are safely flattened into one-liners when possible and pasted directly to your terminal
@@ -49,10 +61,15 @@ The installer will prompt you to configure your API keys automatically.
 ## Quick Start
 
 ```bash
-# Zero-config mode: built-in free profile ("ch-at")
+# Zero-config: works immediately with built-in free profiles
 ask what is rust
 
-# Optional: initialize configuration with your own API keys
+# Use specific free profiles
+ask -p coder write a fibonacci function
+ask -p talker explain quantum computing
+ask -p vision describe this image
+
+# Optional: add your own API keys for premium models
 ask init
 
 # Non-interactive init (for scripts/automation)
@@ -146,7 +163,7 @@ Run `ask init` or `ask config` to configure interactively:
 
 **Profile Management:**
 - Create new profiles with custom provider, model, API key, base URL
-- Add free GPT profile powered by ch.at (one-click)
+- Add free AI profiles (llm7.io + ch.at) in one click
 - Edit existing profiles (provider, model, API key, thinking, web search, fallback)
 - Delete profiles
 - Set default profile
@@ -162,7 +179,7 @@ Configuration is loaded from multiple sources (in order of precedence):
 5. `~/.config/ask/ask.toml` (XDG config - recommended)
 6. Default values
 
-The built-in free profile `ch-at` (OpenAI-compatible endpoint `https://ch.at/v1`) is always available, even when you have your own profiles configured.
+4 built-in free profiles are always available (`talker`, `coder`, `vision`, `faster`), even when you have your own profiles configured. Select with `ask -p <name>`.
 
 ### Example ask.toml
 
@@ -348,7 +365,7 @@ model = "llama3"
 api_key = "ollama"  # dummy key for local servers
 ```
 
-**Profile Resolution**: `default_profile` is used when set. Otherwise, `ask` prefers the first non-built-in profile; `ch-at` is used automatically when no custom profile exists.
+**Profile Resolution**: `default_profile` is used when set. Otherwise, `ask` prefers the first non-built-in profile; `faster` is used automatically when no custom profile exists.
 
 **Fallback Options**:
 - `fallback = "profile-name"` - Use specific profile on provider errors
@@ -383,16 +400,34 @@ base_url = "http://localhost:11434/v1"
 model = "llama3"
 ```
 
-### ch.at (Built-in Free Profile)
+### Built-in Free Profiles
 
-This profile is always available and can be selected with `ask -p ch-at`:
+These profiles are always available, no signup required:
 
 ```toml
-[profiles.ch-at]
+# ask -p faster (default when no custom profiles)
+[profiles.faster]
+provider = "openai"
+base_url = "https://api.llm7.io/v1"
+model = "gpt-oss:20b"
+
+# ask -p talker
+[profiles.talker]
 provider = "openai"
 base_url = "https://ch.at/v1"
 model = "gpt-4o"
-api_key = "ch-at" # dummy key for compatibility
+
+# ask -p coder
+[profiles.coder]
+provider = "openai"
+base_url = "https://api.llm7.io/v1"
+model = "codestral-latest"
+
+# ask -p vision
+[profiles.vision]
+provider = "openai"
+base_url = "https://api.llm7.io/v1"
+model = "GLM-4.6V-Flash"
 ```
 
 ## Thinking Mode

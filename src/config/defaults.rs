@@ -7,19 +7,87 @@ pub const DEFAULT_PROVIDER: &str = "gemini";
 pub const DEFAULT_MODEL: &str = "gemini-flash-lite-latest";
 pub const DEFAULT_OPENAI_MODEL: &str = "gpt-5-nano";
 pub const DEFAULT_ANTHROPIC_MODEL: &str = "claude-haiku-4-5";
-pub const FREE_PROFILE_NAME: &str = "ch-at";
-pub const FREE_PROFILE_PROVIDER: &str = "openai";
-pub const FREE_PROFILE_MODEL: &str = "gpt-4o";
-pub const FREE_PROFILE_API_KEY: &str = "ch-at";
-pub const FREE_PROFILE_BASE_URL: &str = "https://ch.at/v1";
 pub const DEFAULT_TIMEOUT: u64 = 30;
+
+// Free built-in profiles (no signup required)
+pub const FREE_PROFILE_NAMES: &[&str] = &["talker", "coder", "vision", "faster"];
+
+// talker - Conversation & general knowledge (ch.at)
+pub const FREE_TALKER_NAME: &str = "talker";
+pub const FREE_TALKER_PROVIDER: &str = "openai";
+pub const FREE_TALKER_MODEL: &str = "gpt-4o";
+pub const FREE_TALKER_API_KEY: &str = "ch-at";
+pub const FREE_TALKER_BASE_URL: &str = "https://ch.at/v1";
+
+// coder - Code-focused (llm7.io)
+pub const FREE_CODER_NAME: &str = "coder";
+pub const FREE_CODER_PROVIDER: &str = "openai";
+pub const FREE_CODER_MODEL: &str = "codestral-latest";
+pub const FREE_CODER_API_KEY: &str = "unused";
+pub const FREE_CODER_BASE_URL: &str = "https://api.llm7.io/v1";
+
+// vision - Vision support (llm7.io)
+pub const FREE_VISION_NAME: &str = "vision";
+pub const FREE_VISION_PROVIDER: &str = "openai";
+pub const FREE_VISION_MODEL: &str = "GLM-4.6V-Flash";
+pub const FREE_VISION_API_KEY: &str = "unused";
+pub const FREE_VISION_BASE_URL: &str = "https://api.llm7.io/v1";
+
+// faster - Fast + quality, default free profile (llm7.io)
+pub const FREE_FASTER_NAME: &str = "faster";
+pub const FREE_FASTER_PROVIDER: &str = "openai";
+pub const FREE_FASTER_MODEL: &str = "gpt-oss:20b";
+pub const FREE_FASTER_API_KEY: &str = "unused";
+pub const FREE_FASTER_BASE_URL: &str = "https://api.llm7.io/v1";
+
+// Default free profile (used when no user profiles exist)
+pub const DEFAULT_FREE_PROFILE: &str = "faster";
+
+pub struct FreeProfileDef {
+    pub name: &'static str,
+    pub provider: &'static str,
+    pub model: &'static str,
+    pub api_key: &'static str,
+    pub base_url: &'static str,
+}
+
+pub const FREE_PROFILES: &[FreeProfileDef] = &[
+    FreeProfileDef {
+        name: FREE_TALKER_NAME,
+        provider: FREE_TALKER_PROVIDER,
+        model: FREE_TALKER_MODEL,
+        api_key: FREE_TALKER_API_KEY,
+        base_url: FREE_TALKER_BASE_URL,
+    },
+    FreeProfileDef {
+        name: FREE_CODER_NAME,
+        provider: FREE_CODER_PROVIDER,
+        model: FREE_CODER_MODEL,
+        api_key: FREE_CODER_API_KEY,
+        base_url: FREE_CODER_BASE_URL,
+    },
+    FreeProfileDef {
+        name: FREE_VISION_NAME,
+        provider: FREE_VISION_PROVIDER,
+        model: FREE_VISION_MODEL,
+        api_key: FREE_VISION_API_KEY,
+        base_url: FREE_VISION_BASE_URL,
+    },
+    FreeProfileDef {
+        name: FREE_FASTER_NAME,
+        provider: FREE_FASTER_PROVIDER,
+        model: FREE_FASTER_MODEL,
+        api_key: FREE_FASTER_API_KEY,
+        base_url: FREE_FASTER_BASE_URL,
+    },
+];
 
 pub const DEFAULT_CONFIG_TEMPLATE: &str = r##"# ask - Configuration File
 # Place this file at: ~/.config/ask/ask.toml or ~/ask.toml
 
 # All configuration lives in profiles
-# Built-in free profile "ch-at" is always available (OpenAI-compatible endpoint: https://ch.at/v1)
-# Default selection: default_profile, then first non-built-in profile
+# Built-in free profiles: talker (ch.at), coder, vision, faster (llm7.io)
+# Default selection: default_profile, then first non-built-in profile, then "faster"
 # Switch profiles with: ask -p <profile_name>
 [profiles.main]
 provider = "gemini"           # gemini, openai, anthropic
