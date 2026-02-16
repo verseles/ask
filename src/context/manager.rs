@@ -203,6 +203,68 @@ impl ContextManager {
         Ok(())
     }
 
+    /// List all global context history
+    pub fn list_global(config: &Config) -> Result<()> {
+        let storage_path = config.context_storage_path();
+        let storage = ContextStorage::new(storage_path)?;
+        let mut contexts = storage.list()?;
+
+        if contexts.is_empty() {
+            println!("{}", "No global context history found.".yellow());
+            return Ok(());
+        }
+
+        // Sort by last used (descending)
+        contexts.sort_by(|a, b| b.last_used.cmp(&a.last_used));
+
+        println!(
+            "{}",
+            format!("Global History ({} contexts)", contexts.len())
+                .cyan()
+                .bold()
+        );
+        println!();
+
+        let current_dir = std::env::current_dir()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string();
+
+        for ctx in contexts {
+            let msg_count = ctx.messages.len();
+            let total_chars: usize = ctx.messages.iter().map(|m| m.content.len()).sum();
+
+            // Format time
+            let time_str = ctx.last_used.format("%Y-%m-%d %H:%M:%S").to_string();
+
+            let is_current = ctx.pwd == current_dir;
+            let pwd_display = if is_current {
+                ctx.pwd.green().bold()
+            } else {
+                ctx.pwd.white()
+            };
+
+            let marker = if is_current { "* " } else { "  " };
+
+            println!(
+                "{}{} {} {} {}",
+                marker.green(),
+                ctx.id[..8].bright_black(),
+                time_str.blue(),
+                pwd_display,
+                format!("({} msgs, {} chars)", msg_count, total_chars).bright_black(),
+            );
+        }
+
+        println!();
+        println!(
+            "{}",
+            "Use 'ask -c <question>' to use context in the current directory.".bright_black()
+        );
+
+        Ok(())
+    }
+
     /// Print context echo if stats exceed threshold
     pub fn print_echo_if_needed(&self) -> Result<()> {
         let stats = self.get_stats()?;

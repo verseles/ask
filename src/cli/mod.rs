@@ -128,6 +128,10 @@ pub async fn run(update_notification: Option<crate::update::UpdateNotification>)
         return list_profiles(&config);
     }
 
+    if args.history_subcommand {
+        return ContextManager::list_global(&config);
+    }
+
     // Handle context commands
     if args.has_context() {
         let manager = ContextManager::with_ttl(&config, args.context_ttl())?;
