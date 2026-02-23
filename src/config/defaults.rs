@@ -41,7 +41,7 @@ pub const FREE_FASTER_API_KEY: &str = "unused";
 pub const FREE_FASTER_BASE_URL: &str = "https://api.llm7.io/v1";
 
 // Default free profile (used when no user profiles exist)
-pub const DEFAULT_FREE_PROFILE: &str = "faster";
+pub const DEFAULT_FREE_PROFILE: &str = "talker";
 
 pub struct FreeProfileDef {
     pub name: &'static str,
@@ -87,7 +87,7 @@ pub const DEFAULT_CONFIG_TEMPLATE: &str = r##"# ask - Configuration File
 
 # All configuration lives in profiles
 # Built-in free profiles: talker (ch.at), coder, vision, faster (llm7.io)
-# Default selection: default_profile, then first non-built-in profile, then "faster"
+# Default selection: default_profile, then first non-built-in profile, then "talker"
 # Switch profiles with: ask -p <profile_name>
 [profiles.main]
 provider = "gemini"           # gemini, openai, anthropic

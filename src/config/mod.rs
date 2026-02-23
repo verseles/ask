@@ -277,7 +277,7 @@ impl Config {
             .filter(|dp| self.profiles.contains_key(dp))
             .or_else(|| self.first_non_free_profile())
             .or_else(|| {
-                // Prefer "faster" as the default free profile
+                // Prefer "talker" as the default free profile
                 if self.profiles.contains_key(defaults::DEFAULT_FREE_PROFILE) {
                     Some(defaults::DEFAULT_FREE_PROFILE.to_string())
                 } else {
@@ -1599,7 +1599,7 @@ mod tests {
     }
 
     #[test]
-    fn test_default_faster_profile_is_used_when_no_user_profiles() {
+    fn test_default_talker_profile_is_used_when_no_user_profiles() {
         let args = Args::default();
         let config = Config::default()
             .ensure_default_profiles()
@@ -1609,15 +1609,15 @@ mod tests {
             config.active.profile_name.as_deref(),
             Some(defaults::DEFAULT_FREE_PROFILE)
         );
-        assert_eq!(config.active_provider(), defaults::FREE_FASTER_PROVIDER);
-        assert_eq!(config.active_model(), defaults::FREE_FASTER_MODEL);
+        assert_eq!(config.active_provider(), defaults::FREE_TALKER_PROVIDER);
+        assert_eq!(config.active_model(), defaults::FREE_TALKER_MODEL);
         assert_eq!(
             config.api_key(),
-            Some(defaults::FREE_FASTER_API_KEY.to_string())
+            Some(defaults::FREE_TALKER_API_KEY.to_string())
         );
         assert_eq!(
             config.base_url(),
-            Some(defaults::FREE_FASTER_BASE_URL.to_string())
+            Some(defaults::FREE_TALKER_BASE_URL.to_string())
         );
     }
 
