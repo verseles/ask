@@ -1013,6 +1013,30 @@ fn show_current_config(mgr: &ConfigManager) {
 }
 
 const ADD_FREE_PROFILE_OPTION: &str = "Add free AI profiles (llm7.io + ch.at)";
+const QUICK_SETUP_OPTION: &str = "Quick setup (recommended)";
+const USE_FREE_PROFILES_FOR_NOW_OPTION: &str = "Use built-in free profiles for now";
+
+fn build_init_menu_options(has_existing_config: bool) -> (Vec<String>, usize) {
+    if has_existing_config {
+        (
+            vec![
+                "View current config".to_string(),
+                "Manage profiles".to_string(),
+                "Exit".to_string(),
+            ],
+            2,
+        )
+    } else {
+        (
+            vec![
+                QUICK_SETUP_OPTION.to_string(),
+                USE_FREE_PROFILES_FOR_NOW_OPTION.to_string(),
+                "Exit".to_string(),
+            ],
+            2,
+        )
+    }
+}
 
 fn free_profiles_toml() -> String {
     let mut toml = String::new();
@@ -1253,11 +1277,7 @@ pub async fn init_config() -> Result<()> {
 
     loop {
         println!();
-        let (menu_options, default_choice) = if mgr.existing.is_some() {
-            (vec!["View current config", "Manage profiles", "Exit"], 2)
-        } else {
-            (vec!["Quick setup (recommended)", "Exit"], 1)
-        };
+        let (menu_options, default_choice) = build_init_menu_options(mgr.existing.is_some());
 
         let choice = numbered_select("What would you like to do?", &menu_options, default_choice)?;
 
@@ -1317,6 +1337,21 @@ channel = "stable"
                     }
                 }
                 1 => {
+                    println!();
+                    println!("{}", "Using built-in free profiles for now.".green());
+                    println!(
+                        "{} {}",
+                        "Available profiles:".bright_black(),
+                        defaults::FREE_PROFILE_NAMES.join(", ").cyan()
+                    );
+                    println!("Try: {}", "ask -p faster how to list files".cyan());
+                    println!(
+                        "{}",
+                        "Run 'ask init' anytime to add your own API keys.".bright_black()
+                    );
+                    break;
+                }
+                2 => {
                     println!("{}", "Goodbye!".bright_black());
                     break;
                 }
@@ -1730,5 +1765,33 @@ mod tests {
         let options = build_manage_profile_options(&profiles);
 
         assert!(options.iter().any(|o| o == ADD_FREE_PROFILE_OPTION));
+    }
+
+    #[test]
+    fn test_init_menu_options_for_first_run_include_free_profiles_option() {
+        let (options, default_choice) = build_init_menu_options(false);
+
+        assert_eq!(default_choice, 2);
+        assert_eq!(
+            options.first().map(|s| s.as_str()),
+            Some(QUICK_SETUP_OPTION)
+        );
+        assert!(options
+            .iter()
+            .any(|o| o == USE_FREE_PROFILES_FOR_NOW_OPTION));
+        assert_eq!(options.last().map(|s| s.as_str()), Some("Exit"));
+    }
+
+    #[test]
+    fn test_init_menu_options_for_existing_config_stays_manage_first() {
+        let (options, default_choice) = build_init_menu_options(true);
+
+        assert_eq!(default_choice, 2);
+        assert_eq!(
+            options.first().map(|s| s.as_str()),
+            Some("View current config")
+        );
+        assert_eq!(options.get(1).map(|s| s.as_str()), Some("Manage profiles"));
+        assert_eq!(options.last().map(|s| s.as_str()), Some("Exit"));
     }
 }
