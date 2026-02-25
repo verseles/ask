@@ -148,27 +148,31 @@ impl Provider for OllamaProvider {
         }
 
         let mut stream = response.bytes_stream();
-        let mut buffer = String::new();
+        // Raw byte buffer to avoid splitting multibyte UTF-8 sequences at chunk boundaries
+        let mut raw_buf: Vec<u8> = Vec::new();
 
-        while let Some(chunk) = stream.next().await {
+        'outer: while let Some(chunk) = stream.next().await {
             let chunk = chunk?;
-            buffer.push_str(&String::from_utf8_lossy(&chunk));
+            raw_buf.extend_from_slice(&chunk);
 
-            // Process complete NDJSON lines
-            while let Some(newline_pos) = buffer.find('\n') {
-                let line = buffer[..newline_pos].trim().to_string();
-                buffer.drain(..=newline_pos);
+            // Process complete NDJSON lines (newline delimited)
+            while let Some(newline_pos) = raw_buf.iter().position(|&b| b == b'\n') {
+                let line_bytes = raw_buf.drain(..=newline_pos).collect::<Vec<u8>>();
+                let line = match std::str::from_utf8(&line_bytes) {
+                    Ok(s) => s.trim().to_string(),
+                    Err(_) => continue, // Skip malformed UTF-8 lines
+                };
 
                 if line.is_empty() {
                     continue;
                 }
 
-                if let Ok(chunk) = serde_json::from_str::<OllamaStreamChunk>(&line) {
-                    if let Some(err) = chunk.error {
+                if let Ok(parsed) = serde_json::from_str::<OllamaStreamChunk>(&line) {
+                    if let Some(err) = parsed.error {
                         return Err(anyhow!("Ollama stream error: {}", err));
                     }
 
-                    if let Some(delta) = chunk.message {
+                    if let Some(delta) = parsed.message {
                         if let Some(content) = delta.content {
                             if !content.is_empty() {
                                 callback(&content);
@@ -176,8 +180,8 @@ impl Provider for OllamaProvider {
                         }
                     }
 
-                    if chunk.done {
-                        break;
+                    if parsed.done {
+                        break 'outer;
                     }
                 }
             }

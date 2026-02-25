@@ -693,30 +693,31 @@ fn merge_profile_into_doc(doc: &mut toml::Value, profile_toml: &str) -> Result<(
 /// Fetch available models from a running Ollama instance.
 ///
 /// Returns a list of model names on success, or None if Ollama is unreachable.
+/// Uses block_in_place to run async code safely from a sync function called within
+/// an async Tokio context (e.g. during `ask init`).
 fn fetch_ollama_models(base_url: &str) -> Option<Vec<String>> {
     let url = format!("{}/api/tags", base_url);
 
-    let rt = tokio::runtime::Runtime::new().ok()?;
-    let result = rt.block_on(async {
-        let client = reqwest::Client::builder()
-            .timeout(Duration::from_secs(3))
-            .build()
-            .ok()?;
-        let response = client.get(&url).send().await.ok()?;
-        if !response.status().is_success() {
-            return None;
-        }
-        let body: serde_json::Value = response.json().await.ok()?;
-        let models = body
-            .get("models")?
-            .as_array()?
-            .iter()
-            .filter_map(|m| m.get("name")?.as_str().map(|s| s.to_string()))
-            .collect::<Vec<_>>();
-        Some(models)
-    });
-
-    result
+    tokio::task::block_in_place(|| {
+        tokio::runtime::Handle::current().block_on(async {
+            let client = reqwest::Client::builder()
+                .timeout(Duration::from_secs(3))
+                .build()
+                .ok()?;
+            let response = client.get(&url).send().await.ok()?;
+            if !response.status().is_success() {
+                return None;
+            }
+            let body: serde_json::Value = response.json().await.ok()?;
+            let models = body
+                .get("models")?
+                .as_array()?
+                .iter()
+                .filter_map(|m| m.get("name")?.as_str().map(|s| s.to_string()))
+                .collect::<Vec<_>>();
+            Some(models)
+        })
+    })
 }
 
 /// Configure a single profile
