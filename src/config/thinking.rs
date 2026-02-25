@@ -17,6 +17,7 @@ pub enum ThinkingType {
     GeminiLevel,
     OpenAIEffort,
     AnthropicBudget,
+    OllamaThink,
     NotSupported,
 }
 
@@ -54,6 +55,7 @@ pub fn detect_thinking_type(provider: &str, model: &str) -> ThinkingType {
             }
         }
         "anthropic" => ThinkingType::AnthropicBudget,
+        "ollama" => ThinkingType::OllamaThink,
         _ => ThinkingType::NotSupported,
     }
 }
@@ -184,6 +186,18 @@ pub fn get_thinking_options(thinking_type: ThinkingType) -> Vec<ThinkingOption> 
                 config_key: "thinking_budget",
             },
         ],
+        ThinkingType::OllamaThink => vec![
+            ThinkingOption {
+                label: "Disable (default)".to_string(),
+                config_value: "0".to_string(),
+                config_key: "thinking_budget",
+            },
+            ThinkingOption {
+                label: "Enable thinking (model must support it)".to_string(),
+                config_value: "1".to_string(),
+                config_key: "thinking_budget",
+            },
+        ],
         ThinkingType::NotSupported => vec![],
     }
 }
@@ -215,6 +229,7 @@ pub fn select_thinking_config(
                 ThinkingType::GeminiBudget => 1,
                 ThinkingType::OpenAIEffort => 3,
                 ThinkingType::AnthropicBudget => 1,
+                ThinkingType::OllamaThink => 0,
                 ThinkingType::NotSupported => 0,
             })
     } else {
@@ -223,6 +238,7 @@ pub fn select_thinking_config(
             ThinkingType::GeminiBudget => 1,
             ThinkingType::OpenAIEffort => 3,
             ThinkingType::AnthropicBudget => 1,
+            ThinkingType::OllamaThink => 0,
             ThinkingType::NotSupported => 0,
         }
     };
@@ -312,5 +328,30 @@ mod tests {
             detect_thinking_type("anthropic", "claude-3-sonnet"),
             ThinkingType::AnthropicBudget
         );
+    }
+
+    #[test]
+    fn test_detect_ollama() {
+        assert_eq!(
+            detect_thinking_type("ollama", "llama3.2"),
+            ThinkingType::OllamaThink
+        );
+        assert_eq!(
+            detect_thinking_type("ollama", "qwen3"),
+            ThinkingType::OllamaThink
+        );
+        assert_eq!(
+            detect_thinking_type("ollama", "deepseek-r1"),
+            ThinkingType::OllamaThink
+        );
+    }
+
+    #[test]
+    fn test_ollama_thinking_options() {
+        let opts = get_thinking_options(ThinkingType::OllamaThink);
+        assert_eq!(opts.len(), 2);
+        assert_eq!(opts[0].config_value, "0"); // disable
+        assert_eq!(opts[1].config_value, "1"); // enable
+        assert!(opts.iter().all(|o| o.config_key == "thinking_budget"));
     }
 }

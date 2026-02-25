@@ -2,11 +2,13 @@
 
 mod anthropic;
 mod gemini;
+mod ollama;
 mod openai;
 mod traits;
 
 pub use anthropic::AnthropicProvider;
 pub use gemini::GeminiProvider;
+pub use ollama::OllamaProvider;
 pub use openai::OpenAIProvider;
 pub use traits::*;
 
@@ -191,6 +193,15 @@ pub fn flatten_command_if_safe(text: &str) -> Option<String> {
 pub fn create_provider(config: &Config) -> Result<Box<dyn Provider>> {
     let provider_name = config.active_provider();
     let model = config.active_model().to_string();
+
+    // Ollama does not require a real API key
+    if provider_name == "ollama" {
+        let base_url = config
+            .base_url()
+            .unwrap_or_else(|| crate::config::DEFAULT_OLLAMA_BASE_URL.to_string());
+        let api_key = config.api_key().unwrap_or_else(|| "ollama".to_string());
+        return Ok(Box::new(OllamaProvider::new(api_key, base_url, model)));
+    }
 
     let api_key = config.api_key().ok_or_else(|| {
         anyhow!(

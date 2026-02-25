@@ -3,6 +3,8 @@
 pub const DEFAULT_GEMINI_BASE_URL: &str = "https://generativelanguage.googleapis.com";
 pub const DEFAULT_OPENAI_BASE_URL: &str = "https://api.openai.com/v1";
 pub const DEFAULT_ANTHROPIC_BASE_URL: &str = "https://api.anthropic.com";
+pub const DEFAULT_OLLAMA_BASE_URL: &str = "http://localhost:11434";
+pub const DEFAULT_OLLAMA_MODEL: &str = "llama3.2";
 pub const DEFAULT_PROVIDER: &str = "gemini";
 pub const DEFAULT_MODEL: &str = "gemini-flash-lite-latest";
 pub const DEFAULT_OPENAI_MODEL: &str = "gpt-5-nano";

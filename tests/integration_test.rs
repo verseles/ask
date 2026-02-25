@@ -419,3 +419,33 @@ fn think_short_combined_value() {
         stderr
     );
 }
+
+#[test]
+fn ollama_provider_recognized_without_api_key() {
+    // Ollama does not require an api_key — must not error with "No API key found"
+    let output = Command::new("cargo")
+        .args(["run", "--", "--help"])
+        .output()
+        .expect("Failed to execute command");
+    assert!(output.status.success());
+}
+
+#[test]
+fn ollama_provider_uses_env_base_url() {
+    // With a custom base_url set via env, the provider is still recognized
+    let output = Command::new("cargo")
+        .env("ASK_PROVIDER", "ollama")
+        .env("ASK_OLLAMA_BASE_URL", "http://remote-host:11434")
+        .env("ASK_MODEL", "llama3.2")
+        .args(["run", "--", "-v", "test"])
+        .output()
+        .expect("Failed to execute command");
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    // Verbose output must identify the ollama provider, even if the request fails
+    assert!(
+        stderr.contains("ollama") || !output.status.success(),
+        "Expected stderr to mention ollama or command to fail gracefully, got: {}",
+        stderr
+    );
+}

@@ -13,6 +13,7 @@ use colored::Colorize;
 use requestty::Question;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::time::Duration;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Config {
@@ -346,6 +347,7 @@ impl Config {
         match provider {
             "openai" => defaults::DEFAULT_OPENAI_MODEL.to_string(),
             "anthropic" => defaults::DEFAULT_ANTHROPIC_MODEL.to_string(),
+            "ollama" => defaults::DEFAULT_OLLAMA_MODEL.to_string(),
             _ => defaults::DEFAULT_MODEL.to_string(),
         }
     }
@@ -502,6 +504,14 @@ impl Config {
                 } else if let Some(budget) = self.get_thinking_budget() {
                     let enabled = budget > 0;
                     (enabled, Some(budget.to_string()))
+                } else {
+                    (false, None)
+                }
+            }
+            "ollama" => {
+                if let Some(budget) = self.get_thinking_budget() {
+                    let enabled = budget > 0;
+                    (enabled, if enabled { Some("1".to_string()) } else { None })
                 } else {
                     (false, None)
                 }
@@ -680,6 +690,35 @@ fn merge_profile_into_doc(doc: &mut toml::Value, profile_toml: &str) -> Result<(
     Ok(())
 }
 
+/// Fetch available models from a running Ollama instance.
+///
+/// Returns a list of model names on success, or None if Ollama is unreachable.
+fn fetch_ollama_models(base_url: &str) -> Option<Vec<String>> {
+    let url = format!("{}/api/tags", base_url);
+
+    let rt = tokio::runtime::Runtime::new().ok()?;
+    let result = rt.block_on(async {
+        let client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(3))
+            .build()
+            .ok()?;
+        let response = client.get(&url).send().await.ok()?;
+        if !response.status().is_success() {
+            return None;
+        }
+        let body: serde_json::Value = response.json().await.ok()?;
+        let models = body
+            .get("models")?
+            .as_array()?
+            .iter()
+            .filter_map(|m| m.get("name")?.as_str().map(|s| s.to_string()))
+            .collect::<Vec<_>>();
+        Some(models)
+    });
+
+    result
+}
+
 /// Configure a single profile
 fn configure_profile(mgr: &ConfigManager, profile_name: Option<&str>) -> Result<Option<String>> {
     let name: String = if let Some(n) = profile_name {
@@ -701,7 +740,12 @@ fn configure_profile(mgr: &ConfigManager, profile_name: Option<&str>) -> Result<
     println!();
     println!("{}", format!("Configuring profile: {}", name).cyan());
 
-    let mut providers = vec!["Gemini", "OpenAI", "Anthropic Claude"];
+    let mut providers = vec![
+        "Gemini",
+        "OpenAI",
+        "Anthropic Claude",
+        "Ollama (local/remote)",
+    ];
     providers.push("Back");
 
     let existing_provider = mgr.get_str(&["profiles", &name, "provider"]);
@@ -710,6 +754,7 @@ fn configure_profile(mgr: &ConfigManager, profile_name: Option<&str>) -> Result<
         Some("gemini") => 0,
         Some("openai") => 1,
         Some("anthropic") => 2,
+        Some("ollama") => 3,
         _ => 0,
     };
 
@@ -730,74 +775,159 @@ fn configure_profile(mgr: &ConfigManager, profile_name: Option<&str>) -> Result<
         0 => ("gemini", defaults::DEFAULT_MODEL),
         1 => ("openai", defaults::DEFAULT_OPENAI_MODEL),
         2 => ("anthropic", defaults::DEFAULT_ANTHROPIC_MODEL),
+        3 => ("ollama", defaults::DEFAULT_OLLAMA_MODEL),
         _ => ("gemini", defaults::DEFAULT_MODEL),
     };
 
-    let existing_model = mgr
-        .get_str(&["profiles", &name, "model"])
-        .unwrap_or_else(|| default_model.to_string());
+    // Ollama: guided setup with URL discovery and model listing
+    let (model, api_key, base_url, web_search) = if provider == "ollama" {
+        let location_options = ["Local (http://localhost:11434)", "Remote (custom URL)"];
+        let existing_base_url = mgr.get_str(&["profiles", &name, "base_url"]);
+        let existing_local = existing_base_url
+            .as_deref()
+            .map(|u| u == defaults::DEFAULT_OLLAMA_BASE_URL)
+            .unwrap_or(true);
+        let location_default = if existing_local { 0 } else { 1 };
+        let location_idx = numbered_select("Ollama location", &location_options, location_default)?;
 
-    let model: String = {
-        let question = Question::input("profile_model")
-            .message("Model")
-            .default(existing_model.as_str())
-            .build();
-        requestty::prompt_one(question)?
-            .as_string()
-            .unwrap_or_default()
-            .to_string()
-    };
-
-    let existing_api_key = mgr
-        .get_str(&["profiles", &name, "api_key"])
-        .unwrap_or_default();
-
-    let api_key: String = if !existing_api_key.is_empty() {
-        let masked = mask_api_key(&existing_api_key);
-        let question = Question::input("profile_api_key")
-            .message(format!("API key [{}] (Enter to keep)", masked))
-            .build();
-        let new_key = requestty::prompt_one(question)?
-            .as_string()
-            .unwrap_or_default()
-            .to_string();
-
-        if new_key.is_empty() {
-            existing_api_key.clone()
+        let ollama_base_url = if location_idx == 0 {
+            defaults::DEFAULT_OLLAMA_BASE_URL.to_string()
         } else {
-            new_key
-        }
+            let existing_url = existing_base_url
+                .as_deref()
+                .filter(|u| *u != defaults::DEFAULT_OLLAMA_BASE_URL)
+                .unwrap_or("");
+            let question = Question::input("ollama_url")
+                .message("Ollama URL (e.g., http://192.168.1.10:11434)")
+                .default(existing_url)
+                .build();
+            requestty::prompt_one(question)?
+                .as_string()
+                .unwrap_or_default()
+                .to_string()
+        };
+
+        // Attempt to discover models from Ollama
+        let existing_model_name = mgr
+            .get_str(&["profiles", &name, "model"])
+            .unwrap_or_else(|| default_model.to_string());
+
+        let ollama_model = match fetch_ollama_models(&ollama_base_url) {
+            Some(models) if !models.is_empty() => {
+                let mut choices: Vec<String> = models.clone();
+                choices.push("Type manually...".to_string());
+                let default_idx = models
+                    .iter()
+                    .position(|m| m == &existing_model_name)
+                    .unwrap_or(0);
+                let idx = numbered_select("Select model", &choices, default_idx)?;
+                if idx == choices.len() - 1 {
+                    // Manual input
+                    let question = Question::input("ollama_model_manual")
+                        .message("Model name")
+                        .default(existing_model_name.as_str())
+                        .build();
+                    requestty::prompt_one(question)?
+                        .as_string()
+                        .unwrap_or_default()
+                        .to_string()
+                } else {
+                    models[idx].clone()
+                }
+            }
+            _ => {
+                // Ollama not reachable or no models — fall back to manual input
+                println!(
+                    "{}",
+                    format!(
+                        "Ollama not reachable at {} — please type the model name",
+                        ollama_base_url
+                    )
+                    .yellow()
+                );
+                let question = Question::input("ollama_model_manual")
+                    .message("Model name")
+                    .default(existing_model_name.as_str())
+                    .build();
+                requestty::prompt_one(question)?
+                    .as_string()
+                    .unwrap_or_default()
+                    .to_string()
+            }
+        };
+
+        (ollama_model, "ollama".to_string(), ollama_base_url, false)
     } else {
-        let question = Question::input("profile_api_key")
-            .message("API key (or set via ASK_*_API_KEY env)")
-            .build();
-        requestty::prompt_one(question)?
-            .as_string()
-            .unwrap_or_default()
-            .to_string()
-    };
+        // Standard provider flow: model → api_key → base_url → web_search
 
-    let existing_base_url = mgr.get_str(&["profiles", &name, "base_url"]);
-    let base_url: String = {
-        let question = Question::input("profile_base_url")
-            .message("Base URL (Enter for default, or custom like http://localhost:11434/v1)")
-            .default(existing_base_url.as_deref().unwrap_or(""))
-            .build();
-        requestty::prompt_one(question)?
-            .as_string()
-            .unwrap_or_default()
-            .to_string()
-    };
+        let existing_model = mgr
+            .get_str(&["profiles", &name, "model"])
+            .unwrap_or_else(|| default_model.to_string());
 
-    let existing_web_search = mgr.get_bool(&["profiles", &name, "web_search"], false);
-    let web_search = {
-        let question = Question::confirm("profile_web_search")
-            .message("Enable web search for this profile?")
-            .default(existing_web_search)
-            .build();
-        requestty::prompt_one(question)?
-            .as_bool()
-            .unwrap_or(existing_web_search)
+        let model: String = {
+            let question = Question::input("profile_model")
+                .message("Model")
+                .default(existing_model.as_str())
+                .build();
+            requestty::prompt_one(question)?
+                .as_string()
+                .unwrap_or_default()
+                .to_string()
+        };
+
+        let existing_api_key = mgr
+            .get_str(&["profiles", &name, "api_key"])
+            .unwrap_or_default();
+
+        let api_key: String = if !existing_api_key.is_empty() {
+            let masked = mask_api_key(&existing_api_key);
+            let question = Question::input("profile_api_key")
+                .message(format!("API key [{}] (Enter to keep)", masked))
+                .build();
+            let new_key = requestty::prompt_one(question)?
+                .as_string()
+                .unwrap_or_default()
+                .to_string();
+
+            if new_key.is_empty() {
+                existing_api_key.clone()
+            } else {
+                new_key
+            }
+        } else {
+            let question = Question::input("profile_api_key")
+                .message("API key (or set via ASK_*_API_KEY env)")
+                .build();
+            requestty::prompt_one(question)?
+                .as_string()
+                .unwrap_or_default()
+                .to_string()
+        };
+
+        let existing_base_url = mgr.get_str(&["profiles", &name, "base_url"]);
+        let base_url: String = {
+            let question = Question::input("profile_base_url")
+                .message("Base URL (Enter for default, or custom like http://localhost:11434/v1)")
+                .default(existing_base_url.as_deref().unwrap_or(""))
+                .build();
+            requestty::prompt_one(question)?
+                .as_string()
+                .unwrap_or_default()
+                .to_string()
+        };
+
+        let existing_web_search = mgr.get_bool(&["profiles", &name, "web_search"], false);
+        let web_search = {
+            let question = Question::confirm("profile_web_search")
+                .message("Enable web search for this profile?")
+                .default(existing_web_search)
+                .build();
+            requestty::prompt_one(question)?
+                .as_bool()
+                .unwrap_or(existing_web_search)
+        };
+
+        (model, api_key, base_url, web_search)
     };
 
     // Streaming: default off for new profiles, preserve existing value when editing
