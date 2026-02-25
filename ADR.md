@@ -898,3 +898,56 @@ pub fn flatten_command_if_safe(text: &str) -> Option<String> {
 - 4 profiles injected instead of 1 (visible in `ask profiles`)
 - Free providers may have rate limits or availability issues outside user control
 - Users can still override any free profile by creating one with the same name in their config
+
+---
+
+## ADR-027: Native Ollama Provider
+
+**Status**: Accepted
+
+**Context**: Users running local LLMs via Ollama previously had to configure it using the OpenAI-compatible endpoint (`base_url = "http://localhost:11434/v1"`, `provider = "openai"`). While functional, this approach has limitations: the `/v1/chat/completions` compatibility shim does not expose Ollama-native features such as model discovery via `/api/tags`, the `think` parameter for models that support extended reasoning (e.g., DeepSeek-R1, QwQ), and other Ollama-specific controls.
+
+**Decision**: Add `ollama` as a first-class provider with its own implementation using the native Ollama REST API.
+
+**API Endpoints Used**:
+| Purpose | Endpoint | Method |
+|---------|----------|--------|
+| Chat completion | `POST /api/chat` | Streaming NDJSON |
+| Model discovery | `GET /api/tags` | JSON list |
+
+**Key Differences from OpenAI-Compatible Shim**:
+- Request format: Ollama uses `{ model, messages, stream, think, options }` instead of OpenAI's `{ model, messages, stream, max_tokens }`.
+- Response format: NDJSON lines with `{ message: { content }, done }` instead of SSE `data:` chunks.
+- Thinking support: Controlled via `think: true/false` in the request body; thinking content arrives in a separate `message.thinking` field and is rendered distinctly.
+- Model list: Retrieved from `/api/tags` (returns `{ models: [{ name }] }`) instead of `/v1/models`.
+- No API key required: Ollama is local-first; `api_key` in the profile is ignored.
+
+**Configuration Example**:
+```toml
+[profiles.local]
+provider = "ollama"
+model = "llama3.2"
+base_url = "http://localhost:11434"  # optional, this is the default
+
+[profiles.thinker]
+provider = "ollama"
+model = "deepseek-r1:8b"
+thinking_level = "high"  # maps to think: true
+```
+
+**Thinking Mapping**:
+- `thinking_level = none` (or unset) → `think: false`
+- Any other level (`low`, `medium`, `high`, `xhigh`) → `think: true`
+- The `think` parameter is a boolean in Ollama's API; fine-grained budget control is not supported.
+
+**Rationale**:
+- Unlocks Ollama-native features (thinking, accurate model list) unavailable through the OpenAI shim.
+- Provides a cleaner user experience: `provider = "ollama"` is self-explanatory vs. setting `base_url` with `provider = "openai"`.
+- Consistent with the multi-provider architecture: each provider owns its request/response serialization.
+- Existing configs using the OpenAI shim for Ollama continue to work unchanged.
+
+**Consequences**:
+- New provider module added alongside `gemini`, `openai`, and `anthropic`.
+- The OpenAI-compatible shim path (`provider = "openai"` + custom `base_url`) still works as a fallback for other OpenAI-compatible local servers.
+- Model discovery (`ask init` model list) is available for Ollama without an API key.
+- Thinking output is visually separated (prefix or distinct block) from the main response.

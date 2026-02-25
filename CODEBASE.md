@@ -25,7 +25,8 @@ ask/
 │   │   ├── traits.rs        # Provider trait + PromptContext
 │   │   ├── gemini.rs        # Google Gemini integration
 │   │   ├── openai.rs        # OpenAI integration
-│   │   └── anthropic.rs     # Anthropic Claude integration
+│   │   ├── anthropic.rs     # Anthropic Claude integration
+│   │   └── ollama.rs        # Ollama local model integration (native /api/chat NDJSON)
 │   ├── context/
 │   │   ├── mod.rs           # Module exports
 │   │   ├── storage.rs       # JSON file storage
@@ -127,6 +128,10 @@ Key structures:
     - **Smart Persistence**: Pre-selects existing values when editing profiles
 - `aliases: HashMap<String, String>` - Command-line aliases
 
+Key constants (`src/config/defaults.rs`):
+- `DEFAULT_OLLAMA_BASE_URL` - Default Ollama API base URL (`http://localhost:11434`)
+- `DEFAULT_OLLAMA_MODEL` - Default Ollama model name
+
 Key functions:
 - `with_cli_overrides()` - Resolves active config from CLI args, ENV, and profiles
 - `ensure_default_profiles()` - Injects all 4 built-in free profiles if missing (with `fallback = "any"`)
@@ -137,9 +142,10 @@ Key functions:
 - `init_config()` - Interactive configuration menu
 - `init_config_non_interactive()` - Non-interactive setup (for scripts)
 - `load_aliases_only()` - Fast alias loading for early argument expansion
-- `configure_profile()` - Configure a single profile
+- `configure_profile()` - Configure a single profile (includes Ollama provider flow)
+- `fetch_ollama_models()` - Queries local Ollama instance for available model names
 - `manage_profiles()` - Profile management submenu
-- `get_thinking_config()` - Get unified thinking settings (enabled, value)
+- `get_thinking_config()` - Get unified thinking settings (enabled, value); handles Ollama case
 - `get_thinking_level()` - Get thinking level (Gemini/Anthropic) from active profile
 - `get_reasoning_effort()` - Get OpenAI reasoning effort from active profile
 - `get_thinking_budget()` - Get thinking budget (Gemini/Anthropic) from active profile
@@ -171,6 +177,7 @@ Supported providers:
 - **GeminiProvider**: Google Gemini API (Thinking via `thinkingConfig` or `thinkingBudget`)
 - **OpenAIProvider**: OpenAI and compatible APIs (Reasoning via `reasoning_effort`)
 - **AnthropicProvider**: Anthropic Claude API (Thinking via `thinking.budget_tokens`)
+- **OllamaProvider**: Local Ollama instance via native `/api/chat` NDJSON streaming endpoint (Thinking via `/think` tag toggle)
 
 **Thinking Mode Support** (`src/config/thinking.rs`):
 The system dynamically detects and selects the appropriate parameter for each provider/model:
@@ -178,6 +185,7 @@ The system dynamically detects and selects the appropriate parameter for each pr
 - **Gemini 3**: `thinking_level` (minimal, low, medium, high)
 - **OpenAI (o1/o3)**: `reasoning_effort` (none, low, medium, high)
 - **Anthropic**: `thinking_budget` (tokens or levels)
+- **Ollama**: `ThinkingType::OllamaThink` — toggles `/think` tag in the system prompt to enable model-side chain-of-thought
 
 The unified prompt system handles intent detection inline (command vs question vs code) without a separate API call. Key functions:
 - `build_unified_prompt()` - Builds the system prompt with context
