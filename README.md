@@ -15,7 +15,7 @@ A CLI tool that lets you interact with AI models using natural language, without
 | `coder` | codestral-latest | Code generation & analysis |
 | `vision` | GLM-4.6V-Flash | Image/vision tasks |
 
-Want more? Add your own profiles with OpenAI, Gemini, Claude, or any OpenAI-compatible API.
+Want more? Add your own profiles with OpenAI, Gemini, Claude, or **Ollama** (local or remote).
 
 ## Features
 
@@ -24,7 +24,7 @@ Want more? Add your own profiles with OpenAI, Gemini, Claude, or any OpenAI-comp
 - **Flexible flags**: Put options before or after your question - both work!
 - **Smart command injection**: Commands are safely flattened into one-liners when possible and pasted directly to your terminal
 - **Smart intent detection**: Automatically detects if you want a command or an answer
-- **Multiple providers**: Supports Gemini (default), OpenAI, and Anthropic Claude
+- **Multiple providers**: Supports Gemini (default), OpenAI, Anthropic Claude, and Ollama (local/remote)
 - **Streaming responses**: Real-time token-by-token output
 - **Thinking mode**: Enable AI reasoning for complex tasks (`-t` flag or config)
 - **Context awareness**: Optional conversation memory per directory
@@ -209,10 +209,10 @@ stream = true
 
 # Example: Local profile with Ollama
 # [profiles.local]
-# provider = "openai"
-# base_url = "http://localhost:11434/v1"
-# model = "llama3"
-# api_key = "ollama"          # Dummy key for local servers
+# provider = "ollama"
+# base_url = "http://localhost:11434"
+# model = "phi4-mini"
+# # thinking_budget = 1       # Enable thinking (model must support it)
 
 [behavior]
 auto_execute = false
@@ -357,12 +357,11 @@ model = "claude-haiku-4-5"
 api_key = "sk-ant-..."
 fallback = "none"  # don't retry with another profile
 
-# Local profile for Ollama/LM Studio
+# Local profile for Ollama
 [profiles.local]
-provider = "openai"
-base_url = "http://localhost:11434/v1"
-model = "llama3"
-api_key = "ollama"  # dummy key for local servers
+provider = "ollama"
+base_url = "http://localhost:11434"
+model = "phi4-mini"
 ```
 
 **Profile Resolution**: `default_profile` is used when set. Otherwise, `ask` prefers the first non-built-in profile; `faster` is used automatically when no custom profile exists.
@@ -388,16 +387,31 @@ OpenAI's GPT models. Get your API key from [OpenAI Platform](https://platform.op
 
 Anthropic's Claude models. Get your API key from [Anthropic Console](https://console.anthropic.com/).
 
-### OpenAI-Compatible
+### Ollama (local/remote)
 
-Any OpenAI-compatible API (e.g., Ollama, LM Studio):
+Run any model locally with [Ollama](https://ollama.com/). Use `ask init` for guided setup with automatic model discovery, or configure manually:
 
 ```toml
 [profiles.local]
+provider = "ollama"
+base_url = "http://localhost:11434"   # or remote http://host:11434
+model = "phi4-mini"
+stream = true
+# thinking_budget = 1                 # Enable thinking (model must support it)
+```
+
+`ask init` → "Manage profiles" → "Create new profile" → "Ollama" will auto-detect your running models.
+
+### OpenAI-Compatible
+
+Any OpenAI-compatible API (e.g., LM Studio):
+
+```toml
+[profiles.lmstudio]
 provider = "openai"
-api_key = "ollama"
-base_url = "http://localhost:11434/v1"
-model = "llama3"
+api_key = "lmstudio"
+base_url = "http://localhost:1234/v1"
+model = "phi-4"
 ```
 
 ### Built-in Free Profiles
@@ -450,6 +464,7 @@ ask --no-think what time is it
 | Gemini | `thinking_level` | `none`, `low`, `medium`, `high` |
 | OpenAI | `reasoning_effort` | `none`, `minimal`, `low`, `medium`, `high` |
 | Anthropic | `thinking_budget` | Token count or level (`low`=4k, `medium`=8k, `high`=16k) |
+| Ollama | `thinking_budget` | `0` (off), `1` (on — model must support it) |
 
 Configure during `ask init` or manually in your config file.
 
