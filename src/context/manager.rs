@@ -134,6 +134,62 @@ impl ContextManager {
         Ok(())
     }
 
+    /// View a specific history by ID or path
+    pub fn view_history(config: &Config, id_or_path: &str) -> Result<()> {
+        let storage_path = config.context_storage_path();
+        let storage = ContextStorage::new(storage_path)?;
+        let contexts = storage.list()?;
+
+        if contexts.is_empty() {
+            println!("{}", "No global context history found.".yellow());
+            return Ok(());
+        }
+
+        // 1. Try exact path match
+        let path_match = contexts.iter().find(|ctx| ctx.pwd == id_or_path);
+        if let Some(ctx) = path_match {
+            return Self::print_entry(Some(ctx), None);
+        }
+
+        // 2. Try resolving "." to current directory
+        if id_or_path == "." {
+            let current_dir = std::env::current_dir()?
+                .to_string_lossy()
+                .to_string();
+            let current_match = contexts.iter().find(|ctx| ctx.pwd == current_dir);
+            if let Some(ctx) = current_match {
+                return Self::print_entry(Some(ctx), None);
+            }
+        }
+
+        // 3. Try ID prefix match
+        let id_matches: Vec<_> = contexts
+            .iter()
+            .filter(|ctx| ctx.id.starts_with(id_or_path))
+            .collect();
+
+        if id_matches.len() == 1 {
+            return Self::print_entry(Some(id_matches[0]), None);
+        } else if id_matches.len() > 1 {
+            println!(
+                "{}",
+                format!("Multiple contexts match '{}':", id_or_path).yellow()
+            );
+            for ctx in id_matches {
+                println!("  {}  {}", ctx.id.bright_white(), ctx.pwd.bright_black());
+            }
+            println!();
+            println!("{}", "Please provide a longer ID to be specific.".bright_black());
+            return Ok(());
+        }
+
+        println!(
+            "{}",
+            format!("No context found matching '{}'.", id_or_path).red()
+        );
+        Ok(())
+    }
+
     /// Clear the current context
     pub fn clear_current(&self) -> Result<()> {
         self.storage.delete(&self.context_id)
@@ -147,8 +203,11 @@ impl ContextManager {
     /// Show context history
     pub fn show_history(&self) -> Result<()> {
         let entry = self.storage.load(&self.context_id)?;
+        Self::print_entry(entry.as_ref(), Some(self.max_age_minutes))
+    }
 
-        match entry {
+    fn print_entry(ctx: Option<&ContextEntry>, max_age_minutes: Option<u64>) -> Result<()> {
+        match ctx {
             Some(ctx) => {
                 println!("{} {}", "Context for:".cyan(), ctx.pwd.bright_white());
                 println!(
@@ -164,10 +223,12 @@ impl ContextManager {
                 println!("{} {}", "Messages:".cyan(), ctx.messages.len());
 
                 // Show TTL info
-                if self.max_age_minutes == 0 {
-                    println!("{} {}", "TTL:".cyan(), "permanent".green());
-                } else {
-                    println!("{} {} minutes", "TTL:".cyan(), self.max_age_minutes);
+                if let Some(ttl) = max_age_minutes {
+                    if ttl == 0 {
+                        println!("{} {}", "TTL:".cyan(), "permanent".green());
+                    } else {
+                        println!("{} {} minutes", "TTL:".cyan(), ttl);
+                    }
                 }
                 println!();
 
