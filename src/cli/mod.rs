@@ -129,6 +129,9 @@ pub async fn run(update_notification: Option<crate::update::UpdateNotification>)
     }
 
     if args.history_subcommand {
+        if !args.query.is_empty() {
+            return ContextManager::view_history(&config, &args.query[0]);
+        }
         return ContextManager::list_global(&config);
     }
 
