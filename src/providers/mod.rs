@@ -16,7 +16,7 @@ use crate::config::Config;
 use anyhow::{anyhow, Result};
 
 /// List of common command prefixes used to detect if a line is a shell command.
-const COMMAND_STARTERS: &[&str] = &[
+pub const COMMAND_STARTERS: &[&str] = &[
     "ls",
     "cd",
     "rm",

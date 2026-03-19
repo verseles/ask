@@ -100,6 +100,9 @@ pub struct Args {
     /// List all global history
     pub history_subcommand: bool,
 
+    /// View or act on specific history (ID or path)
+    pub history_target: Option<String>,
+
     /// Global flag (used with history subcommand)
     pub global: bool,
 
@@ -246,7 +249,13 @@ impl Args {
                 // Subcommands
                 "init" | "config" if query_parts.is_empty() => result.init = true,
                 "profiles" if query_parts.is_empty() => result.list_profiles = true,
-                "history" if query_parts.is_empty() => result.history_subcommand = true,
+                "history" if query_parts.is_empty() => {
+                    result.history_subcommand = true;
+                    if i + 1 < args.len() && !args[i + 1].starts_with('-') {
+                        i += 1;
+                        result.history_target = Some(args[i].clone());
+                    }
+                }
                 "--clear" => result.clear_context = true,
                 "--history" => result.show_history = true,
                 "--global" => result.global = true,
@@ -678,6 +687,7 @@ mod tests {
     fn test_parse_history_subcommand() {
         let args = Args::parse_args(vec!["history".into()]);
         assert!(args.history_subcommand);
+        assert!(args.history_target.is_none());
         assert!(!args.global);
         assert!(args.query.is_empty());
     }
@@ -687,6 +697,16 @@ mod tests {
         let args = Args::parse_args(vec!["history".into(), "--global".into()]);
         assert!(args.history_subcommand);
         assert!(args.global);
+        assert!(args.history_target.is_none());
+        assert!(args.query.is_empty());
+    }
+
+    #[test]
+    fn test_parse_history_with_target() {
+        let args = Args::parse_args(vec!["history".into(), "1234abcd".into()]);
+        assert!(args.history_subcommand);
+        assert_eq!(args.history_target, Some("1234abcd".to_string()));
+        assert!(!args.global);
         assert!(args.query.is_empty());
     }
 

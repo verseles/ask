@@ -181,8 +181,9 @@ impl ContextManager {
                     println!("[{}] {}", role_color, msg.timestamp.format("%H:%M:%S"));
 
                     // Truncate long messages
-                    let content = if msg.content.len() > 200 {
-                        format!("{}...", &msg.content[..200])
+                    let content = if msg.content.chars().count() > 200 {
+                        let truncated: String = msg.content.chars().take(200).collect();
+                        format!("{}...", truncated)
                     } else {
                         msg.content.clone()
                     };
@@ -196,6 +197,83 @@ impl ContextManager {
                 println!(
                     "{}",
                     "Use 'ask -c <question>' to start a conversation with context.".bright_black()
+                );
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Show specific history by ID or path.
+    pub fn show_specific_history(config: &Config, target: &str) -> Result<()> {
+        let storage_path = config.context_storage_path();
+        let storage = ContextStorage::new(storage_path)?;
+        let contexts = storage.list()?;
+
+        if contexts.is_empty() {
+            println!("{}", "No global context history found.".yellow());
+            return Ok(());
+        }
+
+        let current_dir = std::env::current_dir()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string();
+
+        let search_target = if target == "." {
+            current_dir.clone()
+        } else if let Ok(abs_path) = std::fs::canonicalize(target) {
+            abs_path.to_string_lossy().to_string()
+        } else {
+            target.to_string()
+        };
+
+        let matching_ctx = contexts
+            .into_iter()
+            .find(|ctx| ctx.id.starts_with(&search_target) || ctx.pwd == search_target);
+
+        match matching_ctx {
+            Some(ctx) => {
+                println!("{} {}", "Context for:".cyan(), ctx.pwd.bright_white());
+                println!("{} {}", "ID:".cyan(), ctx.id.bright_black());
+                println!(
+                    "{} {}",
+                    "Created:".cyan(),
+                    ctx.created_at.format("%Y-%m-%d %H:%M:%S")
+                );
+                println!(
+                    "{} {}",
+                    "Last used:".cyan(),
+                    ctx.last_used.format("%Y-%m-%d %H:%M:%S")
+                );
+                println!("{} {}", "Messages:".cyan(), ctx.messages.len());
+                println!();
+
+                for msg in &ctx.messages {
+                    let role_color = match msg.role.as_str() {
+                        "user" => msg.role.green(),
+                        "assistant" => msg.role.blue(),
+                        _ => msg.role.normal(),
+                    };
+
+                    println!("[{}] {}", role_color, msg.timestamp.format("%H:%M:%S"));
+
+                    let content = if msg.content.chars().count() > 200 {
+                        let truncated: String = msg.content.chars().take(200).collect();
+                        format!("{}...", truncated)
+                    } else {
+                        msg.content.clone()
+                    };
+
+                    println!("{}", content.bright_black());
+                    println!();
+                }
+            }
+            None => {
+                println!(
+                    "{} '{}'",
+                    "No context found matching:".yellow(),
+                    search_target.bright_white()
                 );
             }
         }

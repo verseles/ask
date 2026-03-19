@@ -129,6 +129,9 @@ pub async fn run(update_notification: Option<crate::update::UpdateNotification>)
     }
 
     if args.history_subcommand {
+        if let Some(ref target) = args.history_target {
+            return ContextManager::show_specific_history(&config, target);
+        }
         return ContextManager::list_global(&config);
     }
 
@@ -661,72 +664,7 @@ fn is_likely_command(text: &str) -> bool {
     }
 
     let first_word = text.split_whitespace().next().unwrap_or("");
-    let command_starters = [
-        "ls",
-        "cd",
-        "rm",
-        "cp",
-        "mv",
-        "mkdir",
-        "touch",
-        "cat",
-        "echo",
-        "grep",
-        "find",
-        "chmod",
-        "chown",
-        "sudo",
-        "apt",
-        "yum",
-        "brew",
-        "npm",
-        "yarn",
-        "cargo",
-        "git",
-        "docker",
-        "kubectl",
-        "systemctl",
-        "service",
-        "curl",
-        "wget",
-        "tar",
-        "zip",
-        "unzip",
-        "ssh",
-        "scp",
-        "rsync",
-        "ps",
-        "kill",
-        "top",
-        "htop",
-        "df",
-        "du",
-        "free",
-        "ping",
-        "traceroute",
-        "netstat",
-        "ss",
-        "iptables",
-        "ufw",
-        "python",
-        "python3",
-        "node",
-        "ruby",
-        "perl",
-        "php",
-        "java",
-        "go",
-        "rustc",
-        "gcc",
-        "g++",
-        "make",
-        "cmake",
-        "./",
-        "/",
-        "~",
-    ];
-
-    command_starters
+    crate::providers::COMMAND_STARTERS
         .iter()
         .any(|cmd| first_word.starts_with(cmd))
 }
