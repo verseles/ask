@@ -129,6 +129,9 @@ pub async fn run(update_notification: Option<crate::update::UpdateNotification>)
     }
 
     if args.history_subcommand {
+        if let Some(ref target) = args.history_target {
+            return ContextManager::show_specific_history(&config, target);
+        }
         return ContextManager::list_global(&config);
     }
 
