@@ -510,9 +510,30 @@ fallback = "any"
 provider = "anthropic"
 "#;
         let config = Config::from_toml(toml).unwrap();
-        let fallback = config.fallback_profile("work");
-        assert!(fallback.is_some());
-        assert_ne!(fallback.as_deref(), Some("work"));
+        assert_eq!(
+            config.fallback_profile("work"),
+            Some("personal".to_string())
+        );
+    }
+
+    #[test]
+    fn test_fallback_profile_any_is_deterministic_with_multiple_profiles() {
+        let toml = r#"
+[profiles.gamma]
+provider = "gemini"
+
+[profiles.alpha]
+provider = "openai"
+fallback = "any"
+
+[profiles.beta]
+provider = "anthropic"
+"#;
+        let config = Config::from_toml(toml).unwrap();
+
+        for _ in 0..10 {
+            assert_eq!(config.fallback_profile("alpha"), Some("beta".to_string()));
+        }
     }
 
     #[test]

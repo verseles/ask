@@ -379,10 +379,9 @@ impl Config {
         match profile.fallback.as_deref() {
             Some("none") => None,
             Some("any") => self
-                .profiles
-                .keys()
-                .find(|k| k.as_str() != active_profile)
-                .cloned(),
+                .sorted_profile_names()
+                .into_iter()
+                .find(|name| name != active_profile),
             Some(specific) => {
                 if self.profiles.contains_key(specific) {
                     Some(specific.to_string())
@@ -391,10 +390,9 @@ impl Config {
                 }
             }
             None => self
-                .profiles
-                .keys()
-                .find(|k| k.as_str() != active_profile)
-                .cloned(),
+                .sorted_profile_names()
+                .into_iter()
+                .find(|name| name != active_profile),
         }
     }
 
@@ -1706,10 +1704,25 @@ mod tests {
 
         assert_eq!(config.fallback_profile("p1"), Some("p2".to_string()));
         assert_eq!(config.fallback_profile("p2"), None);
+        assert_eq!(config.fallback_profile("p3"), Some("p1".to_string()));
+    }
 
-        let fallback_any = config.fallback_profile("p3");
-        assert!(fallback_any.is_some());
-        assert_ne!(fallback_any.unwrap(), "p3");
+    #[test]
+    fn test_implicit_fallback_selection_is_sorted() {
+        let mut config = Config::default();
+        config
+            .profiles
+            .insert("gamma".to_string(), ProfileConfig::default());
+        config
+            .profiles
+            .insert("alpha".to_string(), ProfileConfig::default());
+        config
+            .profiles
+            .insert("beta".to_string(), ProfileConfig::default());
+
+        assert_eq!(config.fallback_profile("alpha"), Some("beta".to_string()));
+        assert_eq!(config.fallback_profile("beta"), Some("alpha".to_string()));
+        assert_eq!(config.fallback_profile("gamma"), Some("alpha".to_string()));
     }
 
     #[test]

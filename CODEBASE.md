@@ -117,6 +117,7 @@ Key structures:
 - `Config` - Main config container with profiles, behavior, context, update, commands, aliases
 - `ActiveConfig` - Runtime-resolved config (provider, model, api_key, base_url, stream, profile_name)
 - `ProfileConfig` - Named profile settings (provider, model, api_key, base_url, stream, fallback, thinking settings, web search)
+  - `fallback`: Profile failover behavior — `"any"` (first alphabetically-sorted other profile), `"none"` (disable fallback), or a specific profile name
 - `FreeProfileDef` - Static definition for built-in free profiles (name, provider, model, api_key, base_url)
 - `FREE_PROFILES` - Array of all 4 built-in free profile definitions (talker, coder, vision, faster)
 - `FREE_PROFILE_NAMES` - Array of free profile name strings for lookup/filtering
