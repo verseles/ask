@@ -96,11 +96,11 @@ Description: Support finding ask.toml by traversing up the directory tree (like 
 
 Description: Global access to conversation history across all directories
 
-- [ ] 16.01 Add `ask history --global` to list all saved contexts
-- [ ] 16.02 Add ability to view a specific history by ID or path
-- [~] 16.03 Implement search across all stored conversations - Plan: 2333aeec
+- [x] 16.01 Add `ask history --global` to list all saved contexts - Commit hash: 9ec05e9
+- [x] 16.02 Add ability to view a specific history by ID or path - Commit hash: e689674
+- [x] 16.03 Implement search across all stored conversations - Commit hash: 340afad8c0236972673a163ab3532fb1325fa0d2
 - [ ] 16.04 Add automatic summary/title generation for contexts
-- [~] 16.05 Add command to prune histories of deleted directories - Plan: 2333aeec
+- [x] 16.05 Add command to prune histories of deleted directories - Commit hash: 340afad8c0236972673a163ab3532fb1325fa0d2
 
 ## Feature 17: Update Check Refinement
 

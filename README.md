@@ -139,6 +139,10 @@ OPTIONS:
 SUBCOMMANDS:
     init, config          Initialize/manage configuration interactively
     profiles              List all available profiles
+    history               List saved contexts across directories
+    history <TARGET>      Show a saved context by ID prefix or path
+    history search <TERM> Search saved contexts by path or message content
+    history prune         Delete saved contexts for missing directories
     --clear               Clear current directory context (use with -c)
     --history             Show context history (use with -c)
 ```
@@ -364,11 +368,11 @@ base_url = "http://localhost:11434"
 model = "phi4-mini"
 ```
 
-**Profile Resolution**: `default_profile` is used when set. Otherwise, `ask` prefers the first non-built-in profile; `faster` is used automatically when no custom profile exists.
+**Profile Resolution**: `default_profile` is used when set. Otherwise, `ask` prefers the first non-built-in profile; `talker` is used automatically when no custom profile exists.
 
 **Fallback Options**:
 - `fallback = "profile-name"` - Use specific profile on provider errors
-- `fallback = "any"` - Try any available profile
+- `fallback = "any"` - Try the first eligible profile in alphabetical order
 - `fallback = "none"` - Disable fallback (fail immediately)
 
 </details>
@@ -492,6 +496,13 @@ ask -c --clear
 
 # View history
 ask -c --history
+
+# Browse saved contexts across directories
+ask history
+ask history search nginx
+
+# Remove saved contexts for deleted directories
+ask -y history prune
 ```
 
 Context is stored locally and automatically cleaned up after 30 minutes of inactivity.
