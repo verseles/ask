@@ -129,6 +129,14 @@ pub async fn run(update_notification: Option<crate::update::UpdateNotification>)
     }
 
     if args.history_subcommand {
+        if args.history_prune {
+            return ContextManager::prune_deleted(&config, args.yes == Some(true));
+        }
+
+        if let Some(ref query) = args.history_search {
+            return ContextManager::search_global(&config, query);
+        }
+
         if let Some(ref target) = args.history_target {
             return ContextManager::show_specific_history(&config, target);
         }

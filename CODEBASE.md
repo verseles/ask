@@ -210,6 +210,12 @@ pub struct ContextManager {
 }
 ```
 
+**Global History Commands** (via `ask history`):
+- `ask history` — List all saved contexts globally
+- `ask history <TARGET>` — Show specific context by ID prefix or path
+- `ask history search <TERM>` — Search all contexts by path or message content
+- `ask history prune` — Delete contexts whose directories no longer exist
+
 ### Command Executor (`src/executor/`)
 
 Safe command execution with pattern-based safety detection:

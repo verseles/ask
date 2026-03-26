@@ -103,6 +103,12 @@ pub struct Args {
     /// View or act on specific history (ID or path)
     pub history_target: Option<String>,
 
+    /// Search global history by path or message content
+    pub history_search: Option<String>,
+
+    /// Prune history entries whose directories no longer exist
+    pub history_prune: bool,
+
     /// Global flag (used with history subcommand)
     pub global: bool,
 
@@ -251,9 +257,30 @@ impl Args {
                 "profiles" if query_parts.is_empty() => result.list_profiles = true,
                 "history" if query_parts.is_empty() => {
                     result.history_subcommand = true;
+
                     if i + 1 < args.len() && !args[i + 1].starts_with('-') {
-                        i += 1;
-                        result.history_target = Some(args[i].clone());
+                        match args[i + 1].as_str() {
+                            "search" => {
+                                i += 2;
+                                let mut terms = Vec::new();
+
+                                while i < args.len() && !args[i].starts_with('-') {
+                                    terms.push(args[i].clone());
+                                    i += 1;
+                                }
+
+                                result.history_search = Some(terms.join(" "));
+                                i = i.saturating_sub(1);
+                            }
+                            "prune" => {
+                                i += 1;
+                                result.history_prune = true;
+                            }
+                            _ => {
+                                i += 1;
+                                result.history_target = Some(args[i].clone());
+                            }
+                        }
                     }
                 }
                 "--clear" => result.clear_context = true,
@@ -536,9 +563,12 @@ OPTIONS:
 SUBCOMMANDS:
     init, config          Initialize/manage configuration interactively
     profiles              List all available profiles
-    history               List all global context history
-    --clear              Clear current directory context (use with -c)
-    --history            Show context history (use with -c)
+    history               List global context history
+    history <TARGET>      Show one saved context by ID prefix or path
+    history search <TERM> Search saved contexts by path or message content
+    history prune         Delete saved contexts for missing directories
+    --clear               Clear current directory context (use with -c)
+    --history             Show context history (use with -c)
 
 EXAMPLES:
     ask how to list docker containers
@@ -551,6 +581,10 @@ EXAMPLES:
     ask -p work important query           # use work profile
     ask -s what happened today            # web search
     ask --no-stream explain quantum       # disable streaming
+    ask history                           # list saved contexts
+    ask history .                         # show current directory context
+    ask history search docker             # search saved contexts
+    ask -y history prune                  # prune orphaned contexts
     git diff | ask cm
     cat main.rs | ask explain
 
@@ -688,6 +722,8 @@ mod tests {
         let args = Args::parse_args(vec!["history".into()]);
         assert!(args.history_subcommand);
         assert!(args.history_target.is_none());
+        assert!(args.history_search.is_none());
+        assert!(!args.history_prune);
         assert!(!args.global);
         assert!(args.query.is_empty());
     }
@@ -698,6 +734,8 @@ mod tests {
         assert!(args.history_subcommand);
         assert!(args.global);
         assert!(args.history_target.is_none());
+        assert!(args.history_search.is_none());
+        assert!(!args.history_prune);
         assert!(args.query.is_empty());
     }
 
@@ -706,7 +744,46 @@ mod tests {
         let args = Args::parse_args(vec!["history".into(), "1234abcd".into()]);
         assert!(args.history_subcommand);
         assert_eq!(args.history_target, Some("1234abcd".to_string()));
+        assert!(args.history_search.is_none());
+        assert!(!args.history_prune);
         assert!(!args.global);
+        assert!(args.query.is_empty());
+    }
+
+    #[test]
+    fn test_parse_history_search_action() {
+        let args = Args::parse_args(vec![
+            "history".into(),
+            "search".into(),
+            "docker".into(),
+            "compose".into(),
+        ]);
+
+        assert!(args.history_subcommand);
+        assert_eq!(args.history_search, Some("docker compose".to_string()));
+        assert!(args.history_target.is_none());
+        assert!(!args.history_prune);
+        assert!(args.query.is_empty());
+    }
+
+    #[test]
+    fn test_parse_history_search_without_terms() {
+        let args = Args::parse_args(vec!["history".into(), "search".into()]);
+
+        assert!(args.history_subcommand);
+        assert_eq!(args.history_search, Some(String::new()));
+        assert!(args.history_target.is_none());
+        assert!(!args.history_prune);
+    }
+
+    #[test]
+    fn test_parse_history_prune_action() {
+        let args = Args::parse_args(vec!["history".into(), "prune".into()]);
+
+        assert!(args.history_subcommand);
+        assert!(args.history_prune);
+        assert!(args.history_target.is_none());
+        assert!(args.history_search.is_none());
         assert!(args.query.is_empty());
     }
 

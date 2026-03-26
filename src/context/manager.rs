@@ -3,10 +3,12 @@
 use super::storage::{ContextEntry, ContextStorage, StoredMessage};
 use crate::config::Config;
 use crate::providers::Message;
-use anyhow::Result;
+use anyhow::{bail, Result};
 use chrono::Utc;
 use colored::Colorize;
+use requestty::Question;
 use sha2::{Digest, Sha256};
+use std::path::Path;
 
 /// Context statistics for echo display
 #[derive(Debug, Clone)]
@@ -28,6 +30,61 @@ pub struct ContextManager {
     context_id: String,
     max_messages: usize,
     max_age_minutes: u64,
+}
+
+fn sort_contexts_by_recent(contexts: &mut [ContextEntry]) {
+    contexts.sort_by(|a, b| b.last_used.cmp(&a.last_used).then_with(|| a.id.cmp(&b.id)));
+}
+
+fn truncate_chars(text: &str, max_chars: usize) -> String {
+    if text.chars().count() > max_chars {
+        let truncated: String = text.chars().take(max_chars).collect();
+        format!("{}...", truncated)
+    } else {
+        text.to_string()
+    }
+}
+
+fn excerpt_around(text: &str, start: usize, match_len: usize, max_chars: usize) -> String {
+    let chars: Vec<char> = text.chars().collect();
+    let char_start = text[..start].chars().count();
+    let match_chars = text[start..start + match_len].chars().count();
+    let window_start = char_start.saturating_sub(max_chars / 3);
+    let window_end = (char_start + match_chars + (max_chars / 2)).min(chars.len());
+    let mut snippet: String = chars[window_start..window_end].iter().collect();
+
+    if window_start > 0 {
+        snippet = format!("...{}", snippet);
+    }
+
+    if window_end < chars.len() {
+        snippet.push_str("...");
+    }
+
+    snippet
+}
+
+fn first_matching_snippet(text: &str, query: &str) -> Option<String> {
+    if query.is_empty() {
+        return None;
+    }
+
+    if let Some((index, matched)) = text.match_indices(query).next() {
+        return Some(excerpt_around(text, index, matched.len(), 140));
+    }
+
+    let lowercase_query = query.to_lowercase();
+    if text.to_lowercase().contains(&lowercase_query) {
+        return Some(truncate_chars(text, 140));
+    }
+
+    None
+}
+
+fn load_all_contexts(config: &Config) -> Result<Vec<ContextEntry>> {
+    let storage_path = config.context_storage_path();
+    let storage = ContextStorage::new(storage_path)?;
+    storage.list()
 }
 
 #[allow(dead_code)]
@@ -181,12 +238,7 @@ impl ContextManager {
                     println!("[{}] {}", role_color, msg.timestamp.format("%H:%M:%S"));
 
                     // Truncate long messages
-                    let content = if msg.content.chars().count() > 200 {
-                        let truncated: String = msg.content.chars().take(200).collect();
-                        format!("{}...", truncated)
-                    } else {
-                        msg.content.clone()
-                    };
+                    let content = truncate_chars(&msg.content, 200);
 
                     println!("{}", content.bright_black());
                     println!();
@@ -206,9 +258,7 @@ impl ContextManager {
 
     /// Show specific history by ID or path.
     pub fn show_specific_history(config: &Config, target: &str) -> Result<()> {
-        let storage_path = config.context_storage_path();
-        let storage = ContextStorage::new(storage_path)?;
-        let contexts = storage.list()?;
+        let contexts = load_all_contexts(config)?;
 
         if contexts.is_empty() {
             println!("{}", "No global context history found.".yellow());
@@ -258,12 +308,7 @@ impl ContextManager {
 
                     println!("[{}] {}", role_color, msg.timestamp.format("%H:%M:%S"));
 
-                    let content = if msg.content.chars().count() > 200 {
-                        let truncated: String = msg.content.chars().take(200).collect();
-                        format!("{}...", truncated)
-                    } else {
-                        msg.content.clone()
-                    };
+                    let content = truncate_chars(&msg.content, 200);
 
                     println!("{}", content.bright_black());
                     println!();
@@ -283,17 +328,14 @@ impl ContextManager {
 
     /// List all global context history
     pub fn list_global(config: &Config) -> Result<()> {
-        let storage_path = config.context_storage_path();
-        let storage = ContextStorage::new(storage_path)?;
-        let mut contexts = storage.list()?;
+        let mut contexts = load_all_contexts(config)?;
 
         if contexts.is_empty() {
             println!("{}", "No global context history found.".yellow());
             return Ok(());
         }
 
-        // Sort by last used (descending)
-        contexts.sort_by(|a, b| b.last_used.cmp(&a.last_used));
+        sort_contexts_by_recent(&mut contexts);
 
         println!(
             "{}",
@@ -339,6 +381,158 @@ impl ContextManager {
             "{}",
             "Use 'ask -c <question>' to use context in the current directory.".bright_black()
         );
+
+        Ok(())
+    }
+
+    /// Search all saved contexts by path or message content.
+    pub fn search_global(config: &Config, query: &str) -> Result<()> {
+        let query = query.trim();
+        if query.is_empty() {
+            bail!("History search requires a query.");
+        }
+
+        let mut contexts = load_all_contexts(config)?;
+
+        if contexts.is_empty() {
+            println!("{}", "No global context history found.".yellow());
+            return Ok(());
+        }
+
+        sort_contexts_by_recent(&mut contexts);
+
+        let current_dir = std::env::current_dir()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string();
+        let lowercase_query = query.to_lowercase();
+
+        let matches: Vec<_> = contexts
+            .into_iter()
+            .filter_map(|ctx| {
+                let path_match = ctx.pwd.to_lowercase().contains(&lowercase_query);
+                let snippet = ctx
+                    .messages
+                    .iter()
+                    .find_map(|msg| first_matching_snippet(&msg.content, query));
+
+                if path_match || snippet.is_some() {
+                    Some((ctx, path_match, snippet))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        if matches.is_empty() {
+            println!(
+                "{} '{}'",
+                "No history matches found for:".yellow(),
+                query.bright_white()
+            );
+            return Ok(());
+        }
+
+        println!(
+            "{}",
+            format!("History Search ({})", matches.len()).cyan().bold()
+        );
+        println!("{} {}", "Query:".cyan(), query.bright_white());
+        println!();
+
+        for (ctx, path_match, snippet) in matches {
+            let marker = if ctx.pwd == current_dir { "* " } else { "  " };
+            let pwd_display = if ctx.pwd == current_dir {
+                ctx.pwd.green().bold()
+            } else {
+                ctx.pwd.white()
+            };
+
+            println!(
+                "{}{} {} {} {}",
+                marker.green(),
+                ctx.id[..8].bright_black(),
+                ctx.last_used.format("%Y-%m-%d %H:%M:%S").to_string().blue(),
+                pwd_display,
+                format!("({} msgs)", ctx.messages.len()).bright_black(),
+            );
+
+            if path_match {
+                println!("   {}", "Path matched query.".bright_black());
+            }
+
+            if let Some(snippet) = snippet {
+                println!("   {}", snippet.bright_black());
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Delete saved contexts whose directories no longer exist.
+    pub fn prune_deleted(config: &Config, auto_yes: bool) -> Result<()> {
+        let storage_path = config.context_storage_path();
+        let storage = ContextStorage::new(storage_path)?;
+        let mut contexts = storage.list()?;
+
+        if contexts.is_empty() {
+            println!("{}", "No global context history found.".yellow());
+            return Ok(());
+        }
+
+        sort_contexts_by_recent(&mut contexts);
+
+        let orphaned: Vec<_> = contexts
+            .into_iter()
+            .filter(|ctx| !Path::new(&ctx.pwd).exists())
+            .collect();
+
+        if orphaned.is_empty() {
+            println!("{}", "No orphaned contexts found.".green());
+            return Ok(());
+        }
+
+        println!(
+            "{}",
+            format!("Orphaned History ({})", orphaned.len())
+                .yellow()
+                .bold()
+        );
+        println!();
+
+        for ctx in &orphaned {
+            println!(
+                "  {} {} {}",
+                ctx.id[..8].bright_black(),
+                ctx.last_used.format("%Y-%m-%d %H:%M:%S").to_string().blue(),
+                ctx.pwd.white(),
+            );
+        }
+
+        let should_delete = if auto_yes {
+            true
+        } else {
+            println!();
+            let question = Question::confirm("prune_history")
+                .message(format!("Delete {} orphaned context(s)?", orphaned.len()))
+                .default(false)
+                .build();
+            requestty::prompt_one(question)
+                .map(|answer| answer.as_bool().unwrap_or(false))
+                .unwrap_or(false)
+        };
+
+        if !should_delete {
+            println!("{}", "Cancelled.".yellow());
+            return Ok(());
+        }
+
+        for ctx in &orphaned {
+            storage.delete(&ctx.id)?;
+        }
+
+        println!();
+        println!("{} {}", "Pruned orphaned contexts:".green(), orphaned.len());
 
         Ok(())
     }

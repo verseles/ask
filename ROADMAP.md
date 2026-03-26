@@ -98,9 +98,9 @@ Description: Global access to conversation history across all directories
 
 - [ ] 16.01 Add `ask history --global` to list all saved contexts
 - [ ] 16.02 Add ability to view a specific history by ID or path
-- [ ] 16.03 Implement search across all stored conversations
+- [~] 16.03 Implement search across all stored conversations - Plan: 2333aeec
 - [ ] 16.04 Add automatic summary/title generation for contexts
-- [ ] 16.05 Add command to prune histories of deleted directories
+- [~] 16.05 Add command to prune histories of deleted directories - Plan: 2333aeec
 
 ## Feature 17: Update Check Refinement
 
