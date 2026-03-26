@@ -13,7 +13,7 @@ use crate::executor::CommandExecutor;
 use crate::output::OutputFormatter;
 use crate::providers::{
     build_unified_prompt, create_provider, expand_prompt_variables, flatten_command_if_safe,
-    load_custom_prompt, PromptContext, ProviderOptions,
+    load_custom_prompt, strip_code_fences, PromptContext, ProviderOptions,
 };
 
 /// Check if an error is retryable with a fallback profile
@@ -365,6 +365,16 @@ fn read_stdin_if_available() -> Option<String> {
     None
 }
 
+fn normalize_command_response(text: &str) -> Option<String> {
+    let stripped = strip_code_fences(text);
+
+    if is_likely_command(&stripped) {
+        Some(flatten_command_if_safe(&stripped).unwrap_or(stripped))
+    } else {
+        None
+    }
+}
+
 fn build_provider_options(args: &Args, config: &Config) -> ProviderOptions {
     let web_search = args
         .search
@@ -539,12 +549,8 @@ async fn handle_query(
         indicator.lock().unwrap().finish();
         println!();
 
-        let response_text = full_response.lock().unwrap().clone();
-        let response_text = if is_likely_command(&response_text) {
-            flatten_command_if_safe(&response_text).unwrap_or(response_text)
-        } else {
-            response_text
-        };
+        let raw_response = full_response.lock().unwrap().clone();
+        let response_text = normalize_command_response(&raw_response).unwrap_or(raw_response);
 
         // For sync injection (tmux/screen), clear the streamed command before injecting
         // For async injection (GUI paste), show a hint
@@ -586,11 +592,8 @@ async fn handle_query(
         };
 
         let response = provider.complete_with_options(&messages, &options).await?;
-        let response_text = if is_likely_command(&response.text) {
-            flatten_command_if_safe(&response.text).unwrap_or_else(|| response.text.clone())
-        } else {
-            response.text.clone()
-        };
+        let response_text =
+            normalize_command_response(&response.text).unwrap_or_else(|| response.text.clone());
 
         // Stop spinner before output
         drop(spinner);
@@ -623,9 +626,10 @@ async fn handle_query(
 }
 
 async fn maybe_execute_command(config: &Config, args: &Args, response: &str) -> Result<()> {
-    let response = response.trim();
+    let response =
+        normalize_command_response(response).unwrap_or_else(|| response.trim().to_string());
 
-    let looks_like_command = is_likely_command(response);
+    let looks_like_command = is_likely_command(&response);
 
     if !looks_like_command {
         return Ok(());
@@ -633,15 +637,15 @@ async fn maybe_execute_command(config: &Config, args: &Args, response: &str) -> 
 
     let executor = CommandExecutor::new(config);
 
-    if args.yes == Some(true) || (config.behavior.auto_execute && executor.is_safe(response)) {
+    if args.yes == Some(true) || (config.behavior.auto_execute && executor.is_safe(&response)) {
         println!();
         println!("{} {}", "Running:".green(), response.bright_white().bold());
         println!();
         executor
-            .execute_with_sudo_retry(response, args.follow != Some(false))
+            .execute_with_sudo_retry(&response, args.follow != Some(false))
             .await?;
     } else if crate::executor::can_inject() {
-        match crate::executor::inject_command(response)? {
+        match crate::executor::inject_command(&response)? {
             None => {}
             Some(edited_cmd) => {
                 println!(

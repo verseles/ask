@@ -135,6 +135,25 @@ fn line_starts_with_command(line: &str) -> bool {
         .any(|cmd| first_word.starts_with(cmd))
 }
 
+/// Removes one enclosing fenced code block when the entire response is wrapped in it.
+pub fn strip_code_fences(text: &str) -> String {
+    let trimmed = text.trim();
+    let lines: Vec<&str> = trimmed.lines().collect();
+
+    if lines.len() < 3 {
+        return trimmed.to_string();
+    }
+
+    let first = lines.first().copied().unwrap_or("").trim();
+    let last = lines.last().copied().unwrap_or("").trim();
+
+    if !first.starts_with("```") || last != "```" {
+        return trimmed.to_string();
+    }
+
+    lines[1..lines.len() - 1].join("\n").trim().to_string()
+}
+
 /// Attempts to flatten a multi-line command response into a single line.
 ///
 /// Returns `Some(flattened)` only when it's safe to join lines with `&&`.
@@ -293,5 +312,25 @@ mod tests {
             flatten_command_if_safe(&format!("ls -la\n{}", long_line)),
             None
         );
+    }
+
+    #[test]
+    fn test_strip_code_fences_with_language() {
+        assert_eq!(strip_code_fences("```bash\nls -la\n```"), "ls -la");
+    }
+
+    #[test]
+    fn test_strip_code_fences_without_language() {
+        assert_eq!(strip_code_fences("```\ngit status\n```"), "git status");
+    }
+
+    #[test]
+    fn test_strip_code_fences_preserves_plain_text() {
+        assert_eq!(strip_code_fences("ls -la"), "ls -la");
+    }
+
+    #[test]
+    fn test_strip_code_fences_ignores_unclosed_block() {
+        assert_eq!(strip_code_fences("```bash\nls -la"), "```bash\nls -la");
     }
 }
