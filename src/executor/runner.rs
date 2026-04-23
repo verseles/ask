@@ -4,8 +4,9 @@ use super::SafetyAnalyzer;
 use crate::config::Config;
 use anyhow::Result;
 use colored::Colorize;
+use std::io::Write;
 use std::process::Stdio;
-use tokio::io::{AsyncBufReadExt, BufReader};
+use tokio::io::AsyncReadExt;
 use tokio::process::Command;
 
 /// Command executor with safety checks
@@ -50,30 +51,43 @@ impl CommandExecutor {
 
         let exit_code = if follow {
             // Stream output in real-time
-            let stdout = child.stdout.take().unwrap();
-            let stderr = child.stderr.take().unwrap();
+            let mut stdout = child.stdout.take().unwrap();
+            let mut stderr = child.stderr.take().unwrap();
 
-            let stdout_reader = BufReader::new(stdout);
-            let stderr_reader = BufReader::new(stderr);
-
-            let mut stdout_lines = stdout_reader.lines();
-            let mut stderr_lines = stderr_reader.lines();
+            let mut stdout_buf = [0u8; 1024];
+            let mut stderr_buf = [0u8; 1024];
+            let mut stdout_done = false;
+            let mut stderr_done = false;
 
             // Process output
-            loop {
+            while !stdout_done || !stderr_done {
                 tokio::select! {
-                    line = stdout_lines.next_line() => {
-                        match line {
-                            Ok(Some(line)) => println!("{}", line),
-                            Ok(None) => break,
-                            Err(e) => eprintln!("{}: {}", "Error".red(), e),
+                    res = stdout.read(&mut stdout_buf), if !stdout_done => {
+                        match res {
+                            Ok(0) => stdout_done = true,
+                            Ok(n) => {
+                                print!("{}", String::from_utf8_lossy(&stdout_buf[..n]));
+                                std::io::stdout().flush().unwrap_or(());
+                            }
+                            Err(e) => {
+                                eprintln!("{}: {}", "Error".red(), e);
+                                stdout_done = true;
+                            }
                         }
                     }
-                    line = stderr_lines.next_line() => {
-                        match line {
-                            Ok(Some(line)) => eprintln!("{}", line.red()),
-                            Ok(None) => {}
-                            Err(e) => eprintln!("{}: {}", "Error".red(), e),
+                    res = stderr.read(&mut stderr_buf), if !stderr_done => {
+                        match res {
+                            Ok(0) => stderr_done = true,
+                            Ok(n) => {
+                                // We print stderr in red but without trailing newline if not present
+                                let text = String::from_utf8_lossy(&stderr_buf[..n]);
+                                eprint!("{}", text.red());
+                                std::io::stderr().flush().unwrap_or(());
+                            }
+                            Err(e) => {
+                                eprintln!("{}: {}", "Error".red(), e);
+                                stderr_done = true;
+                            }
                         }
                     }
                 }
