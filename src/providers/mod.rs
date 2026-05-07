@@ -130,9 +130,13 @@ pub const COMMAND_STARTERS: &[&str] = &[
 /// Checks if a line starts with a known command.
 fn line_starts_with_command(line: &str) -> bool {
     let first_word = line.split_whitespace().next().unwrap_or("");
-    COMMAND_STARTERS
-        .iter()
-        .any(|cmd| first_word.starts_with(cmd))
+    COMMAND_STARTERS.iter().any(|&cmd| {
+        if cmd == "./" || cmd == "/" || cmd == "~" {
+            first_word.starts_with(cmd)
+        } else {
+            first_word == cmd || first_word.starts_with(&format!("{cmd}-"))
+        }
+    })
 }
 
 /// Removes one enclosing fenced code block when the entire response is wrapped in it.
@@ -287,6 +291,22 @@ mod tests {
             flatten_command_if_safe("docker run \\\n  --name test \\\n  nginx"),
             None
         );
+    }
+
+    #[test]
+    fn test_line_starts_with_command_exact_matching() {
+        // False positives should not be detected
+        assert!(!line_starts_with_command("catapult is a word"));
+        assert!(!line_starts_with_command(".gitignore is a file"));
+        assert!(!line_starts_with_command("timeoutish"));
+
+        // Valid commands should be detected
+        assert!(line_starts_with_command("cat file.txt"));
+        assert!(line_starts_with_command(". ./script.sh"));
+        assert!(line_starts_with_command("./my_script"));
+        assert!(line_starts_with_command("/usr/bin/ls"));
+        assert!(line_starts_with_command("~/bin/run"));
+        assert!(line_starts_with_command("apt-get install htop"));
     }
 
     #[test]
