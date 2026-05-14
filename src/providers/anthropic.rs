@@ -275,12 +275,23 @@ impl Provider for AnthropicProvider {
         }
 
         let mut stream = response.bytes_stream();
+        let mut raw_buf: Vec<u8> = Vec::new();
 
         while let Some(chunk) = stream.next().await {
             let chunk = chunk?;
-            let text = String::from_utf8_lossy(&chunk);
+            raw_buf.extend_from_slice(&chunk);
 
-            for line in text.lines() {
+            while let Some(newline_pos) = raw_buf.iter().position(|&b| b == b'\n') {
+                let line_bytes = raw_buf.drain(..=newline_pos).collect::<Vec<u8>>();
+                let line = match std::str::from_utf8(&line_bytes) {
+                    Ok(s) => s.trim().to_string(),
+                    Err(_) => continue,
+                };
+
+                if line.is_empty() {
+                    continue;
+                }
+
                 if let Some(data) = line.strip_prefix("data: ") {
                     if let Ok(event) = serde_json::from_str::<AnthropicStreamEvent>(data) {
                         if event.event_type == "content_block_delta" {
