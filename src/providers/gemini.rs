@@ -320,16 +320,19 @@ impl Provider for GeminiProvider {
         }
 
         let mut stream = response.bytes_stream();
-        let mut buffer = String::new();
+        let mut raw_buf: Vec<u8> = Vec::new();
 
         while let Some(chunk) = stream.next().await {
             let chunk = chunk?;
-            buffer.push_str(&String::from_utf8_lossy(&chunk));
+            raw_buf.extend_from_slice(&chunk);
 
             // Process complete lines from buffer
-            while let Some(newline_pos) = buffer.find('\n') {
-                let line = buffer[..newline_pos].trim().to_string();
-                buffer = buffer[newline_pos + 1..].to_string();
+            while let Some(newline_pos) = raw_buf.iter().position(|&b| b == b'\n') {
+                let line_bytes = raw_buf.drain(..=newline_pos).collect::<Vec<u8>>();
+                let line = match std::str::from_utf8(&line_bytes) {
+                    Ok(s) => s.trim().to_string(),
+                    Err(_) => continue,
+                };
 
                 if line.is_empty() {
                     continue;
@@ -352,14 +355,17 @@ impl Provider for GeminiProvider {
         }
 
         // Process any remaining data in buffer after stream ends
-        if !buffer.trim().is_empty() {
-            if let Some(data) = buffer.trim().strip_prefix("data: ") {
-                if let Ok(response) = serde_json::from_str::<GeminiStreamResponse>(data) {
-                    if let Some(candidates) = response.candidates {
-                        for candidate in candidates {
-                            for part in candidate.content.parts {
-                                if let Some(text) = part.text {
-                                    callback(&text);
+        if !raw_buf.is_empty() {
+            if let Ok(line) = std::str::from_utf8(&raw_buf) {
+                let line = line.trim();
+                if let Some(data) = line.strip_prefix("data: ") {
+                    if let Ok(response) = serde_json::from_str::<GeminiStreamResponse>(data) {
+                        if let Some(candidates) = response.candidates {
+                            for candidate in candidates {
+                                for part in candidate.content.parts {
+                                    if let Some(text) = part.text {
+                                        callback(&text);
+                                    }
                                 }
                             }
                         }
