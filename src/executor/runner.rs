@@ -9,6 +9,49 @@ use std::process::Stdio;
 use tokio::io::AsyncReadExt;
 use tokio::process::Command;
 
+fn drain_complete_utf8(buffer: &mut Vec<u8>) -> String {
+    let mut output = String::new();
+
+    loop {
+        match std::str::from_utf8(buffer) {
+            Ok(valid) => {
+                output.push_str(valid);
+                buffer.clear();
+                break;
+            }
+            Err(error) => {
+                let valid_len = error.valid_up_to();
+                if valid_len > 0 {
+                    let valid = std::str::from_utf8(&buffer[..valid_len])
+                        .expect("valid_up_to must mark a valid UTF-8 prefix");
+                    output.push_str(valid);
+                }
+
+                match error.error_len() {
+                    Some(invalid_len) => {
+                        let invalid_end = valid_len + invalid_len;
+                        output.push_str(&String::from_utf8_lossy(&buffer[valid_len..invalid_end]));
+                        buffer.drain(..invalid_end);
+                    }
+                    None => {
+                        // Keep the incomplete trailing character for the next chunk.
+                        buffer.drain(..valid_len);
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    output
+}
+
+fn drain_lossy(buffer: &mut Vec<u8>) -> String {
+    let output = String::from_utf8_lossy(buffer).into_owned();
+    buffer.clear();
+    output
+}
+
 /// Command executor with safety checks
 pub struct CommandExecutor {
     analyzer: SafetyAnalyzer,
@@ -70,38 +113,14 @@ impl CommandExecutor {
                             Ok(0) => {
                                 stdout_done = true;
                                 if !stdout_leftover.is_empty() {
-                                    print!("{}", String::from_utf8_lossy(&stdout_leftover));
+                                    print!("{}", drain_lossy(&mut stdout_leftover));
                                     std::io::stdout().flush().unwrap_or(());
                                 }
                             }
                             Ok(n) => {
                                 let chunk = &stdout_buf[..n];
                                 stdout_leftover.extend_from_slice(chunk);
-
-                                match std::str::from_utf8(&stdout_leftover) {
-                                    Ok(s) => {
-                                        print!("{}", s);
-                                        stdout_leftover.clear();
-                                    }
-                                    Err(e) => {
-                                        let valid_len = e.valid_up_to();
-                                        if valid_len > 0 {
-                                            // SAFETY: We just checked that this portion is valid UTF-8
-                                            let valid_str = unsafe { std::str::from_utf8_unchecked(&stdout_leftover[..valid_len]) };
-                                            print!("{}", valid_str);
-                                        }
-
-                                        if e.error_len().is_none() {
-                                            // Incomplete character at the end, keep it for next time
-                                            let new_leftover = stdout_leftover[valid_len..].to_vec();
-                                            stdout_leftover = new_leftover;
-                                        } else {
-                                            // Invalid character, fallback to lossy
-                                            print!("{}", String::from_utf8_lossy(&stdout_leftover[valid_len..]));
-                                            stdout_leftover.clear();
-                                        }
-                                    }
-                                }
+                                print!("{}", drain_complete_utf8(&mut stdout_leftover));
                                 std::io::stdout().flush().unwrap_or(());
                             }
                             Err(e) => {
@@ -115,39 +134,15 @@ impl CommandExecutor {
                             Ok(0) => {
                                 stderr_done = true;
                                 if !stderr_leftover.is_empty() {
-                                    eprint!("{}", String::from_utf8_lossy(&stderr_leftover).red());
+                                    eprint!("{}", drain_lossy(&mut stderr_leftover).red());
                                     std::io::stderr().flush().unwrap_or(());
                                 }
                             }
                             Ok(n) => {
                                 let chunk = &stderr_buf[..n];
                                 stderr_leftover.extend_from_slice(chunk);
-
-                                match std::str::from_utf8(&stderr_leftover) {
-                                    Ok(s) => {
-                                        eprint!("{}", s.red());
-                                        stderr_leftover.clear();
-                                    }
-                                    Err(e) => {
-                                        let valid_len = e.valid_up_to();
-                                        if valid_len > 0 {
-                                            // SAFETY: We just checked that this portion is valid UTF-8
-                                            let valid_str = unsafe { std::str::from_utf8_unchecked(&stderr_leftover[..valid_len]) };
-                                            eprint!("{}", valid_str.red());
-                                        }
-
-                                        if e.error_len().is_none() {
-                                            // Incomplete character at the end, keep it for next time
-                                            let new_leftover = stderr_leftover[valid_len..].to_vec();
-                                            stderr_leftover = new_leftover;
-                                        } else {
-                                            // Invalid character, fallback to lossy
-                                            let lossy = String::from_utf8_lossy(&stderr_leftover[valid_len..]);
-                                            eprint!("{}", lossy.red());
-                                            stderr_leftover.clear();
-                                        }
-                                    }
-                                }
+                                let text = drain_complete_utf8(&mut stderr_leftover);
+                                eprint!("{}", text.red());
                                 std::io::stderr().flush().unwrap_or(());
                             }
                             Err(e) => {
