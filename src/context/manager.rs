@@ -73,9 +73,14 @@ fn first_matching_snippet(text: &str, query: &str) -> Option<String> {
         return Some(excerpt_around(text, index, matched.len(), 140));
     }
 
-    let lowercase_query = query.to_lowercase();
-    if text.to_lowercase().contains(&lowercase_query) {
-        return Some(truncate_chars(text, 140));
+    // Fallback: case-insensitive search using Regex
+    if let Ok(re) = regex::RegexBuilder::new(&regex::escape(query))
+        .case_insensitive(true)
+        .build()
+    {
+        if let Some(m) = re.find(text) {
+            return Some(excerpt_around(text, m.start(), m.len(), 140));
+        }
     }
 
     None
