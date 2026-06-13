@@ -9,6 +9,49 @@ use std::process::Stdio;
 use tokio::io::AsyncReadExt;
 use tokio::process::Command;
 
+fn drain_complete_utf8(buffer: &mut Vec<u8>) -> String {
+    let mut output = String::new();
+
+    loop {
+        match std::str::from_utf8(buffer) {
+            Ok(valid) => {
+                output.push_str(valid);
+                buffer.clear();
+                break;
+            }
+            Err(error) => {
+                let valid_len = error.valid_up_to();
+                if valid_len > 0 {
+                    let valid = std::str::from_utf8(&buffer[..valid_len])
+                        .expect("valid_up_to must mark a valid UTF-8 prefix");
+                    output.push_str(valid);
+                }
+
+                match error.error_len() {
+                    Some(invalid_len) => {
+                        let invalid_end = valid_len + invalid_len;
+                        output.push_str(&String::from_utf8_lossy(&buffer[valid_len..invalid_end]));
+                        buffer.drain(..invalid_end);
+                    }
+                    None => {
+                        // Keep the incomplete trailing character for the next chunk.
+                        buffer.drain(..valid_len);
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    output
+}
+
+fn drain_lossy(buffer: &mut Vec<u8>) -> String {
+    let output = String::from_utf8_lossy(buffer).into_owned();
+    buffer.clear();
+    output
+}
+
 /// Command executor with safety checks
 pub struct CommandExecutor {
     analyzer: SafetyAnalyzer,
@@ -59,14 +102,25 @@ impl CommandExecutor {
             let mut stdout_done = false;
             let mut stderr_done = false;
 
+            let mut stdout_leftover = Vec::new();
+            let mut stderr_leftover = Vec::new();
+
             // Process output
             while !stdout_done || !stderr_done {
                 tokio::select! {
                     res = stdout.read(&mut stdout_buf), if !stdout_done => {
                         match res {
-                            Ok(0) => stdout_done = true,
+                            Ok(0) => {
+                                stdout_done = true;
+                                if !stdout_leftover.is_empty() {
+                                    print!("{}", drain_lossy(&mut stdout_leftover));
+                                    std::io::stdout().flush().unwrap_or(());
+                                }
+                            }
                             Ok(n) => {
-                                print!("{}", String::from_utf8_lossy(&stdout_buf[..n]));
+                                let chunk = &stdout_buf[..n];
+                                stdout_leftover.extend_from_slice(chunk);
+                                print!("{}", drain_complete_utf8(&mut stdout_leftover));
                                 std::io::stdout().flush().unwrap_or(());
                             }
                             Err(e) => {
@@ -77,10 +131,17 @@ impl CommandExecutor {
                     }
                     res = stderr.read(&mut stderr_buf), if !stderr_done => {
                         match res {
-                            Ok(0) => stderr_done = true,
+                            Ok(0) => {
+                                stderr_done = true;
+                                if !stderr_leftover.is_empty() {
+                                    eprint!("{}", drain_lossy(&mut stderr_leftover).red());
+                                    std::io::stderr().flush().unwrap_or(());
+                                }
+                            }
                             Ok(n) => {
-                                // We print stderr in red but without trailing newline if not present
-                                let text = String::from_utf8_lossy(&stderr_buf[..n]);
+                                let chunk = &stderr_buf[..n];
+                                stderr_leftover.extend_from_slice(chunk);
+                                let text = drain_complete_utf8(&mut stderr_leftover);
                                 eprint!("{}", text.red());
                                 std::io::stderr().flush().unwrap_or(());
                             }
