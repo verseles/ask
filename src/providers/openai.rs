@@ -100,13 +100,13 @@ struct OpenAIError {
 }
 
 impl OpenAIProvider {
-    pub fn new(api_key: String, base_url: String, model: String) -> Self {
-        Self {
+    pub fn new(api_key: String, base_url: String, model: String) -> Result<Self> {
+        Ok(Self {
             api_key,
             base_url,
             model,
-            client: create_client(),
-        }
+            client: create_client()?,
+        })
     }
 
     fn convert_messages(&self, messages: &[Message]) -> Vec<OpenAIMessage> {
@@ -389,45 +389,52 @@ mod tests {
 
     #[test]
     fn test_is_reasoning_model() {
-        let provider = OpenAIProvider::new("key".into(), "url".into(), "gpt-5-nano".into());
+        let provider =
+            OpenAIProvider::new("key".into(), "url".into(), "gpt-5-nano".into()).unwrap();
         assert!(provider.is_reasoning_model());
 
-        let provider = OpenAIProvider::new("key".into(), "url".into(), "o1-preview".into());
+        let provider =
+            OpenAIProvider::new("key".into(), "url".into(), "o1-preview".into()).unwrap();
         assert!(provider.is_reasoning_model());
 
-        let provider = OpenAIProvider::new("key".into(), "url".into(), "gpt-4o".into());
+        let provider = OpenAIProvider::new("key".into(), "url".into(), "gpt-4o".into()).unwrap();
         assert!(!provider.is_reasoning_model());
     }
 
     #[test]
     fn test_supports_none_reasoning() {
-        let provider = OpenAIProvider::new("key".into(), "url".into(), "gpt-5.1".into());
+        let provider = OpenAIProvider::new("key".into(), "url".into(), "gpt-5.1".into()).unwrap();
         assert!(provider.supports_none_reasoning());
 
-        let provider = OpenAIProvider::new("key".into(), "url".into(), "gpt-5.2-turbo".into());
+        let provider =
+            OpenAIProvider::new("key".into(), "url".into(), "gpt-5.2-turbo".into()).unwrap();
         assert!(provider.supports_none_reasoning());
 
-        let provider = OpenAIProvider::new("key".into(), "url".into(), "gpt-5-nano".into());
+        let provider =
+            OpenAIProvider::new("key".into(), "url".into(), "gpt-5-nano".into()).unwrap();
         assert!(!provider.supports_none_reasoning());
 
-        let provider = OpenAIProvider::new("key".into(), "url".into(), "gpt-5-mini".into());
+        let provider =
+            OpenAIProvider::new("key".into(), "url".into(), "gpt-5-mini".into()).unwrap();
         assert!(!provider.supports_none_reasoning());
     }
 
     #[test]
     fn test_normalize_reasoning_effort() {
-        let provider = OpenAIProvider::new("key".into(), "url".into(), "gpt-5-nano".into());
+        let provider =
+            OpenAIProvider::new("key".into(), "url".into(), "gpt-5-nano".into()).unwrap();
         assert_eq!(provider.normalize_reasoning_effort("none"), "minimal");
         assert_eq!(provider.normalize_reasoning_effort("minimal"), "minimal");
         assert_eq!(provider.normalize_reasoning_effort("medium"), "medium");
 
-        let provider = OpenAIProvider::new("key".into(), "url".into(), "gpt-5.1".into());
+        let provider = OpenAIProvider::new("key".into(), "url".into(), "gpt-5.1".into()).unwrap();
         assert_eq!(provider.normalize_reasoning_effort("none"), "none");
     }
 
     #[test]
     fn test_build_reasoning_effort_disabled() {
-        let provider = OpenAIProvider::new("key".into(), "url".into(), "gpt-5-nano".into());
+        let provider =
+            OpenAIProvider::new("key".into(), "url".into(), "gpt-5-nano".into()).unwrap();
         let options = ProviderOptions {
             thinking_enabled: false,
             thinking_value: None,
@@ -443,7 +450,8 @@ mod tests {
 
     #[test]
     fn test_build_reasoning_effort_enabled() {
-        let provider = OpenAIProvider::new("key".into(), "url".into(), "gpt-5-nano".into());
+        let provider =
+            OpenAIProvider::new("key".into(), "url".into(), "gpt-5-nano".into()).unwrap();
         let options = ProviderOptions {
             thinking_enabled: true,
             thinking_value: Some("high".to_string()),
@@ -459,7 +467,7 @@ mod tests {
 
     #[test]
     fn test_build_reasoning_effort_non_reasoning_model() {
-        let provider = OpenAIProvider::new("key".into(), "url".into(), "gpt-4o".into());
+        let provider = OpenAIProvider::new("key".into(), "url".into(), "gpt-4o".into()).unwrap();
         let options = ProviderOptions {
             thinking_enabled: true,
             thinking_value: Some("high".to_string()),
