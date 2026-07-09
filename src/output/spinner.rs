@@ -1,4 +1,4 @@
-use std::io::{self, Write};
+use std::io::{self, IsTerminal, Write};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread::{self, JoinHandle};
@@ -22,6 +22,10 @@ impl Spinner {
 
         let handle = thread::spawn(move || {
             let mut stdout = io::stdout();
+
+            if !stdout.is_terminal() {
+                return;
+            }
 
             while running_clone.load(Ordering::Relaxed) {
                 // Show ●
@@ -72,7 +76,7 @@ impl Spinner {
         }
 
         // If ● was visible, remove it
-        if self.visible.load(Ordering::Relaxed) {
+        if self.visible.load(Ordering::Relaxed) && io::stdout().is_terminal() {
             print!("\x08 \x08");
             io::stdout().flush().ok();
         }
@@ -101,25 +105,33 @@ impl StreamingIndicator {
 
     /// Print chunk and add ● indicator at the end
     pub fn print_chunk(&mut self, chunk: &str) {
+        let is_tty = io::stdout().is_terminal();
+
         // Remove previous indicator if present
-        if self.has_indicator {
+        if self.has_indicator && is_tty {
             print!("\x08 \x08");
         }
 
         // Print the actual content
         print!("{}", chunk);
 
-        // Add indicator
-        print!("●");
-        io::stdout().flush().ok();
-        self.has_indicator = true;
+        if is_tty {
+            // Add indicator
+            print!("●");
+            io::stdout().flush().ok();
+            self.has_indicator = true;
+        } else {
+            io::stdout().flush().ok();
+        }
     }
 
     /// Remove the indicator and finalize
     pub fn finish(&mut self) {
         if self.has_indicator {
-            print!("\x08 \x08");
-            io::stdout().flush().ok();
+            if io::stdout().is_terminal() {
+                print!("\x08 \x08");
+                io::stdout().flush().ok();
+            }
             self.has_indicator = false;
         }
     }
