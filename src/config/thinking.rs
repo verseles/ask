@@ -6,7 +6,7 @@
 //! - OpenAI: reasoning_effort (none, minimal, low, medium, high, xhigh)
 //! - Anthropic: thinking_budget (0, 1024-128000)
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use requestty::Question;
 
 use super::numbered_select;
@@ -21,23 +21,64 @@ pub enum ThinkingType {
     NotSupported,
 }
 
+fn gemini_major_version(model: &str) -> Option<u32> {
+    model
+        .strip_prefix("gemini-")?
+        .split(['.', '-'])
+        .next()?
+        .parse()
+        .ok()
+}
+
+pub(crate) fn legacy_budget_to_level(budget: i64) -> Result<Option<&'static str>> {
+    match budget {
+        -1 => Ok(None),
+        value if value < -1 => Err(anyhow!("Invalid legacy Gemini thinking budget: {value}")),
+        0 => Ok(Some("minimal")),
+        1..=2048 => Ok(Some("low")),
+        2049..=8192 => Ok(Some("medium")),
+        _ => Ok(Some("high")),
+    }
+}
+
+fn normalize_existing_thinking_value(
+    thinking_type: ThinkingType,
+    existing_value: String,
+) -> String {
+    if thinking_type != ThinkingType::GeminiLevel {
+        return existing_value;
+    }
+
+    let Ok(budget) = existing_value.parse::<i64>() else {
+        return existing_value;
+    };
+    if budget == -1 {
+        return existing_value;
+    }
+
+    legacy_budget_to_level(budget)
+        .ok()
+        .flatten()
+        .unwrap_or(existing_value.as_str())
+        .to_string()
+}
+
 pub fn detect_thinking_type(provider: &str, model: &str) -> ThinkingType {
     match provider {
         "gemini" => {
             let model_lower = model.to_lowercase();
-            if model_lower.contains("gemini-3")
-                || model_lower.contains("gemini-3-flash")
-                || model_lower.contains("gemini-3-pro")
-            {
-                ThinkingType::GeminiLevel
-            } else if model_lower.contains("2.5")
-                || model_lower.contains("2-5")
-                || model_lower.ends_with("-latest")
-                || model_lower.contains("flash-lite")
-                || model_lower.contains("flash")
-                || model_lower.contains("pro")
+            if model_lower == "gemini-2.5"
+                || model_lower.starts_with("gemini-2.5-")
+                || model_lower == "gemini-2-5"
+                || model_lower.starts_with("gemini-2-5-")
             {
                 ThinkingType::GeminiBudget
+            } else if matches!(
+                model_lower.as_str(),
+                "gemini-flash-latest" | "gemini-flash-lite-latest"
+            ) || gemini_major_version(&model_lower).is_some_and(|major| major >= 3)
+            {
+                ThinkingType::GeminiLevel
             } else {
                 ThinkingType::NotSupported
             }
@@ -70,7 +111,7 @@ pub fn get_thinking_options(thinking_type: ThinkingType) -> Vec<ThinkingOption> 
     match thinking_type {
         ThinkingType::GeminiLevel => vec![
             ThinkingOption {
-                label: "Disable (minimal) - fastest".to_string(),
+                label: "Minimal - fastest".to_string(),
                 config_value: "minimal".to_string(),
                 config_key: "thinking_level",
             },
@@ -85,9 +126,14 @@ pub fn get_thinking_options(thinking_type: ThinkingType) -> Vec<ThinkingOption> 
                 config_key: "thinking_level",
             },
             ThinkingOption {
-                label: "High - deep reasoning (default)".to_string(),
+                label: "High - deep reasoning".to_string(),
                 config_value: "high".to_string(),
                 config_key: "thinking_level",
+            },
+            ThinkingOption {
+                label: "Default (dynamic)".to_string(),
+                config_value: "-1".to_string(),
+                config_key: "thinking_budget",
             },
         ],
         ThinkingType::GeminiBudget => vec![
@@ -220,7 +266,9 @@ pub fn select_thinking_config(
 
     let labels: Vec<&str> = options.iter().map(|o| o.label.as_str()).collect();
 
-    let default_idx = if let Some(existing) = existing_value {
+    let default_idx = if let Some(existing) =
+        existing_value.map(|value| normalize_existing_thinking_value(thinking_type, value))
+    {
         options
             .iter()
             .position(|o| o.config_value == existing)
@@ -288,6 +336,18 @@ mod tests {
             detect_thinking_type("gemini", "gemini-3-pro-preview"),
             ThinkingType::GeminiLevel
         );
+        assert_eq!(
+            detect_thinking_type("gemini", "gemini-3.5-flash-lite"),
+            ThinkingType::GeminiLevel
+        );
+        assert_eq!(
+            detect_thinking_type("gemini", "gemini-3.6-flash"),
+            ThinkingType::GeminiLevel
+        );
+        assert_eq!(
+            detect_thinking_type("gemini", "gemini-4-flash"),
+            ThinkingType::GeminiLevel
+        );
     }
 
     #[test]
@@ -297,12 +357,56 @@ mod tests {
             ThinkingType::GeminiBudget
         );
         assert_eq!(
-            detect_thinking_type("gemini", "gemini-flash-latest"),
+            detect_thinking_type("gemini", "gemini-2.5-flash-preview-05-20"),
             ThinkingType::GeminiBudget
+        );
+    }
+
+    #[test]
+    fn test_detect_gemini_latest_aliases() {
+        assert_eq!(
+            detect_thinking_type("gemini", "gemini-flash-latest"),
+            ThinkingType::GeminiLevel
+        );
+        assert_eq!(
+            detect_thinking_type("gemini", "gemini-flash-lite-latest"),
+            ThinkingType::GeminiLevel
+        );
+    }
+
+    #[test]
+    fn test_normalize_legacy_budgets_for_level_models() {
+        for (budget, expected) in [
+            ("0", "minimal"),
+            ("1024", "low"),
+            ("4096", "medium"),
+            ("8192", "medium"),
+            ("16384", "high"),
+            ("-1", "-1"),
+        ] {
+            assert_eq!(
+                normalize_existing_thinking_value(ThinkingType::GeminiLevel, budget.to_string()),
+                expected
+            );
+        }
+
+        let options = get_thinking_options(ThinkingType::GeminiLevel);
+        let dynamic = options.iter().find(|option| option.config_value == "-1");
+        assert_eq!(
+            dynamic.map(|option| option.config_key),
+            Some("thinking_budget")
+        );
+    }
+
+    #[test]
+    fn test_does_not_guess_unknown_gemini_contracts() {
+        assert_eq!(
+            detect_thinking_type("gemini", "gemini-2.0-flash"),
+            ThinkingType::NotSupported
         );
         assert_eq!(
             detect_thinking_type("gemini", "gemini-pro-latest"),
-            ThinkingType::GeminiBudget
+            ThinkingType::NotSupported
         );
     }
 

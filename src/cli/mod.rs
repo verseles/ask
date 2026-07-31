@@ -715,7 +715,8 @@ fn list_profiles(config: &Config) -> Result<()> {
             "gemini" => profile
                 .thinking_level
                 .as_ref()
-                .map(|v| format!("think:{}", v)),
+                .map(|v| format!("think:{}", v))
+                .or_else(|| profile.thinking_budget.map(|v| format!("budget:{}", v))),
             "openai" => profile
                 .reasoning_effort
                 .as_ref()

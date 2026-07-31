@@ -465,10 +465,13 @@ ask --no-think what time is it
 
 | Provider | Config Parameter | Values |
 |----------|-----------------|--------|
-| Gemini | `thinking_level` | `none`, `low`, `medium`, `high` |
+| Gemini 3.x and `gemini-flash-latest`/`gemini-flash-lite-latest` | `thinking_level` | `minimal`, `low`, `medium`, `high` |
+| Gemini 2.5 | `thinking_budget` | `0`, `-1`, or token count |
 | OpenAI | `reasoning_effort` | `none`, `minimal`, `low`, `medium`, `high` |
 | Anthropic | `thinking_budget` | Token count or level (`low`=4k, `medium`=8k, `high`=16k) |
 | Ollama | `thinking_budget` | `0` (off), `1` (on — model must support it) |
+
+Legacy token budgets configured for these rolling aliases are automatically converted to compatible thinking levels.
 
 Configure during `ask init` or manually in your config file.
 

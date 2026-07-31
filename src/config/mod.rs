@@ -5,6 +5,7 @@ pub(crate) mod loader;
 mod thinking;
 
 pub use defaults::*;
+pub(crate) use thinking::{detect_thinking_type, legacy_budget_to_level, ThinkingType};
 pub use thinking::{format_thinking_config, select_thinking_config};
 
 use crate::cli::Args;

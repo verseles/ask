@@ -1,6 +1,7 @@
 //! Google Gemini provider implementation
 
 use super::{Citation, Message, Provider, ProviderOptions, ProviderResponse, StreamCallback};
+use crate::config::{detect_thinking_type, legacy_budget_to_level, ThinkingType};
 use crate::http::create_client;
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
@@ -40,7 +41,7 @@ struct GeminiPart {
 struct GenerationConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     temperature: Option<f32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "maxOutputTokens", skip_serializing_if = "Option::is_none")]
     max_output_tokens: Option<u32>,
     #[serde(rename = "thinkingConfig", skip_serializing_if = "Option::is_none")]
     thinking_config: Option<ThinkingConfig>,
@@ -160,59 +161,93 @@ impl GeminiProvider {
         }
     }
 
-    fn supports_thinking(&self) -> bool {
-        let model = self.model.to_lowercase();
-        model.contains("gemini-3")
-            || model.contains("gemini-2.5")
-            || model.contains("2.5-flash")
-            || model.contains("2.5-pro")
-            || model.contains("-latest")
-    }
-
-    fn build_generation_config(&self, options: &ProviderOptions) -> GenerationConfig {
-        let thinking_config = if options.thinking_enabled && self.supports_thinking() {
+    fn build_generation_config(&self, options: &ProviderOptions) -> Result<GenerationConfig> {
+        let thinking_type = detect_thinking_type("gemini", &self.model);
+        let thinking_config = if options.thinking_enabled || options.thinking_value.is_some() {
             let value = options
                 .thinking_value
-                .as_ref()
-                .map(|v| v.to_uppercase())
-                .unwrap_or_else(|| "LOW".to_string());
+                .as_deref()
+                .unwrap_or("low")
+                .trim()
+                .to_lowercase();
 
-            // Gemini 3 models use thinkingLevel (minimal, low, medium, high)
-            // Gemini 2.5 models use thinkingBudget (number of tokens)
-            let is_gemini_3 = self.model.contains("gemini-3");
+            match thinking_type {
+                ThinkingType::GeminiLevel => {
+                    let level = if let Ok(budget) = value.parse::<i64>() {
+                        legacy_budget_to_level(budget)
+                            .map_err(|_| {
+                                anyhow!(
+                                    "Invalid Gemini thinking budget for {}: {}",
+                                    self.model,
+                                    budget
+                                )
+                            })?
+                            .map(str::to_uppercase)
+                    } else {
+                        match value.as_str() {
+                            "none" | "minimal" => Some("MINIMAL".to_string()),
+                            "low" => Some("LOW".to_string()),
+                            "medium" => Some("MEDIUM".to_string()),
+                            "high" => Some("HIGH".to_string()),
+                            _ => {
+                                return Err(anyhow!(
+                                    "Invalid Gemini thinking level for {}: {}",
+                                    self.model,
+                                    value
+                                ));
+                            }
+                        }
+                    };
 
-            if is_gemini_3 {
-                Some(ThinkingConfig {
-                    thinking_level: Some(value),
-                    thinking_budget: None,
-                })
-            } else {
-                // For Gemini 2.5, convert level to budget or parse as number
-                let budget = match value.as_str() {
-                    "MINIMAL" => 1024,
-                    "LOW" => 4096,
-                    "MEDIUM" => 8192,
-                    "HIGH" => 16384,
-                    _ => value.parse::<i32>().unwrap_or(4096),
-                };
-                Some(ThinkingConfig {
-                    thinking_level: None,
-                    thinking_budget: Some(budget),
-                })
+                    level.map(|level| ThinkingConfig {
+                        thinking_level: Some(level),
+                        thinking_budget: None,
+                    })
+                }
+                ThinkingType::GeminiBudget => {
+                    let budget = match value.as_str() {
+                        "none" => 0,
+                        "minimal" => 1024,
+                        "low" => 4096,
+                        "medium" => 8192,
+                        "high" => 16384,
+                        _ => value.parse::<i32>().map_err(|_| {
+                            anyhow!(
+                                "Invalid Gemini thinking budget for {}: {}",
+                                self.model,
+                                value
+                            )
+                        })?,
+                    };
+
+                    if budget < -1 {
+                        return Err(anyhow!(
+                            "Invalid Gemini thinking budget for {}: {}",
+                            self.model,
+                            budget
+                        ));
+                    }
+
+                    Some(ThinkingConfig {
+                        thinking_level: None,
+                        thinking_budget: Some(budget),
+                    })
+                }
+                _ => None,
             }
         } else {
             None
         };
 
-        GenerationConfig {
-            temperature: if options.thinking_enabled && self.supports_thinking() {
-                None
-            } else {
-                Some(0.7)
+        Ok(GenerationConfig {
+            temperature: match thinking_type {
+                ThinkingType::GeminiLevel => None,
+                ThinkingType::GeminiBudget if options.thinking_enabled => None,
+                _ => Some(0.7),
             },
             max_output_tokens: Some(65536),
             thinking_config,
-        }
+        })
     }
 
     fn extract_citations(&self, candidate: &GeminiCandidate) -> Vec<Citation> {
@@ -248,7 +283,7 @@ impl Provider for GeminiProvider {
 
         let request = GeminiRequest {
             contents: self.convert_messages(messages),
-            generation_config: Some(self.build_generation_config(options)),
+            generation_config: Some(self.build_generation_config(options)?),
             tools: self.build_tools(options),
         };
 
@@ -302,7 +337,7 @@ impl Provider for GeminiProvider {
 
         let request = GeminiRequest {
             contents: self.convert_messages(messages),
-            generation_config: Some(self.build_generation_config(options)),
+            generation_config: Some(self.build_generation_config(options)?),
             tools: self.build_tools(options),
         };
 
@@ -383,5 +418,144 @@ impl Provider for GeminiProvider {
 
     fn model(&self) -> &str {
         &self.model
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn provider(model: &str) -> GeminiProvider {
+        GeminiProvider::new(
+            "test-key".to_string(),
+            "https://example.com".to_string(),
+            model.to_string(),
+        )
+    }
+
+    fn thinking_options(value: &str) -> ProviderOptions {
+        ProviderOptions {
+            thinking_enabled: true,
+            thinking_value: Some(value.to_string()),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn latest_models_use_level_payload_without_sampling() {
+        for model in [
+            "gemini-3.6-flash",
+            "gemini-3.5-flash-lite",
+            "gemini-flash-latest",
+            "gemini-flash-lite-latest",
+        ] {
+            let config = provider(model)
+                .build_generation_config(&thinking_options("medium"))
+                .unwrap();
+            let payload = serde_json::to_value(config).unwrap();
+
+            assert_eq!(payload["thinkingConfig"]["thinkingLevel"], "MEDIUM");
+            assert!(payload["thinkingConfig"].get("thinkingBudget").is_none());
+            assert!(payload.get("temperature").is_none());
+            assert_eq!(payload["maxOutputTokens"], 65536);
+            assert!(payload.get("max_output_tokens").is_none());
+        }
+    }
+
+    #[test]
+    fn latest_models_omit_sampling_without_explicit_thinking() {
+        for model in ["gemini-3.6-flash", "gemini-flash-lite-latest"] {
+            let config = provider(model)
+                .build_generation_config(&ProviderOptions::default())
+                .unwrap();
+            let payload = serde_json::to_value(config).unwrap();
+
+            assert!(payload.get("temperature").is_none());
+            assert!(payload.get("thinkingConfig").is_none());
+        }
+    }
+
+    #[test]
+    fn explicit_disabled_legacy_config_is_preserved() {
+        let options = ProviderOptions {
+            thinking_enabled: false,
+            thinking_value: Some("0".to_string()),
+            ..Default::default()
+        };
+
+        let config = provider("gemini-flash-latest")
+            .build_generation_config(&options)
+            .unwrap();
+        let payload = serde_json::to_value(config).unwrap();
+        assert_eq!(payload["thinkingConfig"]["thinkingLevel"], "MINIMAL");
+
+        let config = provider("gemini-2.5-flash")
+            .build_generation_config(&options)
+            .unwrap();
+        let payload = serde_json::to_value(config).unwrap();
+        assert_eq!(payload["thinkingConfig"]["thinkingBudget"], 0);
+    }
+
+    #[test]
+    fn legacy_budgets_are_converted_to_levels() {
+        for (budget, expected) in [
+            ("0", Some("MINIMAL")),
+            ("1024", Some("LOW")),
+            ("4096", Some("MEDIUM")),
+            ("8192", Some("MEDIUM")),
+            ("16384", Some("HIGH")),
+            ("-1", None),
+        ] {
+            let config = provider("gemini-flash-latest")
+                .build_generation_config(&thinking_options(budget))
+                .unwrap();
+            let payload = serde_json::to_value(config).unwrap();
+
+            match expected {
+                Some(level) => assert_eq!(payload["thinkingConfig"]["thinkingLevel"], level),
+                None => assert!(payload.get("thinkingConfig").is_none()),
+            }
+        }
+    }
+
+    #[test]
+    fn gemini_25_keeps_budget_contract_and_sampling_behavior() {
+        let provider = provider("gemini-2.5-flash");
+        let config = provider
+            .build_generation_config(&thinking_options("4096"))
+            .unwrap();
+        let payload = serde_json::to_value(config).unwrap();
+
+        assert_eq!(payload["thinkingConfig"]["thinkingBudget"], 4096);
+        assert!(payload["thinkingConfig"].get("thinkingLevel").is_none());
+        assert!(payload.get("temperature").is_none());
+
+        let config = provider
+            .build_generation_config(&ProviderOptions::default())
+            .unwrap();
+        let payload = serde_json::to_value(config).unwrap();
+        assert!((payload["temperature"].as_f64().unwrap() - 0.7).abs() < 1e-6);
+    }
+
+    #[test]
+    fn unknown_models_do_not_receive_inferred_thinking_config() {
+        let config = provider("gemini-2.0-flash")
+            .build_generation_config(&thinking_options("medium"))
+            .unwrap();
+        let payload = serde_json::to_value(config).unwrap();
+
+        assert!(payload.get("thinkingConfig").is_none());
+        assert!((payload["temperature"].as_f64().unwrap() - 0.7).abs() < 1e-6);
+    }
+
+    #[test]
+    fn invalid_thinking_values_fail_locally() {
+        let provider = provider("gemini-3.6-flash");
+        assert!(provider
+            .build_generation_config(&thinking_options("extreme"))
+            .is_err());
+        assert!(provider
+            .build_generation_config(&thinking_options("-2"))
+            .is_err());
     }
 }
