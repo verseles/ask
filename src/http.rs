@@ -55,8 +55,8 @@ pub fn create_client_builder() -> reqwest::ClientBuilder {
 
 /// Create an HTTP client with custom DNS resolver
 /// This works on all platforms including Termux/Android
-pub fn create_client() -> reqwest::Client {
+pub fn create_client() -> anyhow::Result<reqwest::Client> {
     create_client_builder()
         .build()
-        .expect("Failed to create HTTP client")
+        .map_err(|e| anyhow::anyhow!("Failed to create HTTP client: {}", e))
 }

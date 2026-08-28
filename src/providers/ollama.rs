@@ -54,12 +54,12 @@ struct OllamaDelta {
 }
 
 impl OllamaProvider {
-    pub fn new(_api_key: String, base_url: String, model: String) -> Self {
-        Self {
+    pub fn new(_api_key: String, base_url: String, model: String) -> Result<Self> {
+        Ok(Self {
             base_url,
             model,
-            client: create_client(),
-        }
+            client: create_client()?,
+        })
     }
 
     fn convert_messages(&self, messages: &[Message]) -> Vec<OllamaMessage> {

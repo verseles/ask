@@ -223,7 +223,7 @@ pub fn create_provider(config: &Config) -> Result<Box<dyn Provider>> {
             .base_url()
             .unwrap_or_else(|| crate::config::DEFAULT_OLLAMA_BASE_URL.to_string());
         let api_key = config.api_key().unwrap_or_else(|| "ollama".to_string());
-        return Ok(Box::new(OllamaProvider::new(api_key, base_url, model)));
+        return Ok(Box::new(OllamaProvider::new(api_key, base_url, model)?));
     }
 
     let api_key = config.api_key().ok_or_else(|| {
@@ -238,19 +238,19 @@ pub fn create_provider(config: &Config) -> Result<Box<dyn Provider>> {
             let base_url = config
                 .base_url()
                 .unwrap_or_else(|| crate::config::DEFAULT_GEMINI_BASE_URL.to_string());
-            Ok(Box::new(GeminiProvider::new(api_key, base_url, model)))
+            Ok(Box::new(GeminiProvider::new(api_key, base_url, model)?))
         }
         "openai" | "openai_compatible" => {
             let base_url = config
                 .base_url()
                 .unwrap_or_else(|| crate::config::DEFAULT_OPENAI_BASE_URL.to_string());
-            Ok(Box::new(OpenAIProvider::new(api_key, base_url, model)))
+            Ok(Box::new(OpenAIProvider::new(api_key, base_url, model)?))
         }
         "anthropic" | "claude" => {
             let base_url = config
                 .base_url()
                 .unwrap_or_else(|| crate::config::DEFAULT_ANTHROPIC_BASE_URL.to_string());
-            Ok(Box::new(AnthropicProvider::new(api_key, base_url, model)))
+            Ok(Box::new(AnthropicProvider::new(api_key, base_url, model)?))
         }
         _ => Err(anyhow!("Unknown provider: {}", provider_name)),
     }

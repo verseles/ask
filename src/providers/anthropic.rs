@@ -82,13 +82,13 @@ struct AnthropicDelta {
 }
 
 impl AnthropicProvider {
-    pub fn new(api_key: String, base_url: String, model: String) -> Self {
-        Self {
+    pub fn new(api_key: String, base_url: String, model: String) -> Result<Self> {
+        Ok(Self {
             api_key,
             base_url,
             model,
-            client: create_client(),
-        }
+            client: create_client()?,
+        })
     }
 
     fn convert_messages(&self, messages: &[Message]) -> (Option<String>, Vec<AnthropicMessage>) {
@@ -325,7 +325,7 @@ mod tests {
     #[test]
     fn test_build_thinking_levels() {
         let provider =
-            AnthropicProvider::new("key".into(), "url".into(), "claude-3-7-sonnet".into());
+            AnthropicProvider::new("key".into(), "url".into(), "claude-3-7-sonnet".into()).unwrap();
 
         let cases = vec![
             ("minimal", 2048),
@@ -357,7 +357,7 @@ mod tests {
     #[test]
     fn test_build_thinking_disabled() {
         let provider =
-            AnthropicProvider::new("key".into(), "url".into(), "claude-3-5-sonnet".into());
+            AnthropicProvider::new("key".into(), "url".into(), "claude-3-5-sonnet".into()).unwrap();
         let options = ProviderOptions {
             thinking_enabled: false,
             thinking_value: Some("high".to_string()),
