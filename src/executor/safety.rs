@@ -12,13 +12,15 @@ const DESTRUCTIVE_PATTERNS: &[&str] = &[
     // Disk operations
     r"\bdd\b",
     r"\bmkfs\b",
+    r"\bmkswap\b",
+    r"\bwipefs\b",
     r"\bfdisk\b",
     r"\bparted\b",
     // Recursive permission changes
     r"chmod\s+-[rR]",
     r"chown\s+-[rR]",
     // Dangerous redirects
-    r">\s*/dev/(?:sd[a-z]\d*|vd[a-z]\d*|xvd[a-z]\d*|nvme\d+n\d+(?:p\d+)?|mmcblk\d+(?:p\d+)?|mapper/.*|mem|kmem|port|hd[a-z]\d*|fd[0-9]+)\b",
+    r">\s*/dev/(?:sd[a-z]\d*|vd[a-z]\d*|xvd[a-z]\d*|nvme\d+n\d+(?:p\d+)?|mmcblk\d+(?:p\d+)?|mapper/.*|mem|kmem|port|hd[a-z]\d*|fd[0-9]+|urandom|random)\b",
     r">\s*/etc/",
     r">\s*/sys/",
     r">\s*/proc/",
@@ -49,6 +51,8 @@ const DESTRUCTIVE_PATTERNS: &[&str] = &[
     // Dangerous move
     r"mv\s+(?:.*\s+)?-f(?:\s|$)",  // Force move
     r"mv\s+(?:.*\s+)?\*(?:\s+|$)", // Move wildcard
+    // Network/Firewall
+    r"iptables\s+-F",
     // System state
     r"^\s*(reboot|shutdown|poweroff|halt|init\s+[06])\b",
     // Fork bomb
@@ -206,6 +210,12 @@ mod tests {
         assert!(analyzer.is_destructive("init 0"));
         assert!(analyzer.is_destructive(":(){ :|:& };:"));
         assert!(analyzer.is_destructive("echo x > /boot/config"));
+        assert!(analyzer.is_destructive("mkswap /dev/sda1"));
+        assert!(analyzer.is_destructive("wipefs -a /dev/sdb"));
+        assert!(analyzer.is_destructive("echo test > /dev/urandom"));
+        assert!(analyzer.is_destructive("cat file > /dev/random"));
+        assert!(analyzer.is_destructive("iptables -F"));
+        assert!(analyzer.is_destructive("sudo iptables -F"));
     }
 
     #[test]
