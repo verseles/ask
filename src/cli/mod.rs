@@ -675,10 +675,7 @@ fn is_likely_command(text: &str) -> bool {
         return false;
     }
 
-    let first_word = text.split_whitespace().next().unwrap_or("");
-    crate::providers::COMMAND_STARTERS
-        .iter()
-        .any(|cmd| first_word.starts_with(cmd))
+    crate::providers::is_command_starter(text)
 }
 
 fn list_profiles(config: &Config) -> Result<()> {
@@ -767,4 +764,18 @@ fn list_profiles(config: &Config) -> Result<()> {
     );
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_is_likely_command_false_positives() {
+        assert!(!is_likely_command("catapult is a word"));
+        assert!(!is_likely_command("finding a solution"));
+        assert!(!is_likely_command("timeoutish behavior"));
+        assert!(is_likely_command("cat file.txt"));
+        assert!(is_likely_command("find . -name \"*.rs\""));
+    }
 }

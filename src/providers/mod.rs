@@ -128,7 +128,7 @@ pub const COMMAND_STARTERS: &[&str] = &[
 ];
 
 /// Checks if a line starts with a known command.
-fn line_starts_with_command(line: &str) -> bool {
+pub fn is_command_starter(line: &str) -> bool {
     let first_word = line.split_whitespace().next().unwrap_or("");
     COMMAND_STARTERS.iter().any(|&cmd| {
         if cmd == "./" || cmd == "/" || cmd == "~" {
@@ -203,7 +203,7 @@ pub fn flatten_command_if_safe(text: &str) -> Option<String> {
             return None;
         }
         // Must look like a command
-        if !line_starts_with_command(line) {
+        if !is_command_starter(line) {
             return None;
         }
     }
@@ -294,19 +294,19 @@ mod tests {
     }
 
     #[test]
-    fn test_line_starts_with_command_exact_matching() {
+    fn test_is_command_starter_exact_matching() {
         // False positives should not be detected
-        assert!(!line_starts_with_command("catapult is a word"));
-        assert!(!line_starts_with_command(".gitignore is a file"));
-        assert!(!line_starts_with_command("timeoutish"));
+        assert!(!is_command_starter("catapult is a word"));
+        assert!(!is_command_starter(".gitignore is a file"));
+        assert!(!is_command_starter("timeoutish"));
 
         // Valid commands should be detected
-        assert!(line_starts_with_command("cat file.txt"));
-        assert!(line_starts_with_command(". ./script.sh"));
-        assert!(line_starts_with_command("./my_script"));
-        assert!(line_starts_with_command("/usr/bin/ls"));
-        assert!(line_starts_with_command("~/bin/run"));
-        assert!(line_starts_with_command("apt-get install htop"));
+        assert!(is_command_starter("cat file.txt"));
+        assert!(is_command_starter(". ./script.sh"));
+        assert!(is_command_starter("./my_script"));
+        assert!(is_command_starter("/usr/bin/ls"));
+        assert!(is_command_starter("~/bin/run"));
+        assert!(is_command_starter("apt-get install htop"));
     }
 
     #[test]
